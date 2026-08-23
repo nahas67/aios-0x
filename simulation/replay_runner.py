@@ -118,6 +118,7 @@ class ReplayRunner:
         gateway: BaseModelGateway | None = None,
         settings: Settings | None = None,
         macro_calendar_path: str | Path | None = None,
+        shadow_mode: bool = False,
     ) -> None:
         """Build the runner; call :meth:`run` to execute the replay.
 
@@ -200,6 +201,7 @@ class ReplayRunner:
             initial_balance=initial_balance,
             slippage_pct=slippage_pct,
             max_open_positions_per_symbol=1,
+            shadow_mode=shadow_mode,
         )
         self.c6 = ObservationAgent(event_bus=self.bus)
         self.postmortems = PostmortemEngine()

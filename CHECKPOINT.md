@@ -3,16 +3,58 @@
 ## Master System Roadmap
 
 - [x] **Phase 1.0 – Architecture Baseline (FROZEN & LOCKED)** — See [ADR-001](docs/adrs/ADR-001_architecture_baseline_freeze.md)
-- [/] **Phase 2.0 – Technology Acquisition & Validation** — Active Phase
-- [ ] **Phase 3.0 – Prototype Integration**
-- [ ] **Phase 4.0 – MVP Development**
-- [ ] **Phase 5.0 – Production Deployment**
+- [x] **Phase 2.0 – Technology Acquisition & Validation** — COMPLETE (2026-08-23, closure table below)
+- [x] **Phase 3.0 – Prototype Integration** — COMPLETE (2026-08-23, vertical-slice build Phases 1–8)
+- [x] **Phase 4.0 – MVP Development** — COMPLETE (2026-08-23, all domains operational on paper/shadow)
+- [ ] **Phase 5.0 – Production Deployment** — GATED (5 human-held gates listed in §Phase 5.0 below)
 
 ---
 
-## Current Status: Phase 1.0 Frozen & Locked (Active Phase: Phase 2.0 – Technology Acquisition & Validation)
+## Current Status: MVP OPERATIONAL (paper/shadow) · Production deployment gated by CONSTITUTION
 
 **Master System Navigation Map**: [docs/00_system_map.md](docs/00_system_map.md)
+
+---
+
+### Phase 2.0 CLOSURE — Technology Acquisition & Validation (completed 2026-08-23)
+
+| Original checklist item | Status | Evidence |
+|---|---|---|
+| Multi-Agent Frameworks (LangGraph vs. LlamaIndex vs. CrewAI) | BENCHMARKED (functional) | `research/benchmarks/group_a/groupA_benchmark.json` — LangGraph PASS 20.3ms vs native bus 0.2ms per 100-hop cycle (10 reps, integrity asserted); smoke + pydantic-v1/Py3.14 warning captured (`langgraph_result.yaml`). CrewAI/LlamaIndex arms remain BENCHMARK-REQUIRED for the full ADR |
+| Message Bus & Streaming (NATS JetStream vs Redis vs Kafka) | BASELINE RECORDED; broker runs INFRA-BLOCKED | `group_c/baseline_inmemory.json` — native bus ≈750k msg/s local baseline; NATS/Redpanda require services → `group_c/BLOCKED.md` |
+| Databases & Vector Memory (PostgreSQL/TimescaleDB + Qdrant/Milvus) | VECTOR HALF DELIVERED | `core/vector_memory.py` — BaseVectorMemory ABC + Qdrant **local-mode** adapter (real engine, no server) + pure-python fallback; contract-tested parity incl. semantic retrieval order. Relational: SQLite hash-chained store shipped; PG/Timescale swap is deployment-phase adapter work (Doc 16) |
+| Market Data Ingestion Pipelines (CCXT, Alpaca, Polygon.io) | CCXT LIVE-VERIFIED | BTC $76,491.81 through full pipeline with `is_simulated=false`; execution suite testnet rails contract-tested → `research/benchmarks/market_data_evidence.md`. Alpaca/Polygon key-gated |
+| Backtesting & Simulation Engines (NautilusTrader vs Lean vs VectorBT) | COMPAT VERIFIED; same-task protocol REQUIRED | Both publish Py3.14 wheels (`group_b/install_compat.yaml`); own event-driven runner + walk-forward harness built and honestly executed (`research/reports/walk_forward_300b_90t30s.json`) |
+
+Formal selection ADRs stay blocked exactly where the protocol demands more
+evidence. Nothing was selected without evidence — that discipline held.
+
+### Phase 3.0 CLOSURE — Prototype Integration (completed 2026-08-23)
+
+Every designed domain was integrated end-to-end across build sessions
+Phases 1–8 (log at bottom): data fabric → adversarial intelligence → strategy
+lab → portfolio gate → order lifecycle → observation/postmortems → memory +
+prediction ledger → finance back office → control plane/command center →
+evolution & resilience drills. 124 tests green; determinism, no-look-ahead and
+honesty invariants machine-enforced.
+
+### Phase 4.0 CLOSURE — MVP Development (completed 2026-08-23)
+
+MVP = AI-native institution on paper/shadow venues: live CCXT ingestion,
+LLM debate w/ honest fallback, hallucination-checking verification firewall,
+multi-family strategies, opportunity ranking, Kelly/DD-tier governor,
+bracket-exit engine (+shadow), double-entry books, FIFO tax lots + CA gates,
+compliance surveillance, audit-graph provenance walks, kill-switch +
+reconciliation, RBAC console + command-center UI/API/metrics, challenger
+trials, agent reputation, disaster drills, constitution-pinned boot.
+
+### Phase 5.0 — Production Deployment: HUMAN-HELD GATES
+
+1. Broker testnet credentials + shadow validation of the CCXT execution suite on a real venue
+2. Tier-1 benchmark completion → formal selection ADRs
+3. Licensed real-market data replacing synthetic goldens
+4. Tax rules signed by a licensed professional for target jurisdiction(s)
+5. Principal records APPROVE_LIVE_CAPITAL and amends CONSTITUTION §1 via ADR
 
 ---
 

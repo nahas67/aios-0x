@@ -1,0 +1,20 @@
+{
+  "group": "A",
+  "task": "stateful cycle x100 hops",
+  "protocol": "10 reps after 1 warmup; integrity asserted every rep",
+  "python": "3.14.4",
+  "langgraph": {
+    "status": "PASS",
+    "mean_s": 0.02031,
+    "p50_s": 0.02029,
+    "p95_s": 0.02142,
+    "reps": 10
+  },
+  "native_inmemory_bus": {
+    "status": "PASS",
+    "mean_s": 0.0002,
+    "p50_s": 0.00021,
+    "p95_s": 0.00025,
+    "reps": 10
+  }
+}

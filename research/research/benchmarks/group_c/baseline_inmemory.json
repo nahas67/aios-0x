@@ -1,0 +1,9 @@
+{
+  "group": "C",
+  "candidate": "inmemory_event_bus (baseline only)",
+  "events": 20000,
+  "reps": 5,
+  "msg_per_sec_mean": 750607.0,
+  "msg_per_sec_p50": 758674.0,
+  "note": "Baseline for the local transport. NATS JetStream / Redpanda / Redis protocol runs remain BLOCKED pending broker infrastructure (see research/benchmarks/group_c/BLOCKED.md)."
+}
