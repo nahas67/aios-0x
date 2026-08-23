@@ -184,6 +184,15 @@ class VerificationReport(BaseModel):
     verification_notes: str = Field(
         ..., description="Detailed notes and findings from the verification process"
     )
+    fact_score: float | None = Field(
+        default=None, ge=0.0, le=40.0, description="Rubric: fact & data verification points"
+    )
+    balance_score: float | None = Field(
+        default=None, ge=0.0, le=30.0, description="Rubric: balanced reasoning points"
+    )
+    math_score: float | None = Field(
+        default=None, ge=0.0, le=30.0, description="Rubric: mathematical validity points"
+    )
 
     @model_validator(mode="after")
     def determine_is_verified(self) -> "VerificationReport":
@@ -302,6 +311,63 @@ class PerformanceSummary(BaseModel):
 
 
 ExitReason = Literal["TARGET_HIT", "STOP_HIT", "HORIZON_END"]
+
+
+class EvidencePack(BaseModel):
+    """Market facts available at decision time; the grounding set for claim checks.
+
+    Built from a MarketDataPayload by C3 so verification can test cited
+    numbers against reality instead of trusting list lengths.
+    """
+
+    symbol: str
+    timeframe: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    momentum_pct: float
+    range_pct: float
+    sentiment_avg: float
+
+    @classmethod
+    def from_payload(cls, payload: "MarketDataPayload") -> "EvidencePack":
+        price = payload.price_data
+        momentum = (price.close - price.open) / price.open * 100.0
+        bar_range = (price.high - price.low) / price.open * 100.0
+        sentiment = 0.0
+        if payload.news_sentiment:
+            sentiment = sum(s.sentiment_score for s in payload.news_sentiment) / len(
+                payload.news_sentiment
+            )
+        return cls(
+            symbol=payload.symbol,
+            timeframe=payload.timeframe,
+            open=price.open,
+            high=price.high,
+            low=price.low,
+            close=price.close,
+            volume=price.volume,
+            momentum_pct=momentum,
+            range_pct=bar_range,
+            sentiment_avg=sentiment,
+        )
+
+    def reference_numbers(self) -> list[float]:
+        """Values that claims may legitimately cite (rounded variants included)."""
+        base = [
+            self.open,
+            self.high,
+            self.low,
+            self.close,
+            self.volume,
+            self.sentiment_avg,
+            self.momentum_pct,
+            self.range_pct,
+        ]
+        rounded = [round(v, 2) for v in base]
+        return base + rounded
 
 
 class ObservationReport(BaseModel):

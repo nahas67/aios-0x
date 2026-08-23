@@ -77,7 +77,22 @@ Next: Phase 1 Honest Vertical Slice (historical replay adapter, SQLite persisten
 
 Note: parquet deferred to Phase 3 data fabric (CSV keeps stdlib-only deps); deviation documented.
 
-Next: Phase 2 Intelligence Onboarding (LLM gateway, model router, Prompt Lab, adversarial C2/C3).
+---
+
+### Phase 2 INTELLIGENCE ONBOARDING — COMPLETE (2026-08-23)
+
+- [x] **Model gateway** (`core/model_gateway.py`): BaseModelGateway ABC; OpenAI-compatible adapter (httpx, retries w/ backoff, token+cost accounting) + Anthropic adapter; ScriptedModel TEST DOUBLE for CI; `complete_structured()` enforces Pydantic output contracts w/ repair-retry loop
+- [x] **Model router v0** (`core/model_router.py`): CHEAP/REASONING tiers from Settings; honest `available=False` when unconfigured — system NEVER pretends an LLM contributed
+- [x] **Config**: pydantic-settings `core/config.py` (env-only secrets, repr=False) + `.env.example`; verified: no credentials present → deterministic mode active
+- [x] **Prompt registry** (`core/prompts.py`): versioned PromptSpecs w/ variable validation; built-in v1 prompts: research-bull-thesis, research-bear-thesis, research-quant-review, research-moderator-synthesis
+- [x] **C2 adversarial debate** (`debate_engine.py`): BULL→BEAR→QUANT→MODERATOR pipeline producing balanced CandidateHypothesis (Mandatory Balance Rule enforced by contract min-lengths); quant REJECT recorded as counter-argument; ANY failure → deterministic template fallback tagged in transcript
+- [x] **C3 real verification**: EvidencePack contract; numeric hallucination detector — every cited number checked vs decision-time market facts (2% tolerance); fabrication caps fact score at 5/40 ⇒ total 65 < 70 ⇒ rejected; no-evidence path preserves legacy behavior
+- [x] **Prompt Lab v0** (`evaluation/prompt_lab.py`): golden-set eval harness (parse-rate gate ≥90%); golden cases committed for bull prompt; pass/fail gates proven in tests
+- [x] **Cost intelligence**: every model call logged as MODEL_CALL event w/ tokens/cost/latency into hash-chained store; runner summary exposes model_calls + total_model_cost_usd + research_mode_used
+- [x] Runner integration: injected-gateway debate mode tested E2E (scripted, deterministic); deterministic mode unchanged
+- [x] Gates: **pytest 59/59 · ruff clean · mypy strict clean (34 files)**
+
+Next: Phase 3 Data Fabric & World Intelligence (real ingestion adapters, quality states, event engine, expectation engine).
 
 ---
 

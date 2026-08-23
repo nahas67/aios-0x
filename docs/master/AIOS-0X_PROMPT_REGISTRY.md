@@ -1,9 +1,18 @@
 # AIOS-0X Prompt Registry
-Version 0.1.0 | Status: EMPTY - no LLM integration exists yet; this registry is established before first prompt ships.
+Version 1.0.0 | Status: ACTIVE - registry implemented (core/prompts.py); first 4 prompts shipped in Phase 2.
 
-## 1. Current State (verified)
-Zero prompts exist in the codebase. All agents are deterministic templates. This document defines
-the governance that must exist BEFORE any prompt enters production.
+## 1. Current State (verified 2026-08-23)
+Implemented in `core/prompts.py`: versioned `PromptSpec` records with variable validation,
+`PromptRegistry` with latest-version resolution, and the v0 evaluation harness in
+`evaluation/prompt_lab.py` (golden-set parse-rate gate >= 90%).
+
+Shipped prompts:
+| prompt_id | Agent | Status |
+|---|---|---|
+| research-bull-thesis | C2 bull | ACTIVE v1 (golden cases: evaluation/golden/research-bull-thesis.cases.json) |
+| research-bear-thesis | C2 bear | ACTIVE v1 |
+| research-quant-review | C2 quant | ACTIVE v1 |
+| research-moderator-synthesis | C2 moderator | ACTIVE v1 |
 
 ## 2. Prompt Record Schema
 ```

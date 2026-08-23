@@ -1,0 +1,40 @@
+{
+  "prompt_id": "research-bull-thesis",
+  "contract": "BullBearCase",
+  "gate": 0.9,
+  "cases": [
+    {
+      "name": "crypto_uptrend",
+      "variables": {
+        "symbol": "BTC/USD",
+        "timeframe": "1d",
+        "close": "45450",
+        "momentum_pct": "+1.01",
+        "range_pct": "4.00",
+        "sentiment": "0.59"
+      }
+    },
+    {
+      "name": "equity_chop",
+      "variables": {
+        "symbol": "AAPL",
+        "timeframe": "1d",
+        "close": "185.2",
+        "momentum_pct": "-0.10",
+        "range_pct": "1.20",
+        "sentiment": "0.05"
+      }
+    },
+    {
+      "name": "risk_off",
+      "variables": {
+        "symbol": "ETH/USD",
+        "timeframe": "1d",
+        "close": "2205",
+        "momentum_pct": "-2.30",
+        "range_pct": "5.50",
+        "sentiment": "-0.44"
+      }
+    }
+  ]
+}

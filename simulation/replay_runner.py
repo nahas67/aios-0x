@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from communities.c1_data.data_agent import DataAcquisitionAgent
 from communities.c1_data.replay_fetcher import ReplayCursor, ReplayDataFetcher
+from communities.c2_research.debate_engine import DebateEngine, DebateResearchAgent
 from communities.c2_research.research_agent import ResearchAgent
 from communities.c3_verification.verification_agent import VerificationAgent
 from communities.c4_strategy.strategy_agent import StrategyAgent
@@ -22,8 +23,12 @@ from communities.c6_observation.observation_agent import ObservationAgent
 from communities.c6_observation.postmortem_engine import PostmortemEngine
 from communities.c7_memory.memory_agent import MemoryAgent
 from communities.c8_evolution.evolution_agent import EvolutionAgent
+from core.config import Settings, get_settings
 from core.event_bus import BaseEventBus, EventTopic, InMemoryEventBus
+from core.model_gateway import BaseModelGateway, ModelResponse, build_gateway
+from core.model_router import ModelRouter
 from core.persistence import BaseMemoryStore, SqliteMemoryStore
+from core.prompts import PromptRegistry
 from core.risk_firewall import RiskConfig, RiskFirewall
 from schemas.contracts import (
     CandidateHypothesis,
@@ -55,6 +60,9 @@ class RunSummary(BaseModel):
     events_logged: int = 0
     chain_valid: bool = True
     determinism_hash: str = ""
+    model_calls: int = 0
+    total_model_cost_usd: float = 0.0
+    research_mode_used: str = "deterministic"
 
 
 def _payload_ref_id(payload: Any) -> str | None:
@@ -85,14 +93,24 @@ class ReplayRunner:
         treat_as_real: bool = False,
         bus: BaseEventBus | None = None,
         store: BaseMemoryStore | None = None,
+        gateway: BaseModelGateway | None = None,
+        settings: Settings | None = None,
     ) -> None:
-        """Build the runner; call :meth:`run` to execute the replay."""
+        """Build the runner; call :meth:`run` to execute the replay.
+
+        ``gateway`` injection is for tests (ScriptedModel); production builds
+        from settings via :func:`build_gateway` (None => deterministic mode).
+        """
         self.csv_path_by_symbol = dict(csv_path_by_symbol)
         self.symbols = sorted(self.csv_path_by_symbol)
         self.initial_balance = initial_balance
         self.slippage_pct = slippage_pct
         self.bus = bus or InMemoryEventBus()
         self.store = store or SqliteMemoryStore(store_path)
+
+        self.settings = settings or get_settings()
+        self.gateway = gateway if gateway is not None else build_gateway(self.settings)
+        self.router = ModelRouter(self.gateway, self.settings)
 
         self.cursor = ReplayCursor()
         self.fetcher = ReplayDataFetcher(
@@ -102,7 +120,30 @@ class ReplayRunner:
         )
 
         self.c1 = DataAcquisitionAgent(fetcher=self.fetcher, event_bus=self.bus)
-        self.c2 = ResearchAgent(event_bus=self.bus)
+
+        # ---- C2: adversarial debate when intelligence is available, else template
+        if self.settings.research_mode == "auto" and self.router.llm_available:
+            self.registry = PromptRegistry()
+            self.model_calls = 0
+            self.total_model_cost_usd = 0.0
+            debate = DebateEngine(
+                router=self.router,
+                registry=self.registry,
+                settings=self.settings,
+                model_call_sink=self._on_model_call,
+            )
+            self.c2: ResearchAgent | DebateResearchAgent = DebateResearchAgent(
+                event_bus=self.bus,
+                engine=debate,
+                transcript_sink=self._on_transcript,
+            )
+            self._research_mode_used = "debate"
+        else:
+            self.c2 = ResearchAgent(event_bus=self.bus)
+            self.model_calls = 0
+            self.total_model_cost_usd = 0.0
+            self._research_mode_used = "deterministic"
+
         self.c3 = VerificationAgent(event_bus=self.bus, min_confidence_threshold=70.0)
         self.risk_firewall = RiskFirewall(RiskConfig())
         self.c4 = StrategyAgent(
@@ -138,6 +179,7 @@ class ReplayRunner:
 
         self._subscriptions: list[tuple[EventTopic, Any]] = [
             (EventTopic.DATA_ACQUIRED, self.c2.on_data_acquired),
+            (EventTopic.DATA_ACQUIRED, self.c3.on_data_acquired),
             (EventTopic.DATA_ACQUIRED, self.c4.on_data_acquired),
             (EventTopic.HYPOTHESIS_GENERATED, self.c3.on_hypothesis_generated),
             (EventTopic.HYPOTHESIS_GENERATED, self.c4.on_hypothesis_generated),
@@ -156,6 +198,17 @@ class ReplayRunner:
     async def _log_event(self, payload: Any) -> None:
         kind = type(payload).__name__
         self.store.append_event(kind, _payload_ref_id(payload), payload.model_dump(mode="json"))
+
+    async def _on_model_call(self, role: str, response: ModelResponse) -> None:
+        """Cost-intelligence sink: log every model call with its accounting."""
+        self.model_calls += 1
+        self.total_model_cost_usd = round(self.total_model_cost_usd + response.cost_usd, 8)
+        self.store.append_event(
+            "MODEL_CALL", f"{role}:{response.model}", response.model_dump(mode="json")
+        )
+
+    async def _on_transcript(self, transcript_json: str) -> None:
+        self.store.append_event("TRANSCRIPT", None, {"json": transcript_json})
 
     async def _on_hypothesis(self, hypothesis: CandidateHypothesis) -> None:
         self._hypotheses[hypothesis.hypothesis_id] = hypothesis
@@ -377,4 +430,7 @@ class ReplayRunner:
             events_logged=counts["event_log"],
             chain_valid=chain_ok,
             determinism_hash=digest,
+            model_calls=self.model_calls,
+            total_model_cost_usd=self.total_model_cost_usd,
+            research_mode_used=self._research_mode_used,
         )
