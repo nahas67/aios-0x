@@ -31,6 +31,10 @@ class EventTopic(StrEnum):
     OPPORTUNITY_RANKED = "aios.c4.opportunity_ranked"
     PORTFOLIO_ALLOCATED = "aios.c9.portfolio_allocated"
     PORTFOLIO_REJECTED = "aios.c9.portfolio_rejected"
+    ORDER_SUBMITTED = "aios.c5.order_submitted"
+    ORDER_FILLED = "aios.c5.order_filled"
+    RECONCILIATION_FAILED = "aios.c5.reconciliation_failed"
+    RISK_EMERGENCY = "aios.risk.emergency"
     TRADE_EXECUTED = "aios.c5.order_executed"  # alias: order_executed semantics
     OBSERVATION_COMPLETED = "aios.c6.observation_completed"
     MEMORY_STORED = "aios.c7.memory_stored"

@@ -764,3 +764,121 @@ class CalibrationReport(BaseModel):
         default=False,
         description="True when >=20 scored predictions exist (minimum for judgment)",
     )
+
+
+# --------------------------------------------------- execution & emergency (C5)
+
+
+class OrderSide(StrEnum):
+    BUY = "BUY"
+    SELL = "SELL"
+
+
+class OrderType(StrEnum):
+    MARKET = "MARKET"
+    LIMIT = "LIMIT"
+
+
+class OrderStatus(StrEnum):
+    PENDING_NEW = "PENDING_NEW"
+    ACCEPTED = "ACCEPTED"
+    PARTIALLY_FILLED = "PARTIALLY_FILLED"
+    FILLED = "FILLED"
+    CANCELLED = "CANCELLED"
+    REJECTED = "REJECTED"
+
+
+_TERMINAL_ORDER_STATES = frozenset(
+    {OrderStatus.FILLED, OrderStatus.CANCELLED, OrderStatus.REJECTED}
+)
+
+
+def is_terminal(status: OrderStatus) -> bool:
+    return status in _TERMINAL_ORDER_STATES
+
+
+class OrderRequest(BaseModel):
+    """Full order-lifecycle record with idempotency key (Doc 07 / Directive 78)."""
+
+    order_id: str = Field(default_factory=generate_uuid)
+    client_order_id: str = Field(..., min_length=1, description="Idempotency key")
+    strategy_id: str = Field(..., min_length=1)
+    plan_id: str | None = None
+    symbol: str
+    side: OrderSide
+    order_type: OrderType = OrderType.MARKET
+    quantity: float = Field(..., gt=0.0)
+    limit_price: float | None = Field(default=None, gt=0.0)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    status: OrderStatus = OrderStatus.PENDING_NEW
+    filled_quantity: float = Field(default=0.0, ge=0.0)
+    avg_fill_price: float | None = None
+    reject_reason: str | None = None
+    updated_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_limit(self) -> "OrderRequest":
+        if self.order_type == OrderType.LIMIT and self.limit_price is None:
+            raise ValueError("LIMIT orders require limit_price")
+        return self
+
+
+class ReconciliationReport(BaseModel):
+    """Broker-vs-internal position comparison (Directive 41)."""
+
+    report_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    checked_symbols: int
+    mismatches: list[str] = Field(default_factory=list)
+    ok: bool = True
+
+    @model_validator(mode="after")
+    def derive_ok(self) -> "ReconciliationReport":
+        if "ok" not in self.model_fields_set:
+            self.ok = not self.mismatches
+        return self
+
+
+class EmergencyStateValue(StrEnum):
+    NORMAL = "NORMAL"
+    CAUTION = "CAUTION"
+    HIGH_ALERT = "HIGH_ALERT"
+    MARKET_SHOCK = "MARKET_SHOCK"
+    DATA_FAILURE = "DATA_FAILURE"
+    MODEL_FAILURE = "MODEL_FAILURE"
+    EXECUTION_FAILURE = "EXECUTION_FAILURE"
+    SECURITY_INCIDENT = "SECURITY_INCIDENT"
+    EMERGENCY_HALT = "EMERGENCY_HALT"
+
+
+_LOCKOUT_STATES = frozenset(
+    {
+        EmergencyStateValue.EMERGENCY_HALT,
+        EmergencyStateValue.EXECUTION_FAILURE,
+        EmergencyStateValue.SECURITY_INCIDENT,
+    }
+)
+
+_TRADING_ALLOWED = frozenset(
+    {
+        EmergencyStateValue.NORMAL,
+        EmergencyStateValue.CAUTION,
+        EmergencyStateValue.HIGH_ALERT,
+        EmergencyStateValue.MARKET_SHOCK,
+        EmergencyStateValue.DATA_FAILURE,
+        EmergencyStateValue.MODEL_FAILURE,
+    }
+)
+
+
+class EmergencyEvent(BaseModel):
+    """Published on every state transition of the risk governor."""
+
+    event_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    previous_state: EmergencyStateValue
+    new_state: EmergencyStateValue
+    reason: str
+    triggered_by: str = Field(default="system", description="Component or operator id")
+    trading_allowed: bool = True
+    lockout_engaged: bool = False

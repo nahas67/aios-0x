@@ -43,6 +43,7 @@ class PaperEngine:
         slippage_pct: float = 0.05,
         taker_fee_pct: float = _DEFAULT_TAKER_FEE_PCT,
         max_open_positions_per_symbol: int = 1,
+        shadow_mode: bool = False,
     ) -> None:
         """Initialize PaperEngine.
 
@@ -53,6 +54,9 @@ class PaperEngine:
             taker_fee_pct: Simulated exchange fee percentage applied to notional.
             max_open_positions_per_symbol: Portfolio control limiting stacked
                 exposure per symbol (Doc 11 control set; deterministic).
+            shadow_mode: When True, fills are recorded and published but NO cash
+                is ever mutated - the mandatory pre-live rehearsal venue
+                (Directive 74). Settlement PnL is returned but not booked.
         """
         if initial_balance <= 0:
             raise ValueError("initial_balance must be positive")
@@ -64,6 +68,7 @@ class PaperEngine:
         self.slippage_pct = slippage_pct
         self.taker_fee_pct = taker_fee_pct
         self.max_open_positions_per_symbol = max_open_positions_per_symbol
+        self.shadow_mode = shadow_mode
         self.open_positions: dict[str, OpenPaperPosition] = {}
 
     async def execute_paper_trade(
@@ -111,7 +116,8 @@ class PaperEngine:
 
         filled_quantity = round(allocated_capital / fill_price, 6)
         slippage = abs(fill_price - strategy.entry_price)
-        self.cash_balance = round(self.cash_balance - allocated_capital, 2)
+        if not self.shadow_mode:
+            self.cash_balance = round(self.cash_balance - allocated_capital, 2)
 
         receipt = TradeExecutionReceipt(
             strategy_id=strategy.strategy_id,
@@ -120,7 +126,7 @@ class PaperEngine:
             filled_quantity=filled_quantity,
             slippage=round(slippage, 4),
             fees=fees,
-            venue="paper",
+            venue="shadow" if self.shadow_mode else "paper",
             is_simulated=True,
             provenance=DataProvenance(
                 source_id="paper_engine_v1",
@@ -138,7 +144,8 @@ class PaperEngine:
 
         await self.event_bus.publish(EventTopic.TRADE_EXECUTED, receipt)
         logger.info(
-            "Executed paper %s %s for strategy %s at fill_price=%.4f; cash=%.2f",
+            "Executed %s %s %s for strategy %s at fill_price=%.4f; cash=%.2f",
+            "SHADOW" if self.shadow_mode else "paper",
             strategy.action,
             receipt.symbol,
             receipt.strategy_id,
@@ -173,10 +180,12 @@ class PaperEngine:
             pnl = (exit_price - r.fill_price) * r.filled_quantity - r.fees
 
         realized = round(pnl, 2)
-        proceeds = round(position.allocated_capital + realized, 2)
-        self.cash_balance = round(self.cash_balance + proceeds, 2)
+        if not self.shadow_mode:
+            proceeds = round(position.allocated_capital + realized, 2)
+            self.cash_balance = round(self.cash_balance + proceeds, 2)
         logger.info(
-            "Settled paper position %s at %.4f; realized_pnl=%.2f; cash=%.2f",
+            "Settled %s position %s at %.4f; realized_pnl=%.2f; cash=%.2f",
+            "shadow" if self.shadow_mode else "paper",
             execution_id,
             exit_price,
             realized,

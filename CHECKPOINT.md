@@ -127,6 +127,21 @@ Next: Phase 5 Execution & Risk Governor hardening (broker adapters paper-first, 
 
 ---
 
+### Phase 5 EXECUTION & RISK GOVERNOR HARDENING — COMPLETE (2026-08-23)
+
+- [x] **Order lifecycle** (`communities/c5_execution/execution.py`): OrderManager converts approved plans into OrderRequests (PENDING_NEW→ACCEPTED→FILLED/REJECTED) with client_order_id idempotency; ORDER_SUBMITTED/ORDER_FILLED events; TRADE_EXECUTED stays single-source (engine-emitted)
+- [x] **Kill switch implemented** (Doc 07 sequence): flatten-all-positions at adverse prices → EMERGENCY_HALT lockout persisted to audit log → new orders refused while locked. **Only** `RiskGovernor.human_reset(operator_id)` clears it; blank operator ids refused
+- [x] **Emergency state machine** (`core/risk_governor.py`): 9-state model per RISK_MODEL doc; drawdown-halt linkage (governor dd ≥3% → EMERGENCY_HALT); reconciliation-failure → EXECUTION_FAILURE; boot-time lockout detection from audit log (`load_lockout_from_store`) blocks trading after restart until human reset
+- [x] **Execution adapters** (`adapters.py`): BaseExecutionAdapter ABC; PaperExecutionAdapter delegating to engine; **CcxtExecutionAdapter honest stub** — refuses without AIOS_ALLOW_LIVE_EXECUTION=1 + credentials, testnet default ON, hard micro-live notional cap ($100) pending constitution sign-off; never silently paper-simulates
+- [x] **Reconciliation loop**: adapter snapshot vs internal fill mirror each bar; mismatch → RECONCILIATION_FAILED + EXECUTION_FAILURE lockout + kill-switch trigger
+- [x] **Shadow mode**: PaperEngine(shadow_mode=True) records fills/pnl with venue="shadow" but zero cash mutation — mandatory pre-live rehearsal venue
+- [x] **Topic ACL** (`core/security.py`): AgentPrincipal capability sets + ACLBus wrapper; publish_as/subscribe_as enforce permissions (PermissionError on violation); system API reserved for composition root
+- [x] Gates: **pytest 93 passed +1 opt-in · ruff clean · mypy strict clean (53 files)**
+
+Next: Phase 6 Finance Back Office (double-entry ledger, broker/statement reconciliation, tax lots w/ jurisdiction rules + CA review workflow, NAV, compliance hooks, audit-graph query API).
+
+---
+
 ### Phase 1.0 – Architecture Baseline (FROZEN & LOCKED) — 100% COMPLETE
 
 - [x] **System Map & Master Index** ([docs/00_system_map.md](docs/00_system_map.md))

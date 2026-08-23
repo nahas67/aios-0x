@@ -20,6 +20,8 @@ from communities.c2_research.debate_engine import DebateEngine, DebateResearchAg
 from communities.c2_research.research_agent import ResearchAgent
 from communities.c3_verification.verification_agent import VerificationAgent
 from communities.c4_strategy.strategy_agent import StrategyAgent
+from communities.c5_execution.adapters import PaperExecutionAdapter
+from communities.c5_execution.execution import KillSwitch, OrderManager
 from communities.c6_observation.observation_agent import ObservationAgent
 from communities.c6_observation.postmortem_engine import PostmortemEngine
 from communities.c7_memory.memory_agent import MemoryAgent
@@ -36,10 +38,12 @@ from core.model_router import ModelRouter
 from core.persistence import BaseMemoryStore, SqliteMemoryStore
 from core.prompts import PromptRegistry
 from core.risk_firewall import RiskConfig, RiskFirewall
+from core.risk_governor import RiskGovernor, load_lockout_from_store
 from schemas.contracts import (
     CandidateHypothesis,
     PortfolioAllocationPlan,
     PredictionRecord,
+    ReconciliationReport,
     StrategySpecification,
     TradeExecutionReceipt,
     VerificationReport,
@@ -195,6 +199,29 @@ class ReplayRunner:
             exposure_by_class_provider=self._class_exposures,
         )
 
+        # ---- C5 execution chain: plan -> order lifecycle -> venue
+        self.adapter = PaperExecutionAdapter(self.paper)
+        self.order_manager = OrderManager(
+            event_bus=self.bus,
+            adapter=self.adapter,
+            quantity_provider=self._plan_quantity,
+        )
+
+        # ---- Emergency authority + kill switch
+        self.risk_governor = RiskGovernor(event_bus=self.bus)
+        if store is not None and load_lockout_from_store(self.store):
+            from schemas.contracts import EmergencyStateValue
+
+            self.risk_governor.state = EmergencyStateValue.EMERGENCY_HALT
+            logger.warning("Boot: uncleared lockout found in audit log; trading blocked")
+        self.kill_switch = KillSwitch(
+            governor=self.risk_governor,
+            positions_view=self._positions_view,
+            flatten_callback=self._flatten_position,
+            price_lookup=self._last_price_of,
+        )
+        self._fill_mirror: dict[str, str] = {}  # execution_id -> symbol (reconciliation)
+
         # Decision-time caches (runner-owned; communities stay decoupled)
         self._hypotheses: dict[str, CandidateHypothesis] = {}
         self._reports: dict[str, VerificationReport] = {}
@@ -223,8 +250,7 @@ class ReplayRunner:
             (EventTopic.VERIFICATION_COMPLETED, self._on_verification),
             # Doc 15 gate: strategies flow through the governor, not straight to execution
             (EventTopic.STRATEGY_GENERATED, self.governor.on_strategy_generated),
-            (EventTopic.PORTFOLIO_ALLOCATED, self.paper.on_plan),
-            (EventTopic.PORTFOLIO_ALLOCATED, self._on_plan),
+            (EventTopic.PORTFOLIO_ALLOCATED, self._on_plan_execute),
             (EventTopic.TRADE_EXECUTED, self.c6.on_trade_executed),
             (EventTopic.TRADE_EXECUTED, self.c7.on_trade_executed),
             (EventTopic.TRADE_EXECUTED, self._on_receipt),
@@ -282,6 +308,67 @@ class ReplayRunner:
             exposures[cls] = exposures.get(cls, 0.0) + p.receipt.filled_quantity * close
         return exposures
 
+    def _plan_quantity(self, plan: PortfolioAllocationPlan) -> float:
+        """Notional sizing: equity x size% / entry price."""
+        strategy = plan.strategy
+        return (
+            self.initial_balance
+            * (plan.final_position_size_pct / 100.0)
+            / max(strategy.entry_price, 1e-9)
+        )
+
+    async def _on_plan_execute(self, plan: PortfolioAllocationPlan) -> None:
+        """Governor-approved plans enter the order lifecycle here."""
+        if plan.approved:
+            self._strategies[plan.strategy.strategy_id] = plan.strategy
+        await self.order_manager.on_plan(plan, locked_out=self.risk_governor.locked_out)
+
+    def _positions_view(self) -> dict[str, dict[str, str]]:
+        return {
+            eid: {"symbol": pos.receipt.symbol, "action": pos.action}
+            for eid, pos in self.paper.open_positions.items()
+        }
+
+    def _last_price_of(self, symbol: str) -> float:
+        try:
+            return self.fetcher.current_bar(symbol)["close"]
+        except (IndexError, RuntimeError, KeyError):
+            for p in self.paper.open_positions.values():
+                if p.receipt.symbol == symbol:
+                    return p.receipt.fill_price
+            raise
+
+    async def _flatten_position(self, execution_id: str, exit_price: float) -> None:
+        position = self.paper.open_positions.get(execution_id)
+        if position is None:
+            return
+        await self._settle(position.receipt, exit_price, "KILL_SWITCH")
+
+    async def _reconcile(self) -> ReconciliationReport:
+        """Adapter snapshot vs internal fill mirror; mismatch = execution failure."""
+        venue_positions = self.adapter.positions_snapshot()
+        mirror_symbols = set(self._fill_mirror.values())
+        mismatches: list[str] = []
+        for symbol in sorted(set(venue_positions) | mirror_symbols):
+            venue_qty = venue_positions.get(symbol)
+            internal_open = any(
+                p.receipt.symbol == symbol for p in self.paper.open_positions.values()
+            )
+            if venue_qty is not None and not internal_open and venue_qty > 0:
+                mismatches.append(f"{symbol}: venue reports {venue_qty} qty; internal none")
+            if venue_qty is None and internal_open:
+                # Paper adapter mirrors engine by construction; divergence = bug/tamper.
+                mismatches.append(f"{symbol}: internal open position missing at venue")
+        report = ReconciliationReport(
+            checked_symbols=len(set(venue_positions) | mirror_symbols),
+            mismatches=mismatches,
+        )
+        if not report.ok:
+            await self.bus.publish(EventTopic.RECONCILIATION_FAILED, report)
+            await self.risk_governor.observe_reconciliation(report)
+            await self.kill_switch.trigger("reconciliation failed", triggered_by="reconciler")
+        return report
+
     async def _on_data_quality(self, payload: Any) -> None:
         """Run anomaly detection + health tracking for every data arrival.
 
@@ -329,6 +416,7 @@ class ReplayRunner:
         taken - scoring them would corrupt calibration statistics.
         """
         self._receipts[receipt.execution_id] = receipt
+        self._fill_mirror[receipt.execution_id] = receipt.symbol
         self._filled_this_bar.add(receipt.execution_id)
 
         if receipt.strategy_id in self._pending_predictions:
@@ -483,6 +571,15 @@ class ReplayRunner:
 
                 for receipt, exit_price, reason in self._evaluate_bracket_exits():
                     await self._settle(receipt, exit_price, reason)
+
+                # Emergency supervision chain (per bar)
+                dd = self.governor.current_drawdown_pct()
+                await self.risk_governor.observe_drawdown(dd, halt_threshold_pct=3.0)
+                if self.risk_governor.locked_out and self.paper.open_positions:
+                    await self.kill_switch.trigger(
+                        f"drawdown {dd:.2f}% halt", triggered_by="portfolio_governor"
+                    )
+                await self._reconcile()
 
                 open_value = 0.0
                 for p in self.paper.open_positions.values():

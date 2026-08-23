@@ -70,6 +70,10 @@ class BaseMemoryStore(ABC):
     def counts(self) -> dict[str, int]:
         """Row counts per table for run summaries."""
 
+    @abstractmethod
+    def iter_event_payloads(self, kind: str) -> list[dict[str, Any]]:
+        """All payloads of one event kind in sequence order."""
+
 
 class SqliteMemoryStore(BaseMemoryStore):
     """Local SQLite implementation of the memory store."""
@@ -230,6 +234,14 @@ class SqliteMemoryStore(BaseMemoryStore):
         for table in ("event_log", "predictions", "observations", "postmortems"):
             result[table] = int(cur.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"])
         return result
+
+    def iter_event_payloads(self, kind: str) -> list[dict[str, Any]]:
+        """All payloads of one event kind in sequence order (typed query API)."""
+        rows = self._conn.execute(
+            "SELECT payload_json FROM event_log WHERE kind = ? ORDER BY seq ASC",
+            (kind,),
+        ).fetchall()
+        return [json.loads(r["payload_json"]) for r in rows]
 
     def close(self) -> None:
         self._conn.close()
