@@ -157,6 +157,22 @@ Next: Phase 7 Control Plane & UI (human control-plane APIs with RBAC, institutio
 
 ---
 
+### Phase 7 CONTROL PLANE & COMMAND CENTER — COMPLETE (2026-08-23)
+
+- [x] **RBAC control plane** (`core/control_plane.py`): 4 roles × 10 actions matrix; every attempt (granted or denied) appended to the hash-chained audit log as CONTROL_ACTION; blank operator ids refused; actions wired to live components (freeze sets StrategyAgent state, reset clears RiskGovernor lockout, kill-switch flattens via adverse pricing)
+- [x] **Command-center API** (`api/views.py` + `api/server.py`): zero-dependency stdlib HTTP server; endpoints executive / executions / decisions/{id} / risk / accounting / research / health; POST /api/v1/control/{action} enforces RBAC over HTTP (403 denials); Prometheus text exposition at /metrics
+- [x] **Decision drill-down implemented** (Directive 53/54): DECISION→REASON→EVIDENCE→COUNTERARGS→VERIFICATION(scores+flags)→RISK(levels)→OUTCOME(pnl/exit/lessons) with chain_complete integrity flag
+- [x] **UI v0** (`ui/index.html`): dark institutional theme, status pills (STATE/DD/CHAIN/CASH), auto-refreshing cards, executions table with click-through drill-down, risk/accounting tabs — vanilla JS, no framework
+- [x] **Thread-safe persistence**: SqliteMemoryStore now shares its connection across event-loop + server threads under RLock
+- [x] **Live demo executed**: replay → serve() → all endpoints verified → OPERATOR pause over HTTP → chain_complete drilldown → DEMO OK
+- [x] Gates: **pytest 110 passed +1 opt-in · ruff clean · mypy strict clean (63 files)**
+
+Deferred honestly: OTel/LangFuse SDK integration (Prometheus exposition shipped); richer UI framework decision deferred until product phase.
+
+Next: Phase 8 Evolution & Resilience (challenger architecture, agent reputation from calibration, disaster-lab chaos drills, hardening pass).
+
+---
+
 ### Phase 1.0 – Architecture Baseline (FROZEN & LOCKED) — 100% COMPLETE
 
 - [x] **System Map & Master Index** ([docs/00_system_map.md](docs/00_system_map.md))

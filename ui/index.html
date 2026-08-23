@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AIOS-0X Command Center</title>
+<style>
+  :root { --bg:#0b0f14; --panel:#121821; --line:#1e2836; --text:#d7e0ea; --dim:#8494a7; --ok:#3fb96f; --warn:#d9a03c; --bad:#e05252; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font:14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  header { display:flex; gap:18px; align-items:center; padding:14px 22px; border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; z-index:5;}
+  h1 { font-size:16px; font-weight:600; letter-spacing:.08em; }
+  .pill { padding:3px 10px; border-radius:12px; font-size:12px; background:#182231; color:var(--dim);}
+  .pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)}
+  nav { display:flex; gap:4px; margin-left:auto; flex-wrap:wrap;}
+  nav button { background:none; border:1px solid transparent; color:var(--dim); padding:6px 10px; cursor:pointer; font-size:13px;}
+  nav button.active, nav button:hover { color:var(--text); border-color:var(--line); background:#16202e;}
+  main { padding:20px 22px; max-width:1200px; margin:0 auto;}
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:18px;}
+  .card { background:var(--panel); border:1px solid var(--line); padding:12px 14px;}
+  .card b{display:block; font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; font-weight:600;}
+  .card span{font-size:20px; font-weight:600;}
+  table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line);}
+  th,td { padding:8px 12px; border-bottom:1px solid var(--line); text-align:left; font-size:13px;}
+  th{color:var(--dim); font-weight:600; text-transform:uppercase; font-size:10.5px; letter-spacing:.08em;}
+  tr.click{cursor:pointer} tr.click:hover td{background:#16202e}
+  .pos{color:var(--ok)} .neg{color:var(--bad)}
+  section{display:none} section.active{display:block}
+  pre{white-space:pre-wrap; word-break:break-word; background:var(--panel); border:1px solid var(--line); padding:14px; font-size:12.5px; color:var(--dim);}
+  .chain span{margin-right:6px; padding:2px 8px; border-radius:10px; background:#182231; font-size:11.5px;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>AIOS&#8209;0X COMMAND CENTER</h1>
+  <span id="p-state" class="pill">STATE -</span>
+  <span id="p-dd" class="pill">DD -</span>
+  <span id="p-chain" class="pill">CHAIN -</span>
+  <span id="p-cash" class="pill">CASH -</span>
+  <nav id="tabs"></nav>
+</header>
+<main>
+  <section data-tab="executive" class="active">
+    <div class="cards" id="exec-cards"></div>
+    <div class="grid2">
+      <div><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">RESEARCH QUALITY</h3><pre id="research-box">loading...</pre></div>
+      <div><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">HEALTH</h3><pre id="health-box">loading...</pre></div>
+    </div>
+  </section>
+
+  <section data-tab="decisions">
+    <table id="exec-table"><thead><tr>
+      <th>Execution</th><th>Symbol</th><th>Fill</th><th>Realized PnL</th></tr></thead><tbody></tbody></table>
+    <div id="drilldown" style="margin-top:16px;display:none">
+      <div class="cards" id="dd-cards"></div>
+      <p class="chain" id="dd-chain" style="margin:10px 0"></p>
+      <div class="grid2">
+        <div><h3 style="font-size:12px;color:var(--dim)">REASON / EVIDENCE</h3><pre id="dd-reason"></pre></div>
+        <div><h3 style="font-size:12px;color:var(--dim)">VERIFICATION + RISK</h3><pre id="dd-risk"></pre></div>
+        <div><h3 style="font-size:12px;color:var(--dim)">OUTCOME</h3><pre id="dd-outcome"></pre></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-tab="risk"><pre id="risk-box">loading...</pre></section>
+  <section data-tab="accounting"><pre id="acct-box">loading...</pre></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const fmt=v=>v==null?"-":v;
+const money=v=>v==null?"-":(v<0?`-$${Math.abs(v).toFixed(2)}`:`$${Number(v).toFixed(2)}`);
+const cls=v=>v>0?"pos":v<0?"neg":"";
+async function j(url){const r=await fetch(url);if(!r.ok)throw new Error(await r.text());return r.json();}
+
+function pill(id,text,cls_){const e=$(id);e.textContent=text;e.className="pill "+(cls_||"");}
+
+async function loadExecutive(){
+  const d=await j("/api/v1/executive");
+  pill("p-state", "STATE "+fmt(d.emergency_state), d.emergency_state==="NORMAL"?"ok":"bad");
+  const dd=d.drawdown_pct??0;
+  pill("p-dd","DD "+dd+"%", dd>=2.5?"bad":dd>=1.5?"warn":"ok");
+  pill("p-chain","CHAIN "+(d.chain_valid?"OK":"BROKEN"), d.chain_valid?"ok":"bad");
+  pill("p-cash","CASH "+money(d.cash_balance));
+  const cards=[["Cash",money(d.cash_balance)],["Open Positions",fmt(d.open_positions)],
+    ["Realized PnL",money(d.cumulative_realized_pnl),cls(d.cumulative_realized_pnl)],
+    ["Closed Trades",fmt(d.closed_trades)],["Events Logged",fmt(d.events_logged)],
+    ["Predictions Scored",fmt(d.predictions_scored)],["Postmortems",fmt(d.postmortems)]];
+  $("exec-cards").innerHTML=cards.map(([k,v,c])=>`<div class="card"><b>${k}</b><span class="${c||""}">${fmt(v)}</span></div>`).join("");
+}
+
+async function loadDecisions(){
+  const d=await j("/api/v1/executions");
+  const tb=$("exec-table").querySelector("tbody");
+  tb.innerHTML=(d.executions||[]).map(e=>`
+    <tr class="click" data-id="${e.execution_id}">
+      <td>${String(e.execution_id).slice(0,8)}</td><td>${fmt(e.symbol)}</td>
+      <td>${fmt(e.fill_price)}</td><td class="${cls(e.realized_pnl)}">${money(e.realized_pnl)}</td></tr>`).join("");
+  tb.querySelectorAll("tr").forEach(tr=>tr.onclick=()=>drill(tr.dataset.id));
+}
+
+async function drill(executionId){
+  const d=await j("/api/v1/decisions/"+executionId);
+  $("drilldown").style.display="block";
+  $("dd-cards").innerHTML=[
+    ["Action",(d.decision.action||"-")+" "+(d.decision.symbol||"")],
+    ["Family",d.decision.family||"-"],
+    ["Size %",fmt(d.decision.position_size_pct)],
+    ["PnL",money(d.outcome.actual_pnl)]
+  ].map(([k,v])=>`<div class="card"><b>${k}</b><span>${v}</span></div>`).join("");
+  $("dd-chain").innerHTML="CHAIN: "+["execution","strategy","hypothesis","verification"]
+    .map(k=>`<span>${k}: ${d[k]&&Object.keys(d[k]).length?"OK":"missing"}</span>`).join("")
+    +(d.chain_complete?' <span class="pos">COMPLETE</span>':' <span class="bad">INCOMPLETE</span>');
+  $("dd-reason").textContent=JSON.stringify({thesis:d.reason.thesis,supporting:d.evidence.supporting_arguments,counters:d.evidence.counter_arguments},null,1);
+  $("dd-risk").textContent=JSON.stringify({verification:{conf:d.verification.confidence_score,fact:d.verification.fact_score,bal:d.verification.balance_score,math:d.verification.math_score},flagged:d.verification.flagged_hallucinations,risk:{stop:d.risk.stop_loss_price,target:d.risk.take_profit_price}},null,1);
+  $("dd-outcome").textContent=JSON.stringify({pnl:d.outcome.actual_pnl,exit:d.outcome.exit_reason,direction_correct:d.outcome.direction_correct,lessons:d.outcome.lessons_learned},null,1);
+  $("drilldown").scrollIntoView({behavior:"smooth"});
+}
+
+async function loadRisk(){$("risk-box").textContent=JSON.stringify(await j("/api/v1/risk"),null,2);}
+async function loadAcct(){$("acct-box").textContent=JSON.stringify(await j("/api/v1/accounting"),null,2);}
+
+const tabs=["executive","decisions","risk","accounting"];
+const nav=$("tabs");let current="executive";
+tabs.forEach(t=>{const b=document.createElement("button");b.textContent=t.toUpperCase();b.dataset.t=t;
+  if(t===current)b.classList.add("active");
+  b.onclick=()=>{current=t;document.querySelectorAll("section").forEach(s=>s.classList.toggle("active",s.dataset.tab===t));
+    nav.querySelectorAll("button").forEach(x=>x.classList.toggle("active",x.dataset.t===t));};
+  nav.appendChild(b);});
+
+async function refreshAll(){
+  try{
+    await loadExecutive();
+    if(current==="decisions")await loadDecisions();
+    if(current==="risk")await loadRisk();
+    if(current==="accounting")await loadAcct();
+    j("/api/v1/research").then(d=>$("research-box").textContent=JSON.stringify(d,null,1)).catch(()=>{});
+    j("/api/v1/health").then(d=>$("health-box").textContent=JSON.stringify(d,null,1)).catch(()=>{});
+  }catch(e){console.error(e);}
+}
+refreshAll();
+loadDecisions().catch(()=>{});
+setInterval(refreshAll,5000);
+</script>
+</body>
+</html>

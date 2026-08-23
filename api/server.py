@@ -1,0 +1,153 @@
+"""Command-center HTTP server (stdlib only) + static UI.
+
+Routes:
+    GET /                    -> ui/index.html
+    GET /api/v1/executive    -> executive snapshot
+    GET /api/v1/executions   -> recent closed trades
+    GET /api/v1/decisions/{execution_id} -> full drill-down
+    GET /api/v1/risk         -> risk/emergency/compliance state
+    GET /api/v1/accounting   -> ledger balances + lots
+    GET /api/v1/research     -> calibration report
+    GET /api/v1/health       -> system health
+    GET /metrics             -> Prometheus exposition
+
+POST /api/v1/control/{action}  body {"operator_id","role",...params}
+    -> audited ControlPlane execution
+"""
+
+import json
+import logging
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
+
+from api.views import SystemSnapshotBuilder, prometheus_metrics
+from core.control_plane import ControlPlane
+
+logger = logging.getLogger(__name__)
+
+_UI_FILE = Path(__file__).resolve().parents[1] / "ui" / "index.html"
+
+
+def make_handler(
+    builder: SystemSnapshotBuilder, control_plane: ControlPlane | None
+) -> type[BaseHTTPRequestHandler]:
+    """Bind views + control plane into a request handler class."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, fmt: str, *args: Any) -> None:  # quiet access logs
+            logger.debug(fmt, *args)
+
+        def _json(self, payload: Any, status: int = 200) -> None:
+            body = json.dumps(payload).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _text(self, text: str, status: int = 200, ctype: str = "text/plain") -> None:
+            body = text.encode()
+            self.send_response(status)
+            self.send_header("Content-Type", f"{ctype}; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self) -> None:  # noqa: N802 - stdlib API
+            path = self.path.split("?")[0]
+            if path == "/" or path == "/ui":
+                if _UI_FILE.exists():
+                    self._text(_UI_FILE.read_text(encoding="utf-8"), ctype="text/html")
+                else:
+                    self._text("ui/index.html missing", status=404)
+                return
+
+            try:
+                if path == "/api/v1/executive":
+                    self._json(builder.executive())
+                elif path == "/api/v1/executions":
+                    self._json({"executions": builder.executions()})
+                elif path.startswith("/api/v1/decisions/"):
+                    execution_id = path.rsplit("/", 1)[-1]
+                    try:
+                        self._json(builder.decision_drilldown(execution_id))
+                    except KeyError:
+                        self._json({"error": "unknown execution"}, status=404)
+                elif path == "/api/v1/risk":
+                    self._json(builder.risk_state())
+                elif path == "/api/v1/accounting":
+                    self._json(builder.accounting())
+                elif path == "/api/v1/research":
+                    self._json(builder.research_quality())
+                elif path == "/api/v1/health":
+                    self._json(builder.health())
+                elif path == "/metrics":
+                    self._text(prometheus_metrics(builder.executive()), ctype="text/plain")
+                else:
+                    self._json({"error": "not found"}, status=404)
+            except Exception as exc:  # noqa: BLE001 - server boundary
+                logger.exception("GET %s failed", path)
+                self._json({"error": str(exc)}, status=500)
+
+        def do_POST(self) -> None:  # noqa: N802 - stdlib API
+            path = self.path.split("?")[0]
+            if control_plane is None or not path.startswith("/api/v1/control/"):
+                self._json({"error": "not found"}, status=404)
+                return
+            action = path.rsplit("/", 1)[-1]
+            length = int(self.headers.get("Content-Length") or 0)
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                body = json.loads(raw or b"{}")
+                result = run_control(control_plane, action, body)
+                self._json(result)
+            except PermissionError as exc:
+                self._json({"error": str(exc)}, status=403)
+            except (ValueError, RuntimeError, NotImplementedError) as exc:
+                self._json({"error": str(exc)}, status=400)
+            except Exception as exc:  # noqa: BLE001 - server boundary
+                logger.exception("control action failed")
+                self._json({"error": str(exc)}, status=500)
+
+    def run_control(plane: ControlPlane, action: str, body: dict[str, Any]) -> dict[str, Any]:
+        import asyncio
+
+        operator_id = str(body.get("operator_id", "")).strip()
+        role = str(body.get("role", "VIEWER"))
+        params_raw = body.get("params", {}) or {}
+        params = {k: v for k, v in params_raw.items()}
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(plane.execute(operator_id, role, action, params))
+        finally:
+            loop.close()
+
+    return Handler
+
+
+class CommandCenterServer:
+    """Daemon-threaded server; call start()/stop() around usage."""
+
+    def __init__(
+        self,
+        builder: SystemSnapshotBuilder,
+        control_plane: ControlPlane | None = None,
+        port: int = 8787,
+    ) -> None:
+        handler = make_handler(builder, control_plane)
+        self._server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+        self.port = self._server.server_address[1]
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+
+    def serve_forever(self) -> None:
+        self._server.serve_forever()

@@ -10,7 +10,7 @@ import hashlib
 import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
@@ -54,6 +54,10 @@ from schemas.contracts import (
     VerificationReport,
 )
 from simulation.paper_engine import PaperEngine
+
+if TYPE_CHECKING:
+    from api.views import SystemSnapshotBuilder
+    from core.control_plane import ControlPlane
 
 logger = logging.getLogger(__name__)
 
@@ -350,6 +354,47 @@ class ReplayRunner:
                 if p.receipt.symbol == symbol:
                     return p.receipt.fill_price
             raise
+
+    def build_control_plane(self) -> "ControlPlane":
+        """Wire the audited operator console over live components."""
+        from core.control_plane import ControlPlane
+
+        return ControlPlane(
+            store=self.store,
+            event_bus=self.bus,
+            risk_governor=self.risk_governor,
+            strategy_agent=self.c4,
+            order_manager=self.order_manager,
+            governor=self.governor,
+            paper_engine=self.paper,
+            price_lookup=self._last_price_of,
+            flatten_callback=self._flatten_position,
+            positions_view=self._positions_view,
+        )
+
+    def build_snapshot_builder(self) -> "SystemSnapshotBuilder":
+        """Expose read-only command-center views over this run."""
+        from api.views import SystemSnapshotBuilder
+
+        return SystemSnapshotBuilder(
+            store=self.store,
+            ledger=self.ledger,
+            governor=self.governor,
+            risk_governor=self.risk_governor,
+            paper_engine=self.paper,
+            lot_book=self.lot_book,
+        )
+
+    def serve(self, port: int = 8787) -> Any:
+        """Start the command-center HTTP server on a daemon thread."""
+        from api.server import CommandCenterServer
+
+        server = CommandCenterServer(
+            self.build_snapshot_builder(), self.build_control_plane(), port=port
+        )
+        server.start()
+        logger.warning("Command center serving on http://127.0.0.1:%s", server.port)
+        return server
 
     async def _flatten_position(self, execution_id: str, exit_price: float) -> None:
         position = self.paper.open_positions.get(execution_id)
