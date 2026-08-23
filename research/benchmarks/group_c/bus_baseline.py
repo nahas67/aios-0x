@@ -10,8 +10,10 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
+
+from pydantic import BaseModel  # noqa: E402
 
 from core.event_bus import EventTopic, InMemoryEventBus  # noqa: E402
 from schemas.contracts import MarketDataPayload, PriceData  # noqa: E402
@@ -24,7 +26,7 @@ async def run_once() -> float:
     await bus.start()
     received = 0
 
-    async def sink(payload: MarketDataPayload) -> None:
+    async def sink(payload: BaseModel) -> None:
         nonlocal received
         received += 1
 

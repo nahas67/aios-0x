@@ -16,12 +16,14 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
 HOPS = 100
 WARMUP = 1
 REPS = 10
+
+from pydantic import BaseModel  # noqa: E402
 
 
 def bench_langgraph() -> list[float]:
@@ -66,7 +68,7 @@ def bench_native_bus() -> list[float]:
         state = HopState()
         done = asyncio.Event()
 
-        async def hop(payload: CandidateHypothesis) -> None:
+        async def hop(payload: BaseModel) -> None:
             state.hops += 1
             if state.hops < HOPS:
                 await bus.publish(EventTopic.HYPOTHESIS_GENERATED, payload)
