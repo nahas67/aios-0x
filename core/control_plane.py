@@ -48,6 +48,7 @@ class ControlAction(StrEnum):
     TRIGGER_KILL_SWITCH = "trigger_kill_switch"
     RESET_LOCKOUT = "reset_lockout"
     APPROVE_LIVE_CAPITAL = "approve_live_capital"
+    PROMOTE_CHALLENGER = "promote_challenger"
 
 
 def _build_matrix() -> dict[OperatorRole, frozenset[ControlAction]]:
@@ -65,6 +66,7 @@ def _build_matrix() -> dict[OperatorRole, frozenset[ControlAction]]:
         ControlAction.SET_HALT_DRAWDOWN_PCT,
         ControlAction.TRIGGER_KILL_SWITCH,
         ControlAction.RESET_LOCKOUT,
+        ControlAction.PROMOTE_CHALLENGER,
     }
     admin = risk_admin | {ControlAction.APPROVE_LIVE_CAPITAL}
     return {
@@ -92,6 +94,7 @@ class ControlPlane:
         order_manager: Any,
         governor: Any = None,
         paper_engine: Any = None,
+        challenge_registry: Any = None,
         price_lookup: Callable[[str], float] | None = None,
         flatten_callback: Callable[[str, float], Awaitable[None]] | None = None,
         positions_view: Callable[[], dict[str, dict[str, str]]] | None = None,
@@ -103,6 +106,7 @@ class ControlPlane:
         self.order_manager = order_manager
         self.governor = governor
         self.paper_engine = paper_engine
+        self.challenge_registry = challenge_registry
         self._price_lookup = price_lookup or (lambda symbol: 0.0)
         self._flatten = flatten_callback
         self._positions_view = positions_view or (lambda: {})
@@ -143,14 +147,12 @@ class ControlPlane:
 
         try:
             role_enum = OperatorRole(role.upper())
-        except ValueError:
-            return_err = _deny(f"unknown role: {role!r}")
-            raise return_err
+        except ValueError as exc:
+            raise _deny(f"unknown role: {role!r}") from exc
         try:
             action_enum = ControlAction(action.lower())
-        except ValueError:
-            err = _deny(f"unknown action: {action!r}", role_enum.value)
-            raise err
+        except ValueError as exc:
+            raise _deny(f"unknown action: {action!r}", role_enum.value) from exc
 
         if not self.authorize(role_enum, action_enum):
             record = {
@@ -267,6 +269,19 @@ class ControlPlane:
             "LIVE_CAPITAL_APPROVAL", None, {"operator_id": operator_id, "note": note}
         )
         return {"live_capital_approved_by": operator_id}
+
+    async def _do_promote_challenger(
+        self, operator_id: str, trial_name: str = "", decision: str = "promote"
+    ) -> dict[str, Any]:
+        if self.challenge_registry is None:
+            raise RuntimeError("challenge registry not wired")
+        if not trial_name:
+            raise ValueError("trial_name required")
+        if decision == "promote":
+            promoted: dict[str, Any] = self.challenge_registry.promote(trial_name, operator_id)
+            return promoted
+        rejected: dict[str, Any] = self.challenge_registry.reject(trial_name, operator_id)
+        return rejected
 
     def _require_governor(self) -> None:
         if self.governor is None:

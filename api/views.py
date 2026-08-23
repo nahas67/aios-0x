@@ -211,5 +211,5 @@ def prometheus_metrics(snapshot: dict[str, Any]) -> str:
         f"aios_audit_chain_valid {1 if snapshot.get('chain_valid') else 0}",
     ]
     state = str(snapshot.get("emergency_state", "UNKNOWN"))
-    lines.append('aios_emergency_state{state="%s"} 1' % state)
+    lines.append(f'aios_emergency_state{{state="{state}"}} 1')
     return "\n".join(lines) + "\n"

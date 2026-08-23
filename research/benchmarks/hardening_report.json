@@ -1,0 +1,45 @@
+{
+  "date_note": "numbers recorded from THIS machine/run - not portable claims",
+  "performance": {
+    "bars": 400,
+    "elapsed_s": 5.368,
+    "bars_per_second": 74.5,
+    "trades": 11,
+    "events_logged": 1061,
+    "chain_valid": true
+  },
+  "security_checklist": [
+    {
+      "item": "secrets only via env (pydantic-settings, repr=False)",
+      "status": "implemented"
+    },
+    {
+      "item": ".env gitignored; .env.example committed without values",
+      "status": "implemented"
+    },
+    {
+      "item": "no API keys in code paths; adapters require explicit env opt-in",
+      "status": "implemented"
+    },
+    {
+      "item": "live execution gated by AIOS_ALLOW_LIVE_EXECUTION + testnet default",
+      "status": "implemented"
+    },
+    {
+      "item": "audit log hash-chained; tamper pinpointed in tests",
+      "status": "implemented"
+    },
+    {
+      "item": "lockout survives restart until human reset w/ operator id",
+      "status": "implemented"
+    },
+    {
+      "item": "topic-level ACLs enforced via ACLBus (mechanism shipped; per-agent wiring pending)",
+      "status": "partial"
+    },
+    {
+      "item": "dependency pinning (requirements.txt) + no known vulnerable pins at audit date",
+      "status": "implemented"
+    }
+  ]
+}

@@ -46,6 +46,7 @@ from core.risk_governor import RiskGovernor, load_lockout_from_store
 from schemas.contracts import (
     CandidateHypothesis,
     Disposal,
+    EmergencyStateValue,
     PortfolioAllocationPlan,
     PredictionRecord,
     ReconciliationReport,
@@ -57,6 +58,7 @@ from simulation.paper_engine import PaperEngine
 
 if TYPE_CHECKING:
     from api.views import SystemSnapshotBuilder
+    from core.challenger import ChallengeRegistry
     from core.control_plane import ControlPlane
 
 logger = logging.getLogger(__name__)
@@ -357,8 +359,11 @@ class ReplayRunner:
 
     def build_control_plane(self) -> "ControlPlane":
         """Wire the audited operator console over live components."""
+        from core.challenger import ChallengeRegistry
         from core.control_plane import ControlPlane
 
+        if not hasattr(self, "_challenge_registry"):
+            self._challenge_registry = ChallengeRegistry(self.store)
         return ControlPlane(
             store=self.store,
             event_bus=self.bus,
@@ -367,10 +372,18 @@ class ReplayRunner:
             order_manager=self.order_manager,
             governor=self.governor,
             paper_engine=self.paper,
+            challenge_registry=self._challenge_registry,
             price_lookup=self._last_price_of,
             flatten_callback=self._flatten_position,
             positions_view=self._positions_view,
         )
+
+    def build_challenge_registry(self) -> "ChallengeRegistry":
+        if not hasattr(self, "_challenge_registry"):
+            from core.challenger import ChallengeRegistry
+
+            self._challenge_registry = ChallengeRegistry(self.store)
+        return self._challenge_registry
 
     def build_snapshot_builder(self) -> "SystemSnapshotBuilder":
         """Expose read-only command-center views over this run."""
@@ -654,6 +667,13 @@ class ReplayRunner:
                         await self.c1.collect_and_publish(symbol, "1d")
                     except IndexError:
                         exhausted = True
+                    except Exception as exc:  # noqa: BLE001 - venue/feed outage drill
+                        logger.error("feed failure for %s: %s", symbol, exc)
+                        await self.risk_governor.escalate(
+                            EmergencyStateValue.DATA_FAILURE,
+                            f"ingestion outage on {symbol}: {type(exc).__name__}",
+                            triggered_by="data_fabric",
+                        )
                 await self.bus.wait_until_idle()
 
                 await self._process_due_events()
