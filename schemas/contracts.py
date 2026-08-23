@@ -882,3 +882,90 @@ class EmergencyEvent(BaseModel):
     triggered_by: str = Field(default="system", description="Component or operator id")
     trading_allowed: bool = True
     lockout_engaged: bool = False
+
+
+# ------------------------------------------------ finance back office (C11)
+
+
+class Posting(BaseModel):
+    """One double-entry posting; amounts in INTEGER minor units (cents)."""
+
+    entry_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    debit_account: str = Field(..., min_length=1, description="e.g. ASSET:BTC/USD")
+    credit_account: str = Field(..., min_length=1, description="e.g. CASH")
+    amount_minor: int = Field(..., gt=0, description="Integer minor units - never floats")
+    currency: str = "USD"
+    memo: str = ""
+    refs: dict[str, str] = Field(default_factory=dict)
+
+
+class TaxLotOpen(BaseModel):
+    lot_id: str = Field(default_factory=generate_uuid)
+    symbol: str
+    opened_at: datetime
+    qty_original: float = Field(gt=0.0)
+    qty_remaining: float = Field(gt=0.0)
+    unit_cost_minor: int = Field(gt=0)
+    fees_minor: int = 0
+    ref_execution_id: str
+
+
+class Disposal(BaseModel):
+    disposal_id: str = Field(default_factory=generate_uuid)
+    lot_id: str
+    symbol: str
+    disposed_qty: float = Field(gt=0.0)
+    basis_minor: int = Field(ge=0)
+    proceeds_minor: int = Field(ge=0)
+    gain_minor: int
+    holding_days: int = Field(ge=0)
+    long_term: bool
+    disposed_at: datetime
+    ref_execution_id_exit: str
+
+
+class TaxComputation(BaseModel):
+    """Advisory tax output with cited rule; filings REQUIRE professional signoff."""
+
+    computation_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    jurisdiction: str
+    rule_id: str
+    rule_citation: str
+    inputs_summary: str
+    taxable_gain_minor: int
+    tax_due_minor: int
+    confidence: float = Field(default=0.75, ge=0.0, le=1.0)
+    requires_professional_signoff: bool = True
+    is_simulated: bool = False
+
+
+class ReviewState(StrEnum):
+    DRAFT = "DRAFT"
+    PREPARED = "PREPARED"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    APPROVED_BY_CA = "APPROVED_BY_CA"
+    REJECTED = "REJECTED"
+
+
+class ReviewItem(BaseModel):
+    item_id: str = Field(default_factory=generate_uuid)
+    subject_kind: str
+    subject_ref: str
+    state: ReviewState = ReviewState.DRAFT
+    prepared_by: str | None = None
+    reviewed_by: str | None = None
+    notes: list[str] = Field(default_factory=list)
+    updated_at: datetime = Field(default_factory=generate_utc_now)
+
+
+class ComplianceAlert(BaseModel):
+    alert_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    rule_name: Literal["WASH_SALE_WINDOW", "RESTRICTED_SYMBOL", "FAT_FINGER_QTY", "POSITION_LIMIT"]
+    severity: Literal["WARNING", "CRITICAL"]
+    detail: str
+    symbol: str | None = None
+    ref_execution_id: str | None = None
+    blocks_execution: bool = False

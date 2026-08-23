@@ -30,6 +30,10 @@ from communities.c9_portfolio.portfolio import PortfolioGovernor
 from communities.c10_world.macro_calendar import FileMacroCalendar
 from communities.c10_world.regime_engine import RegimeEngine
 from communities.c10_world.world_engines import ExpectationEngine, ScenarioEngine
+from communities.c11_finance.ca_review import CAWorkflow
+from communities.c11_finance.compliance import Surveillance
+from communities.c11_finance.ledger import DoubleEntryLedger
+from communities.c11_finance.tax import BUILTIN_RULES, LotBook, TaxEngine
 from core.config import Settings, get_settings
 from core.data_quality import AnomalyDetector, SymbolHealthRegistry
 from core.event_bus import BaseEventBus, EventTopic, InMemoryEventBus
@@ -41,6 +45,7 @@ from core.risk_firewall import RiskConfig, RiskFirewall
 from core.risk_governor import RiskGovernor, load_lockout_from_store
 from schemas.contracts import (
     CandidateHypothesis,
+    Disposal,
     PortfolioAllocationPlan,
     PredictionRecord,
     ReconciliationReport,
@@ -221,6 +226,14 @@ class ReplayRunner:
             price_lookup=self._last_price_of,
         )
         self._fill_mirror: dict[str, str] = {}  # execution_id -> symbol (reconciliation)
+
+        # ---- C11 finance back office
+        self.ledger = DoubleEntryLedger(event_bus=self.bus)
+        self.lot_book = LotBook()
+        self.tax_engine = TaxEngine(BUILTIN_RULES["GENERIC_25"])
+        self.ca_workflow = CAWorkflow()
+        self.surveillance = Surveillance(event_bus=self.bus)
+        self._disposals_by_execution: dict[str, list[Disposal]] = {}
 
         # Decision-time caches (runner-owned; communities stay decoupled)
         self._hypotheses: dict[str, CandidateHypothesis] = {}
@@ -419,6 +432,17 @@ class ReplayRunner:
         self._fill_mirror[receipt.execution_id] = receipt.symbol
         self._filled_this_bar.add(receipt.execution_id)
 
+        # C11 hooks: double-entry books + tax lot opening + surveillance
+        await self.ledger.post_fill_open(
+            symbol=receipt.symbol,
+            fill_price=receipt.fill_price,
+            quantity=receipt.filled_quantity,
+            fees=receipt.fees,
+            execution_id=receipt.execution_id,
+        )
+        self.lot_book.open_from_fill(receipt, opened_at=self.fetcher.current_timestamp())
+        await self.surveillance.check_fill(receipt, action_hint="BUY")
+
         if receipt.strategy_id in self._pending_predictions:
             return
         strategy = self._strategies.get(receipt.strategy_id)
@@ -485,6 +509,27 @@ class ReplayRunner:
         if pnl_opt is None:
             logger.warning("Settlement skipped for unknown execution %s", receipt.execution_id)
             return
+
+        # C11 hooks: FIFO lot consumption + realized-pnl ledger legs
+        disposals: list[Disposal] = []
+        try:
+            disposals = self.lot_book.consume(
+                receipt.symbol,
+                receipt.filled_quantity,
+                exit_price,
+                disposed_at=self.fetcher.current_timestamp(),
+                ref_execution_id_exit=receipt.execution_id,
+            )
+            self._disposals_by_execution[receipt.execution_id] = disposals
+            await self.ledger.post_exit_close(
+                symbol=receipt.symbol,
+                basis_released_minor=sum(d.basis_minor for d in disposals),
+                proceeds_minor=sum(d.proceeds_minor for d in disposals),
+                realized_pnl_minor=sum(d.gain_minor for d in disposals),
+                execution_id=receipt.execution_id,
+            )
+        except ValueError as exc:
+            logger.error("lot consumption failed for %s: %s", receipt.execution_id, exc)
 
         strategy = self._strategies.get(receipt.strategy_id)
         hypothesis = self._hypotheses.get(strategy.hypothesis_id) if strategy else None

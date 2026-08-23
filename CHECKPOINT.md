@@ -142,6 +142,21 @@ Next: Phase 6 Finance Back Office (double-entry ledger, broker/statement reconci
 
 ---
 
+### Phase 6 FINANCE BACK OFFICE — COMPLETE (2026-08-23)
+
+- [x] **Double-entry ledger** (`c11_finance/ledger.py`): integer-minor-unit postings only; hard zero-sum trial-balance invariant; trading legs (open-at-cost, fees, basis release, realized gain/loss); LEDGER_POSTED events; **verified balanced across full honest replay**
+- [x] **Tax lot book**: FIFO consumption w/ partial fills, per-lot cost basis + fee allocation, holding-period split (short/long), overdraw refused loudly
+- [x] **Jurisdiction rule engine**: cited advisory rules (IN s.115BBH flat-30% VDA, US IRC §1222 LT/ST split, GENERIC placeholder); TaxComputation carries citation + `requires_professional_signoff=True` unconditionally
+- [x] **CA review workflow**: DRAFT→PREPARED→UNDER_REVIEW→APPROVED_BY_CA/REJECTED state machine; `export_for_filing` raises PermissionError unless approved; reviewer identity mandatory
+- [x] **Compliance surveillance**: RESTRICTED_SYMBOL (CRITICAL/blocking), FAT_FINGER_QTY vs rolling median (CRITICAL/blocking), WASH_SALE_WINDOW heuristic (WARNING); COMPLIANCE_ALERT topic live
+- [x] **Audit-graph query API** (`audit_graph.py`): decision_provenance(execution_id) walks execution→strategy→hypothesis→verification over the hash-chained store; hypothesis_impact() aggregates downstream PnL; chain_complete flag verified E2E in tests
+- [x] **Runner integration**: fills post to books + open lots; settlements consume FIFO + post realized legs; NAV utility added
+- [x] Gates: **pytest 103 passed +1 opt-in · ruff clean · mypy strict clean (59 files)**
+
+Next: Phase 7 Control Plane & UI (human control-plane APIs with RBAC, institutional command-center UI, observability stack wiring).
+
+---
+
 ### Phase 1.0 – Architecture Baseline (FROZEN & LOCKED) — 100% COMPLETE
 
 - [x] **System Map & Master Index** ([docs/00_system_map.md](docs/00_system_map.md))

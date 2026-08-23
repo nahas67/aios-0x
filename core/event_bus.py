@@ -35,6 +35,8 @@ class EventTopic(StrEnum):
     ORDER_FILLED = "aios.c5.order_filled"
     RECONCILIATION_FAILED = "aios.c5.reconciliation_failed"
     RISK_EMERGENCY = "aios.risk.emergency"
+    LEDGER_POSTED = "aios.c11.ledger_posted"
+    COMPLIANCE_ALERT = "aios.c11.compliance_alert"
     TRADE_EXECUTED = "aios.c5.order_executed"  # alias: order_executed semantics
     OBSERVATION_COMPLETED = "aios.c6.observation_completed"
     MEMORY_STORED = "aios.c7.memory_stored"
