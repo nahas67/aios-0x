@@ -8,6 +8,7 @@ timestamp-free determinism hash identical across identical runs.
 
 import hashlib
 import logging
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,11 @@ from communities.c6_observation.observation_agent import ObservationAgent
 from communities.c6_observation.postmortem_engine import PostmortemEngine
 from communities.c7_memory.memory_agent import MemoryAgent
 from communities.c8_evolution.evolution_agent import EvolutionAgent
+from communities.c10_world.macro_calendar import FileMacroCalendar
+from communities.c10_world.regime_engine import RegimeEngine
+from communities.c10_world.world_engines import ExpectationEngine, ScenarioEngine
 from core.config import Settings, get_settings
+from core.data_quality import AnomalyDetector, SymbolHealthRegistry
 from core.event_bus import BaseEventBus, EventTopic, InMemoryEventBus
 from core.model_gateway import BaseModelGateway, ModelResponse, build_gateway
 from core.model_router import ModelRouter
@@ -95,11 +100,13 @@ class ReplayRunner:
         store: BaseMemoryStore | None = None,
         gateway: BaseModelGateway | None = None,
         settings: Settings | None = None,
+        macro_calendar_path: str | Path | None = None,
     ) -> None:
         """Build the runner; call :meth:`run` to execute the replay.
 
         ``gateway`` injection is for tests (ScriptedModel); production builds
         from settings via :func:`build_gateway` (None => deterministic mode).
+        ``macro_calendar_path`` enables C10 world-intelligence processing.
         """
         self.csv_path_by_symbol = dict(csv_path_by_symbol)
         self.symbols = sorted(self.csv_path_by_symbol)
@@ -120,6 +127,20 @@ class ReplayRunner:
         )
 
         self.c1 = DataAcquisitionAgent(fetcher=self.fetcher, event_bus=self.bus)
+
+        # ---- Data-quality pipeline (Directive 9 reactions)
+        self.anomaly_detector = AnomalyDetector()
+        self.health = SymbolHealthRegistry()
+
+        # ---- C10 world intelligence
+        self.regime_engine = RegimeEngine(event_bus=self.bus)
+        self.calendar: FileMacroCalendar | None = None
+        self.expectation_engine: ExpectationEngine | None = None
+        self.scenario_engine: ScenarioEngine | None = None
+        if macro_calendar_path is not None:
+            self.calendar = FileMacroCalendar(macro_calendar_path)
+            self.expectation_engine = ExpectationEngine(event_bus=self.bus)
+            self.scenario_engine = ScenarioEngine(event_bus=self.bus)
 
         # ---- C2: adversarial debate when intelligence is available, else template
         if self.settings.research_mode == "auto" and self.router.llm_available:
@@ -178,9 +199,13 @@ class ReplayRunner:
         self.equity_curve: list[float] = []
 
         self._subscriptions: list[tuple[EventTopic, Any]] = [
+            (EventTopic.DATA_ACQUIRED, self._on_data_quality),
+            (EventTopic.DATA_ACQUIRED, self.regime_engine.on_data_acquired),
             (EventTopic.DATA_ACQUIRED, self.c2.on_data_acquired),
             (EventTopic.DATA_ACQUIRED, self.c3.on_data_acquired),
             (EventTopic.DATA_ACQUIRED, self.c4.on_data_acquired),
+            (EventTopic.DATA_ANOMALY, self.c4.on_data_anomaly),
+            (EventTopic.REGIME_CHANGED, self.c4.on_regime_changed),
             (EventTopic.HYPOTHESIS_GENERATED, self.c3.on_hypothesis_generated),
             (EventTopic.HYPOTHESIS_GENERATED, self.c4.on_hypothesis_generated),
             (EventTopic.HYPOTHESIS_GENERATED, self._on_hypothesis),
@@ -196,8 +221,20 @@ class ReplayRunner:
         ]
 
     async def _log_event(self, payload: Any) -> None:
-        kind = type(payload).__name__
-        self.store.append_event(kind, _payload_ref_id(payload), payload.model_dump(mode="json"))
+        # Legacy direct logger; prefer _logger_for(topic) subscriptions.
+        self.store.append_event(
+            type(payload).__name__, _payload_ref_id(payload), payload.model_dump(mode="json")
+        )
+
+    def _logger_for(self, topic: EventTopic) -> Callable[[Any], Awaitable[None]]:
+        """Bind the canonical topic value as the audit-log ``kind``."""
+
+        async def _topic_logger(payload: Any) -> None:
+            self.store.append_event(
+                topic.value, _payload_ref_id(payload), payload.model_dump(mode="json")
+            )
+
+        return _topic_logger
 
     async def _on_model_call(self, role: str, response: ModelResponse) -> None:
         """Cost-intelligence sink: log every model call with its accounting."""
@@ -209,6 +246,30 @@ class ReplayRunner:
 
     async def _on_transcript(self, transcript_json: str) -> None:
         self.store.append_event("TRANSCRIPT", None, {"json": transcript_json})
+
+    async def _on_data_quality(self, payload: Any) -> None:
+        """Run anomaly detection + health tracking for every data arrival.
+
+        Subscribed BEFORE research/strategy handlers so freeze reactions apply
+        within the same bar cascade.
+        """
+        self.health.apply_payload(payload)
+        for alert in self.anomaly_detector.ingest(payload):
+            self.health.apply_alert(alert)
+            await self.bus.publish(EventTopic.DATA_ANOMALY, alert)
+
+    async def _process_due_events(self) -> None:
+        """Publish pre-event scenarios and post-release expectation snapshots."""
+        if self.calendar is None or self.expectation_engine is None:
+            return
+        current_ts = self.fetcher.current_timestamp()
+        for event in self.calendar.due_events(current_ts):
+            if event.actual is None and self.scenario_engine is not None:
+                await self.scenario_engine.on_event(event)
+            elif event.actual is not None:
+                if self.scenario_engine is not None:
+                    await self.scenario_engine.on_event(event)
+                await self.expectation_engine.on_event(event)
 
     async def _on_hypothesis(self, hypothesis: CandidateHypothesis) -> None:
         self._hypotheses[hypothesis.hypothesis_id] = hypothesis
@@ -361,7 +422,7 @@ class ReplayRunner:
         for topic, handler in self._subscriptions:
             await self.bus.subscribe(topic, handler)
         for topic in EventTopic:
-            await self.bus.subscribe(topic, self._log_event)
+            await self.bus.subscribe(topic, self._logger_for(topic))
 
         total_bars = min(self.fetcher.bar_count(s) for s in self.symbols)
         try:
@@ -374,6 +435,9 @@ class ReplayRunner:
                         await self.c1.collect_and_publish(symbol, "1d")
                     except IndexError:
                         exhausted = True
+                await self.bus.wait_until_idle()
+
+                await self._process_due_events()
                 await self.bus.wait_until_idle()
 
                 for receipt, exit_price, reason in self._evaluate_bracket_exits():

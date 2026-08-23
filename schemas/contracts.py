@@ -6,6 +6,7 @@ between the decoupled AI agent communities.
 
 import uuid
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -514,3 +515,124 @@ class PostmortemRecord(BaseModel):
     should_change: list[str] = Field(
         default_factory=list, description="Concrete process changes proposed"
     )
+
+
+# ------------------------------------------------- world intelligence (C10)
+
+
+class ScheduledEvent(BaseModel):
+    """A scheduled world/macro event with consensus and (later) actual outcome.
+
+    ``actual`` is None until the event resolves; the expectation engine
+    computes surprise only from recorded values - never invented ones.
+    """
+
+    event_id: str = Field(..., min_length=1)
+    title: str = Field(..., min_length=1)
+    event_time: datetime = Field(..., description="Scheduled UTC release time")
+    consensus: float | None = Field(default=None, description="Market consensus value")
+    prior: float | None = Field(default=None, description="Prior printed value")
+    actual: float | None = Field(default=None, description="Printed actual (None until released)")
+    unit: str = Field(default="", description="Unit of the values (%, index...)")
+    higher_is_better: bool = Field(
+        default=True,
+        description=(
+            "Direction convention for surprise interpretation (Directive 12): for GDP, "
+            "higher prints are 'better than expected'; for CPI/unemployment the opposite. "
+            "Interpretation is ALWAYS relative to expectations, never naive good/bad."
+        ),
+    )
+    affected_symbols: list[str] = Field(default_factory=list)
+    source_tag: str = Field(default="user_calendar", min_length=1)
+    is_simulated: bool = Field(default=False)
+
+
+class ExpectationSnapshot(BaseModel):
+    """Expected vs actual vs interpretation for one resolved event (Directive 12).
+
+    Interpretation is relative to EXPECTATIONS (better/worse than feared),
+    never a naive good-news/bad-news label.
+    """
+
+    snapshot_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    event_id: str
+    title: str
+    consensus: float | None
+    actual: float
+    surprise: float = Field(..., description="actual - consensus")
+    surprise_pct: float = Field(..., description="surprise relative to |consensus|")
+    interpretation: Literal["BETTER_THAN_EXPECTED", "WORSE_THAN_EXPECTED", "AS_EXPECTED"]
+    affected_symbols: list[str]
+    is_simulated: bool = False
+
+
+class ScenarioCard(BaseModel):
+    """One pre-event scenario with probability and invalidation condition."""
+
+    name: Literal["BASE", "BULL", "BEAR", "UNEXPECTED", "EXTREME"]
+    probability: float = Field(..., ge=0.0, le=1.0)
+    expected_impact: str
+    horizon_timeframe: str
+    invalidation_condition: str
+
+
+class ScenarioSet(BaseModel):
+    """Pre-event scenario distribution (Directive 29)."""
+
+    scenario_set_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    event_id: str
+    title: str
+    cards: list[ScenarioCard] = Field(min_length=3)
+    is_simulated: bool = False
+
+    @model_validator(mode="after")
+    def validate_probabilities(self) -> "ScenarioSet":
+        total = sum(c.probability for c in self.cards)
+        if abs(total - 1.0) > 0.01:
+            raise ValueError(f"scenario probabilities sum to {total}, expected ~1.0")
+        return self
+
+
+class TrendLabel(StrEnum):
+    UP = "UP"
+    DOWN = "DOWN"
+    FLAT = "FLAT"
+
+
+class VolRegime(StrEnum):
+    LOW = "LOW"
+    NORMAL = "NORMAL"
+    HIGH = "HIGH"
+
+
+class RegimeState(BaseModel):
+    """Deterministic regime assessment for one symbol (Directive 37)."""
+
+    symbol: str
+    trend: TrendLabel
+    vol_regime: VolRegime
+    realized_vol_pct: float = Field(..., ge=0.0, description="Stdev of bar returns (%)")
+    ema_slope_pct: float = Field(..., description="EMA(8) slope over window (%)")
+    assessed_at: datetime
+    window_bars: int = Field(..., gt=0)
+    is_simulated: bool = False
+
+
+class DataAnomalyAlert(BaseModel):
+    """Emitted when ingested data violates sanity rules (Doc 02 / Directive 9)."""
+
+    alert_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    symbol: str
+    anomaly_type: Literal["OHLC_INVALID", "PRICE_GAP", "VOLUME_SPIKE", "STALE_DATA", "SCHEMA_DRIFT"]
+    severity: Literal["WARNING", "CRITICAL"]
+    detail: str
+    observed_value: float | None = None
+    reference_value: float | None = None
+    freezes_symbol: bool = Field(
+        default=False,
+        description="True when downstream strategy generation must pause for this symbol",
+    )
+    is_simulated: bool = False

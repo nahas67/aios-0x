@@ -96,6 +96,21 @@ Next: Phase 3 Data Fabric & World Intelligence (real ingestion adapters, quality
 
 ---
 
+### Phase 3 DATA FABRIC & WORLD INTELLIGENCE — COMPLETE (2026-08-23)
+
+- [x] **REAL LIVE MARKET DATA ACHIEVED**: `CcxtDataFetcher` (communities/c1_data/ccxt_fetcher.py) pulls public OHLCV from any CCXT venue keylessly; verified live — BTC/USDT $76,491.81 through the full pipeline with `is_simulated=false`, provenance `ccxt:binance/LIVE`; injectable exchange factory for offline tests; `scripts/fetch_live_sample.py` CLI reports failures honestly
+- [x] **Data-quality machinery** (`core/data_quality.py`): AnomalyDetector (OHLC_INVALID / PRICE_GAP >15% / VOLUME_SPIKE vs rolling median) + SymbolHealthRegistry freeze/unfreeze lifecycle; DATA_ANOMALY reactions wired — StrategyAgent refuses frozen symbols (Directive 9)
+- [x] **C10 World Intelligence** (`communities/c10_world/`): FileMacroCalendar (CSV scheduled events, replay-cursor semantics); **ExpectationEngine** with direction-aware surprise interpretation (`higher_is_better` per event — hot CPI ≠ good news; Directive 12 honored); ScenarioEngine publishing BASE/BULL/BEAR/UNEXPECTED/EXTREME cards summing to 1.0
+- [x] **Regime engine v0**: EMA(8)-slope trend labels + realized-vol bands; REGIME_CHANGED published on flips; StrategyAgent scales position size by vol regime (HIGH→50% of base)
+- [x] **Audit upgrade**: event log `kind` now uses canonical topic names (`aios.c10.expectation_updated`...) for precise queries
+- [x] Contracts added: ScheduledEvent, ExpectationSnapshot, ScenarioCard/Set, RegimeState, DataAnomalyAlert, TrendLabel/VolRegime
+- [x] ccxt pinned (4.5.74) in requirements.txt; live-network test gated behind AIOS_LIVE_TESTS=1
+- [x] Gates: **pytest 73 passed +1 opt-in live · ruff clean · mypy strict clean (40 files)**
+
+Next: Phase 4 Quant Research & Strategy Lab (benchmark Groups A/B/C execution → selection ADRs; walk-forward harness; backtest-integrity linters; Opportunity Engine; C9 portfolio allocator).
+
+---
+
 ### Phase 1.0 – Architecture Baseline (FROZEN & LOCKED) — 100% COMPLETE
 
 - [x] **System Map & Master Index** ([docs/00_system_map.md](docs/00_system_map.md))

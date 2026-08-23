@@ -3,6 +3,7 @@
 pydantic==2.12.5
 pydantic_core==2.41.5
 pydantic-settings==2.13.1
+ccxt==4.5.74
 annotated-types==0.7.0
 annotated-doc==0.0.4
 typing_extensions==4.16.0

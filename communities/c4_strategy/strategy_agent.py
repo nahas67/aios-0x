@@ -10,13 +10,17 @@ import logging
 from collections import OrderedDict
 from typing import Literal, TypeVar
 
+from core.data_quality import _FREEZING_STATES
 from core.event_bus import BaseEventBus, EventTopic
 from core.risk_firewall import RiskFirewall
 from schemas.contracts import (
     CandidateHypothesis,
+    DataAnomalyAlert,
     MarketDataPayload,
+    RegimeState,
     StrategySpecification,
     VerificationReport,
+    VolRegime,
 )
 
 logger = logging.getLogger(__name__)
@@ -25,6 +29,13 @@ _DEFAULT_PROPOSED_POSITION_SIZE_PCT = 5.0
 _MIN_STOP_DISTANCE_PCT = 0.5
 _STOP_FRACTION_OF_RANGE = 0.5
 _CACHE_MAX_ENTRIES = 512
+
+# Volatility-regime scaling of proposed size (Directive 37 conditioning)
+_VOL_SIZE_SCALAR = {
+    VolRegime.HIGH: 0.5,
+    VolRegime.NORMAL: 1.0,
+    VolRegime.LOW: 1.0,
+}
 
 T = TypeVar("T")
 
@@ -61,6 +72,8 @@ class StrategyAgent:
         self._portfolio_value_estimate = portfolio_value_estimate
         self._hypotheses: OrderedDict[str, CandidateHypothesis] = OrderedDict()
         self._market_payloads: OrderedDict[str, MarketDataPayload] = OrderedDict()
+        self._frozen_symbols: set[str] = set()
+        self._regimes: dict[str, RegimeState] = {}
 
     async def generate_strategy(
         self,
@@ -83,6 +96,14 @@ class StrategyAgent:
         if payload is None:
             logger.info(
                 "NO TRADE for hypothesis %s: no market state cached for %s",
+                hypothesis.hypothesis_id,
+                hypothesis.symbol,
+            )
+            return None
+
+        if hypothesis.symbol in self._frozen_symbols:
+            logger.info(
+                "NO TRADE for hypothesis %s: %s frozen by data anomaly (Directive 9 reaction)",
                 hypothesis.hypothesis_id,
                 hypothesis.symbol,
             )
@@ -128,6 +149,10 @@ class StrategyAgent:
             stop_loss_price = round(entry_price * (1.0 + stop_distance_pct / 100.0), 4)
             take_profit_price = round(entry_price * (1.0 - target_distance_pct / 100.0), 4)
 
+        regime = self._regimes.get(hypothesis.symbol)
+        scalar = _VOL_SIZE_SCALAR.get(regime.vol_regime, 1.0) if regime else 1.0
+        proposed_size = round(_DEFAULT_PROPOSED_POSITION_SIZE_PCT * scalar, 2)
+
         strategy = StrategySpecification(
             hypothesis_id=hypothesis.hypothesis_id,
             symbol=hypothesis.symbol,
@@ -135,7 +160,7 @@ class StrategyAgent:
             entry_price=entry_price,
             stop_loss_price=stop_loss_price,
             take_profit_price=take_profit_price,
-            position_size_pct=_DEFAULT_PROPOSED_POSITION_SIZE_PCT,
+            position_size_pct=proposed_size,
         )
 
         portfolio_value = self._portfolio_value_estimate
@@ -168,8 +193,26 @@ class StrategyAgent:
         return None
 
     async def on_data_acquired(self, payload: MarketDataPayload) -> None:
-        """Cache latest market payload per symbol (bounded)."""
+        """Cache latest market payload per symbol (bounded); clean arrivals unfreeze."""
         _bounded_put(self._market_payloads, payload.symbol, payload)
+        quality = payload.provenance.quality_state if payload.provenance else "FRESH"
+        if payload.is_simulated or quality not in _FREEZING_STATES:
+            self._frozen_symbols.discard(payload.symbol)
+
+    async def on_data_anomaly(self, alert: DataAnomalyAlert) -> None:
+        """Directive 9 reaction: freeze the symbol when the alert demands it."""
+        if alert.freezes_symbol:
+            self._frozen_symbols.add(alert.symbol)
+            logger.warning(
+                "Symbol %s frozen for strategy generation: %s (%s)",
+                alert.symbol,
+                alert.anomaly_type,
+                alert.detail,
+            )
+
+    async def on_regime_changed(self, state: RegimeState) -> None:
+        """Track latest regime per symbol for volatility-scaled sizing."""
+        self._regimes[state.symbol] = state
 
     async def on_hypothesis_generated(self, hypothesis: CandidateHypothesis) -> None:
         """Cache candidate hypothesis by hypothesis_id (bounded)."""

@@ -20,6 +20,11 @@ class EventTopic(StrEnum):
     """
 
     DATA_ACQUIRED = "aios.c1.data_acquired"
+    DATA_ANOMALY = "aios.c1.data_anomaly"
+    EVENT_DETECTED = "aios.c10.event_detected"
+    EXPECTATION_UPDATED = "aios.c10.expectation_updated"
+    SCENARIOS_PUBLISHED = "aios.c10.scenarios_published"
+    REGIME_CHANGED = "aios.c10.regime_changed"
     HYPOTHESIS_GENERATED = "aios.c2.hypothesis_generated"
     VERIFICATION_COMPLETED = "aios.c3.verification_completed"
     STRATEGY_GENERATED = "aios.c4.strategy_generated"
