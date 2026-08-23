@@ -111,6 +111,22 @@ Next: Phase 4 Quant Research & Strategy Lab (benchmark Groups A/B/C execution �
 
 ---
 
+### Phase 4 QUANT RESEARCH & STRATEGY LAB — COMPLETE (2026-08-23)
+
+- [x] **C9 PortfolioGovernor live in production path**: STRATEGY_GENERATED → governor (Doc 15) → PORTFOLIO_ALLOCATED/REJECTED → PaperEngine. Drawdown tiers (1.5%→×0.75, 2.5%→×0.5, 3%→HALT), class exposure caps 35%, half-Kelly sizing when ≥20 calibrated samples exist; provider-injection preserves community isolation
+- [x] **Strategy families**: StrategyFamily ABC; MomentumFamily (baseline geometry preserved) + MeanReversionFamily (z-score extreme-move fade); multi-candidate generation with firewall validation per candidate
+- [x] **Opportunity engine (C4-owned per topic namespace)**: composite = (confidence−breakeven_p) × RR × alpha-decay(halflife by timeframe); OPPORTUNITY_RANKED published for every candidate
+- [x] **Backtest-integrity linters** (`research/integrity.py`): timestamp monotonicity, duplicate bars, survivorship universe guard, positive prices; runner-config gates (slippage>0, fees>0, bracket exits, no-same-bar-exit, as-of access)
+- [x] **Walk-forward harness** (`research/walkforward.py`): WindowSlicer (90/30 Doc 06 defaults), per-window runner execution, Sharpe/maxDD, overfit flagging
+- [x] **Calibration reports**: reliability decile buckets + Brier score from prediction ledger; `reliable` gate at ≥20 scored predictions
+- [x] **Benchmark evidence recorded honestly**: Group A langgraph smoke PASS (200/200 hops, 0.21 ms/hop) WITH pydantic.v1-on-Py3.14 compat warning captured; Group B install-compat PASS (nautilus cp314 wheel exists; vectorbt resolves via numba 0.67) — formal protocol BENCHMARK-REQUIRED; Group C BLOCKED.md (no broker infra). Evidence under research/benchmarks/
+- [x] **Measured impact of governance** (3-crypto golden replay): trades 1,505→68-class-scale, PnL −13,637→+162.38, maxDD 13.6%→0.47%. Cause: portfolio controls strangling fee churn — NOT a claimed edge (synthetic data)
+- [x] Gates: **pytest 87 passed +1 opt-in · ruff clean · mypy strict clean (48 files)**
+
+Next: Phase 5 Execution & Risk Governor hardening (broker adapters paper-first, order lifecycle, kill-switch implementation, emergency state machine).
+
+---
+
 ### Phase 1.0 – Architecture Baseline (FROZEN & LOCKED) — 100% COMPLETE
 
 - [x] **System Map & Master Index** ([docs/00_system_map.md](docs/00_system_map.md))

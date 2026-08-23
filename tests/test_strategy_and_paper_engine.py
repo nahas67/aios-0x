@@ -84,17 +84,19 @@ def test_strategy_agent_generates_buy_with_volatility_scaled_levels() -> None:
         hypothesis = _hypothesis("BTC/USD", rr=2.0)
 
         try:
-            strategy = await agent.generate_strategy(
+            strategies = await agent.generate_strategy(
                 verification_report=_verified_report(hypothesis),
                 hypothesis=hypothesis,
                 daily_drawdown_pct=0.5,
             )
             await event_bus.wait_until_idle()
 
-            assert isinstance(strategy, StrategySpecification)
+            assert isinstance(strategies, list) and len(strategies) == 1
+            strategy = strategies[0]
             assert strategy.action == "BUY"
             assert strategy.symbol == "BTC/USD"
             assert strategy.entry_price == 101.0
+            assert strategy.family == "momentum"
 
             # Deterministic derivation: bar range 4% -> stop distance 2%, target 4%
             expected_stop = round(101.0 * (1.0 - 0.02), 4)
@@ -122,12 +124,13 @@ def test_strategy_agent_generates_sell_on_negative_signal() -> None:
         hypothesis = _hypothesis("ETH/USD", rr=2.0)
 
         try:
-            strategy = await agent.generate_strategy(
+            strategies = await agent.generate_strategy(
                 verification_report=_verified_report(hypothesis),
                 hypothesis=hypothesis,
             )
 
-            assert strategy is not None
+            assert len(strategies) == 1
+            strategy = strategies[0]
             assert strategy.action == "SELL"
             assert strategy.entry_price == 100.0
 
@@ -166,13 +169,13 @@ def test_strategy_agent_no_trade_on_mixed_signal() -> None:
         hypothesis = _hypothesis("BTC/USD")
 
         try:
-            strategy = await agent.generate_strategy(
+            strategies = await agent.generate_strategy(
                 verification_report=_verified_report(hypothesis),
                 hypothesis=hypothesis,
             )
             await event_bus.wait_until_idle()
 
-            assert strategy is None
+            assert strategies == []
             assert len(generated) == 0
         finally:
             await event_bus.stop()
@@ -190,11 +193,11 @@ def test_strategy_agent_no_trade_without_market_state() -> None:
         hypothesis = _hypothesis("BTC/USD")
 
         try:
-            strategy = await agent.generate_strategy(
+            strategies = await agent.generate_strategy(
                 verification_report=_verified_report(hypothesis),
                 hypothesis=hypothesis,
             )
-            assert strategy is None
+            assert strategies == []
         finally:
             await event_bus.stop()
 
@@ -223,14 +226,14 @@ def test_strategy_agent_rejection_by_risk_firewall() -> None:
 
         try:
             # Trigger with daily drawdown = 3.5% (exceeds 3.0% cap)
-            strategy = await agent.generate_strategy(
+            strategies = await agent.generate_strategy(
                 verification_report=_verified_report(hypothesis),
                 hypothesis=hypothesis,
                 daily_drawdown_pct=3.5,
             )
             await event_bus.wait_until_idle()
 
-            assert strategy is None
+            assert strategies == []
             assert len(generated) == 0
         finally:
             await event_bus.stop()

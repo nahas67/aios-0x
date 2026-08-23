@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from core.event_bus import BaseEventBus, EventTopic
 from schemas.contracts import (
     DataProvenance,
+    PortfolioAllocationPlan,
     StrategySpecification,
     TradeExecutionReceipt,
 )
@@ -200,6 +201,20 @@ class PaperEngine:
             raise ValueError("Market price must be positive")
         ids = [eid for eid, p in self.open_positions.items() if p.receipt.symbol == symbol]
         return [pnl for eid in ids if (pnl := self.settle_position(eid, price)) is not None]
+
+    async def on_plan(self, plan: PortfolioAllocationPlan) -> None:
+        """Execute an approved PortfolioAllocationPlan (Doc 15 production path).
+
+        The plan carries the final position size decided by the C9 governor;
+        the embedded strategy is re-sized before execution.
+        """
+        if not plan.approved:
+            logger.warning("PaperEngine received unapproved plan %s; ignored", plan.plan_id)
+            return
+        strategy = plan.strategy.model_copy(
+            update={"position_size_pct": plan.final_position_size_pct}
+        )
+        await self.execute_paper_trade(strategy)
 
     async def on_strategy_generated(self, strategy: StrategySpecification) -> None:
         """Event handler callback triggered when a strategy specification is generated."""

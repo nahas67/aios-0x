@@ -24,6 +24,7 @@ from communities.c6_observation.observation_agent import ObservationAgent
 from communities.c6_observation.postmortem_engine import PostmortemEngine
 from communities.c7_memory.memory_agent import MemoryAgent
 from communities.c8_evolution.evolution_agent import EvolutionAgent
+from communities.c9_portfolio.portfolio import PortfolioGovernor
 from communities.c10_world.macro_calendar import FileMacroCalendar
 from communities.c10_world.regime_engine import RegimeEngine
 from communities.c10_world.world_engines import ExpectationEngine, ScenarioEngine
@@ -37,6 +38,7 @@ from core.prompts import PromptRegistry
 from core.risk_firewall import RiskConfig, RiskFirewall
 from schemas.contracts import (
     CandidateHypothesis,
+    PortfolioAllocationPlan,
     PredictionRecord,
     StrategySpecification,
     TradeExecutionReceipt,
@@ -185,6 +187,14 @@ class ReplayRunner:
             event_bus=self.bus, performance_provider=self.c7.get_performance_summary
         )
 
+        # ---- C9 portfolio gate: nothing executes without an allocation plan
+        self.governor = PortfolioGovernor(
+            event_bus=self.bus,
+            initial_equity=initial_balance,
+            equity_provider=self._current_equity,
+            exposure_by_class_provider=self._class_exposures,
+        )
+
         # Decision-time caches (runner-owned; communities stay decoupled)
         self._hypotheses: dict[str, CandidateHypothesis] = {}
         self._reports: dict[str, VerificationReport] = {}
@@ -211,8 +221,10 @@ class ReplayRunner:
             (EventTopic.HYPOTHESIS_GENERATED, self._on_hypothesis),
             (EventTopic.VERIFICATION_COMPLETED, self.c4.on_verification_completed),
             (EventTopic.VERIFICATION_COMPLETED, self._on_verification),
-            (EventTopic.STRATEGY_GENERATED, self.paper.on_strategy_generated),
-            (EventTopic.STRATEGY_GENERATED, self._on_strategy_generated),
+            # Doc 15 gate: strategies flow through the governor, not straight to execution
+            (EventTopic.STRATEGY_GENERATED, self.governor.on_strategy_generated),
+            (EventTopic.PORTFOLIO_ALLOCATED, self.paper.on_plan),
+            (EventTopic.PORTFOLIO_ALLOCATED, self._on_plan),
             (EventTopic.TRADE_EXECUTED, self.c6.on_trade_executed),
             (EventTopic.TRADE_EXECUTED, self.c7.on_trade_executed),
             (EventTopic.TRADE_EXECUTED, self._on_receipt),
@@ -247,6 +259,29 @@ class ReplayRunner:
     async def _on_transcript(self, transcript_json: str) -> None:
         self.store.append_event("TRANSCRIPT", None, {"json": transcript_json})
 
+    def _current_equity(self) -> float:
+        """Cash plus mark-to-market value of open positions (governor input)."""
+        open_value = 0.0
+        for p in self.paper.open_positions.values():
+            try:
+                close = self.fetcher.current_bar(p.receipt.symbol)["close"]
+            except (IndexError, RuntimeError, KeyError):
+                close = p.receipt.fill_price
+            open_value += p.receipt.filled_quantity * close
+        return round(self.paper.cash_balance + open_value, 2)
+
+    def _class_exposures(self) -> dict[str, float]:
+        """Open notional grouped by asset class (governor input)."""
+        exposures: dict[str, float] = {}
+        for p in self.paper.open_positions.values():
+            cls = self.governor._classes.get(p.receipt.symbol, "OTHER")  # noqa: SLF001
+            try:
+                close = self.fetcher.current_bar(p.receipt.symbol)["close"]
+            except (IndexError, RuntimeError, KeyError):
+                close = p.receipt.fill_price
+            exposures[cls] = exposures.get(cls, 0.0) + p.receipt.filled_quantity * close
+        return exposures
+
     async def _on_data_quality(self, payload: Any) -> None:
         """Run anomaly detection + health tracking for every data arrival.
 
@@ -278,7 +313,13 @@ class ReplayRunner:
         self._reports[report.hypothesis_id] = report
 
     async def _on_strategy_generated(self, strategy: StrategySpecification) -> None:
+        """Legacy cache path (direct-wiring tests); production uses _on_plan."""
         self._strategies[strategy.strategy_id] = strategy
+
+    async def _on_plan(self, plan: PortfolioAllocationPlan) -> None:
+        """Cache allocated strategies for settlement attribution."""
+        if plan.approved:
+            self._strategies[plan.strategy.strategy_id] = plan.strategy
 
     async def _on_receipt(self, receipt: TradeExecutionReceipt) -> None:
         """Register a real fill and open its prediction-ledger entry.

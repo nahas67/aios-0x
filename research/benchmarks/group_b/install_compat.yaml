@@ -1,0 +1,26 @@
+# AIOS Benchmark Result v0.1 (simplified evidence record)
+group: B
+candidate: nautilus_trader + vectorbt
+date: 2026-08-23
+status: INSTALL_COMPAT_PASS_PROTOCOL_REQUIRED
+environment:
+  os: windows-11
+  python: 3.14.4
+install_compat:
+  nautilus_trader:
+    version_probed: 1.231.0
+    wheel_found: cp314-win_amd64 (yes)
+    verdict: INSTALLABLE
+  vectorbt:
+    version_probed: 1.1.0
+    resolution: numba 0.67.0 / llvmlite 0.49.0 resolvable on py3.14
+    verdict: INSTALLABLE_HEAVY (pulls numba/sklearn/plotly chain)
+protocol_status: BENCHMARK-REQUIRED
+unblock_steps:
+  - install candidates into isolated venv (avoid polluting runtime env)
+  - implement golden-dataset backtest task per engine per Phase 2B fairness rules
+  - run >=10 repetitions with warmups; record p50/p95/p99 throughput
+adr_implication: |
+  Python 3.14 ecosystem compatibility risk previously feared is NOT present
+  for these two candidates - both publish current wheels. Formal throughput
+  comparison remains open; no selection decision blocked on compat grounds.

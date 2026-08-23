@@ -330,8 +330,8 @@ def test_strategy_agent_freezes_on_anomaly_and_unfreezes_on_clean() -> None:
         return frozen_result, unfrozen_result
 
     frozen, unfrozen = asyncio.run(_run())
-    assert frozen is None  # NO TRADE while frozen
-    assert unfrozen is not None  # clean arrival restores
+    assert frozen == []  # NO TRADE while frozen
+    assert unfrozen != []  # clean arrival restores
 
 
 def test_runner_calendar_integration_publishes_scenarios_and_expectations(

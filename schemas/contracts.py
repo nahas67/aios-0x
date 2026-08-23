@@ -232,6 +232,21 @@ class StrategySpecification(BaseModel):
         le=100.0,
         description="Percentage of total portfolio risk allocated to this position (0.0 to 100.0)",
     )
+    family: str = Field(
+        default="momentum",
+        description="Strategy family tag (momentum | mean_reversion | ...)",
+    )
+
+    def risk_reward_ratio(self) -> float:
+        """Reward distance / risk distance from entry."""
+        risk = abs(self.entry_price - self.stop_loss_price)
+        if risk <= 0:
+            return 0.0
+        return abs(self.take_profit_price - self.entry_price) / risk
+
+    def notional_pct_of(self, portfolio_value: float) -> float:
+        """Notional this trade adds as % of the given portfolio value."""
+        return self.position_size_pct
 
     @model_validator(mode="after")
     def validate_price_levels(self) -> "StrategySpecification":
@@ -636,3 +651,116 @@ class DataAnomalyAlert(BaseModel):
         description="True when downstream strategy generation must pause for this symbol",
     )
     is_simulated: bool = False
+
+
+# --------------------------------------------- portfolio & research (C9 / lab)
+
+
+class OpportunityScore(BaseModel):
+    """Ranked opportunity assessment for one strategy candidate (Directive 30)."""
+
+    score_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    strategy_id: str
+    symbol: str
+    family: str
+    edge_proxy: float = Field(description="confidence - breakeven probability, clipped")
+    expected_rr: float
+    alpha_decay_multiplier: float = Field(ge=0.0, le=1.0)
+    composite_rank: float
+    is_simulated: bool = False
+
+
+class PortfolioStatus(StrEnum):
+    HEALTHY = "HEALTHY"
+    WARNING = "WARNING"
+    CAUTION = "CAUTION"
+    CRITICAL_HALT = "CRITICAL_HALT"
+
+
+class PortfolioAllocationPlan(BaseModel):
+    """C9 output: final allocation decision for a proposed strategy (Doc 15).
+
+    Nothing executes without this plan - the governor sits between strategy
+    generation and the execution/paper engine.
+    """
+
+    plan_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    strategy: StrategySpecification
+    approved: bool
+    final_position_size_pct: float = Field(ge=0.0, le=100.0)
+    portfolio_status: PortfolioStatus
+    drawdown_pct: float = Field(ge=0.0)
+    kelly_fraction_used: float | None = Field(
+        default=None, ge=0.0, description="Fractional Kelly size when calibration data allowed"
+    )
+    class_exposures_pct: dict[str, float] = Field(default_factory=dict)
+    reasons: list[str] = Field(default_factory=list)
+    is_simulated: bool = False
+
+
+class IntegrityCheck(BaseModel):
+    name: str
+    passed: bool
+    detail: str
+
+
+class IntegrityReport(BaseModel):
+    """Backtest-integrity linter output (Directive 33)."""
+
+    report_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    checks: list[IntegrityCheck]
+    passed: bool = False
+
+    @model_validator(mode="after")
+    def derive_passed(self) -> "IntegrityReport":
+        if "passed" not in self.model_fields_set:
+            self.passed = bool(self.checks) and all(c.passed for c in self.checks)
+        return self
+
+
+class WalkWindowResult(BaseModel):
+    window_index: int
+    train_bars: int
+    test_bars: int
+    test_trades: int
+    test_pnl: float
+    test_sharpe: float
+    test_max_dd_pct: float
+    overfit_flag: bool = False
+
+
+class WalkForwardReport(BaseModel):
+    """Walk-forward validation results (Doc 06 defaults 90/30)."""
+
+    report_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    windows: list[WalkWindowResult]
+    aggregate_test_pnl: float = 0.0
+    overfit_windows: int = 0
+    passed: bool = True
+
+
+class CalibrationBucket(BaseModel):
+    confidence_low: float
+    confidence_high: float
+    predictions: int
+    empirical_accuracy_pct: float
+    avg_confidence_pct: float
+
+
+class CalibrationReport(BaseModel):
+    """Prediction-ledger reliability + Brier scoring (Directive 25/82)."""
+
+    report_id: str = Field(default_factory=generate_uuid)
+    created_at: datetime = Field(default_factory=generate_utc_now)
+    total_scored: int
+    brier_score: float = Field(ge=0.0, le=1.0)
+    directional_accuracy_pct: float
+    buckets: list[CalibrationBucket]
+    reliable: bool = Field(
+        default=False,
+        description="True when >=20 scored predictions exist (minimum for judgment)",
+    )

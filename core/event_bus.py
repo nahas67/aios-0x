@@ -28,6 +28,9 @@ class EventTopic(StrEnum):
     HYPOTHESIS_GENERATED = "aios.c2.hypothesis_generated"
     VERIFICATION_COMPLETED = "aios.c3.verification_completed"
     STRATEGY_GENERATED = "aios.c4.strategy_generated"
+    OPPORTUNITY_RANKED = "aios.c4.opportunity_ranked"
+    PORTFOLIO_ALLOCATED = "aios.c9.portfolio_allocated"
+    PORTFOLIO_REJECTED = "aios.c9.portfolio_rejected"
     TRADE_EXECUTED = "aios.c5.order_executed"  # alias: order_executed semantics
     OBSERVATION_COMPLETED = "aios.c6.observation_completed"
     MEMORY_STORED = "aios.c7.memory_stored"

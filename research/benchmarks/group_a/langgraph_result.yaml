@@ -1,0 +1,28 @@
+# AIOS Benchmark Result v0.1 (simplified evidence record)
+group: A
+candidate: langgraph
+date: 2026-08-23
+status: FEASIBILITY_PASS_WITH_WARNINGS
+environment:
+  os: windows-11
+  python: 3.14.4
+  notes: single repetition smoke; formal protocol (>=10 reps) still REQUIRED
+probe: research/benchmarks/group_a/langgraph_smoke.py
+results:
+  state_integrity_ok: true
+  hops_requested: 200
+  hops_executed: 200
+  latency_ms_mean_per_hop: 0.21
+compat_findings:
+  - severity: MEDIUM
+    finding: >
+      langchain_core depends on pydantic.v1 shims that emit an explicit
+      UserWarning on CPython >= 3.14 ("Core Pydantic V1 functionality isn't
+      compatible with Python 3.14 or greater"). Functional probe passed, but
+      the dependency chain carries deprecation risk on this interpreter.
+adr_implication: |
+  LangGraph remains RESEARCH-PREFERENCE for orchestration. Before formal
+  selection: (1) pin interpreter decision (3.11/3.12 LTS vs 3.14), since the
+  langchain stack's pydantic.v1 usage is a known friction point on 3.14;
+  (2) run full Group A protocol vs CrewAI / MS Agent Framework including
+  cost-per-hop with real model calls.
