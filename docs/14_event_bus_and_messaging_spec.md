@@ -93,4 +93,4 @@ Messages that fail all retry attempts are diverted to `aios.system.dlq` for isol
 
 ## 5. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.14: Event Bus & Messaging Architecture Specification**. Implementation abstraction resides in [event_bus.py](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/core/event_bus.py).
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.14: Event Bus & Messaging Architecture Specification**. Implementation abstraction resides in [event_bus.py](core/event_bus.py).

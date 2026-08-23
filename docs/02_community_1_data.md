@@ -133,10 +133,12 @@ class PriceData(BaseModel):
     close: float = Field(..., gt=0.0)
     volume: float = Field(..., ge=0.0)
 
+
 class NewsSentiment(BaseModel):
     title: str = Field(..., min_length=1)
     sentiment_score: float = Field(..., ge=-1.0, le=1.0)
     source: str = Field(..., min_length=1)
+
 
 class MarketDataPayload(BaseModel):
     timestamp: datetime = Field(default_factory=generate_utc_now)
@@ -156,4 +158,4 @@ class MarketDataPayload(BaseModel):
 
 ## 6. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.2: Community 1 Specification (Data Acquisition)**. Implementation code resides in `communities/c1_data/` and unit tests in `tests/test_c1_data.py`.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.2: Community 1 Specification (Data Acquisition)**. Implementation code resides in `communities/c1_data/` and unit tests in `tests/test_c1_data.py`.

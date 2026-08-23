@@ -1,6 +1,7 @@
 """Community 2: Research Agent for formulating trading hypotheses from market data."""
 
 import logging
+
 from core.event_bus import BaseEventBus, EventTopic
 from schemas.contracts import CandidateHypothesis, MarketDataPayload
 
@@ -35,9 +36,9 @@ class ResearchAgent:
 
         avg_sentiment = 0.0
         if payload.news_sentiment:
-            avg_sentiment = sum(
-                item.sentiment_score for item in payload.news_sentiment
-            ) / len(payload.news_sentiment)
+            avg_sentiment = sum(item.sentiment_score for item in payload.news_sentiment) / len(
+                payload.news_sentiment
+            )
 
         # Formulate supporting arguments based on data
         supporting_arguments = []
@@ -51,13 +52,9 @@ class ResearchAgent:
             )
 
         if avg_sentiment > 0:
-            supporting_arguments.append(
-                f"Positive news sentiment score of {avg_sentiment:.2f}"
-            )
+            supporting_arguments.append(f"Positive news sentiment score of {avg_sentiment:.2f}")
         elif avg_sentiment < 0:
-            supporting_arguments.append(
-                f"Negative news sentiment score of {avg_sentiment:.2f}"
-            )
+            supporting_arguments.append(f"Negative news sentiment score of {avg_sentiment:.2f}")
         else:
             supporting_arguments.append("Neutral news sentiment profile")
 
@@ -99,7 +96,5 @@ class ResearchAgent:
         Args:
             payload: Received MarketDataPayload event.
         """
-        logger.info(
-            "ResearchAgent received DATA_ACQUIRED event for %s", payload.symbol
-        )
+        logger.info("ResearchAgent received DATA_ACQUIRED event for %s", payload.symbol)
         await self.analyze_and_generate_hypothesis(payload)

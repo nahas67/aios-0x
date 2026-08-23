@@ -1,7 +1,14 @@
-"""Community 4: Strategy Agent for generating risk-evaluated trading strategy specifications."""
+"""Community 4: Strategy Agent for generating risk-evaluated trading strategy specifications.
+
+ADR-002/D3: strategies are derived deterministically from observed market state
+(momentum, sentiment, realized bar range) and the hypothesis risk/reward target.
+BUY, SELL and NO TRADE are all valid outcomes; missing market state yields NO TRADE
+rather than an invented default price.
+"""
 
 import logging
-from typing import Optional
+from collections import OrderedDict
+from typing import Literal, TypeVar
 
 from core.event_bus import BaseEventBus, EventTopic
 from core.risk_firewall import RiskFirewall
@@ -14,58 +21,127 @@ from schemas.contracts import (
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_PROPOSED_POSITION_SIZE_PCT = 5.0
+_MIN_STOP_DISTANCE_PCT = 0.5
+_STOP_FRACTION_OF_RANGE = 0.5
+_CACHE_MAX_ENTRIES = 512
+
+T = TypeVar("T")
+
+
+def _bounded_put(cache: OrderedDict[str, T], key: str, value: T) -> None:
+    """Insert into cache with FIFO eviction beyond _CACHE_MAX_ENTRIES (defect D6)."""
+    cache[key] = value
+    cache.move_to_end(key)
+    while len(cache) > _CACHE_MAX_ENTRIES:
+        cache.popitem(last=False)
+
 
 class StrategyAgent:
     """Strategy Agent that translates verified hypotheses into actionable strategy specifications."""
 
-    def __init__(self, event_bus: BaseEventBus, risk_firewall: RiskFirewall) -> None:
+    def __init__(
+        self,
+        event_bus: BaseEventBus,
+        risk_firewall: RiskFirewall,
+        portfolio_value_estimate: float = 100000.0,
+    ) -> None:
         """Initialize StrategyAgent with event bus and risk firewall.
 
         Args:
             event_bus: Event bus instance for inter-community messaging.
             risk_firewall: Risk Firewall engine instance.
+            portfolio_value_estimate: Portfolio value supplied to the firewall for
+                notional sizing (owned by the composition root until C9 exists).
         """
+        if portfolio_value_estimate <= 0:
+            raise ValueError("portfolio_value_estimate must be positive")
         self.event_bus = event_bus
         self.risk_firewall = risk_firewall
-        self._hypotheses: dict[str, CandidateHypothesis] = {}
-        self._market_prices: dict[str, float] = {}
+        self._portfolio_value_estimate = portfolio_value_estimate
+        self._hypotheses: OrderedDict[str, CandidateHypothesis] = OrderedDict()
+        self._market_payloads: OrderedDict[str, MarketDataPayload] = OrderedDict()
 
     async def generate_strategy(
         self,
         verification_report: VerificationReport,
         hypothesis: CandidateHypothesis,
-        current_price: float,
         daily_drawdown_pct: float = 0.0,
-    ) -> Optional[StrategySpecification]:
-        """Generate strategy specification, validate against Risk Firewall, and publish if approved.
+    ) -> StrategySpecification | None:
+        """Generate a strategy specification from cached market state and firewall rules.
 
         Args:
             verification_report: Approved VerificationReport instance.
             hypothesis: Source CandidateHypothesis instance.
-            current_price: Current market entry price.
             daily_drawdown_pct: Current portfolio daily drawdown percentage.
 
         Returns:
-            StrategySpecification if approved by Risk Firewall, otherwise None.
+            StrategySpecification if a tradeable setup passed the Risk Firewall,
+            otherwise None (NO TRADE / insufficient evidence).
         """
-        entry_price = current_price
-        stop_loss_price = round(entry_price * 0.97, 4)  # 3% stop loss
-        take_profit_price = round(entry_price * 1.06, 4)  # 6% take profit (2.0 R:R)
-        proposed_position_size_pct = 5.0
+        payload = self._market_payloads.get(hypothesis.symbol)
+        if payload is None:
+            logger.info(
+                "NO TRADE for hypothesis %s: no market state cached for %s",
+                hypothesis.hypothesis_id,
+                hypothesis.symbol,
+            )
+            return None
+
+        price_data = payload.price_data
+        entry_price = price_data.close
+        momentum_pct = (price_data.close - price_data.open) / price_data.open * 100.0
+
+        avg_sentiment = 0.0
+        if payload.news_sentiment:
+            avg_sentiment = sum(i.sentiment_score for i in payload.news_sentiment) / len(
+                payload.news_sentiment
+            )
+
+        action: Literal["BUY", "SELL"]
+        if momentum_pct > 0 and avg_sentiment >= 0:
+            action = "BUY"
+        elif momentum_pct < 0 and avg_sentiment <= 0:
+            action = "SELL"
+        else:
+            logger.info(
+                "NO TRADE for hypothesis %s on %s: mixed signal (momentum=%.2f%%, sentiment=%.2f)",
+                hypothesis.hypothesis_id,
+                hypothesis.symbol,
+                momentum_pct,
+                avg_sentiment,
+            )
+            return None
+
+        max_stop_pct = self.risk_firewall.config.max_stop_loss_pct * 0.8
+        bar_range_pct = (price_data.high - price_data.low) / price_data.open * 100.0
+        stop_distance_pct = min(
+            max(bar_range_pct * _STOP_FRACTION_OF_RANGE, _MIN_STOP_DISTANCE_PCT),
+            max_stop_pct,
+        )
+        target_distance_pct = stop_distance_pct * hypothesis.expected_risk_reward_ratio
+
+        if action == "BUY":
+            stop_loss_price = round(entry_price * (1.0 - stop_distance_pct / 100.0), 4)
+            take_profit_price = round(entry_price * (1.0 + target_distance_pct / 100.0), 4)
+        else:
+            stop_loss_price = round(entry_price * (1.0 + stop_distance_pct / 100.0), 4)
+            take_profit_price = round(entry_price * (1.0 - target_distance_pct / 100.0), 4)
 
         strategy = StrategySpecification(
             hypothesis_id=hypothesis.hypothesis_id,
             symbol=hypothesis.symbol,
-            action="BUY",
+            action=action,
             entry_price=entry_price,
             stop_loss_price=stop_loss_price,
             take_profit_price=take_profit_price,
-            position_size_pct=proposed_position_size_pct,
+            position_size_pct=_DEFAULT_PROPOSED_POSITION_SIZE_PCT,
         )
 
+        portfolio_value = self._portfolio_value_estimate
         risk_result = self.risk_firewall.evaluate_strategy(
             strategy=strategy,
-            current_portfolio_value=100000.0,
+            current_portfolio_value=portfolio_value,
             current_daily_drawdown_pct=daily_drawdown_pct,
         )
 
@@ -75,44 +151,48 @@ class StrategyAgent:
             )
             await self.event_bus.publish(EventTopic.STRATEGY_GENERATED, strategy)
             logger.info(
-                "Published approved StrategySpecification %s for %s to %s",
+                "Published approved %s StrategySpecification %s for %s (notional=%.2f) to %s",
+                action,
                 strategy.strategy_id,
                 strategy.symbol,
+                risk_result.position_notional_value,
                 EventTopic.STRATEGY_GENERATED,
             )
             return strategy
-        else:
-            logger.warning(
-                "Strategy for hypothesis %s rejected by Risk Firewall. Reasons: %s",
-                hypothesis.hypothesis_id,
-                risk_result.rejection_reasons,
-            )
-            return None
+
+        logger.warning(
+            "Strategy for hypothesis %s rejected by Risk Firewall. Reasons: %s",
+            hypothesis.hypothesis_id,
+            risk_result.rejection_reasons,
+        )
+        return None
 
     async def on_data_acquired(self, payload: MarketDataPayload) -> None:
-        """Cache latest market close price for the symbol."""
-        self._market_prices[payload.symbol] = payload.price_data.close
+        """Cache latest market payload per symbol (bounded)."""
+        _bounded_put(self._market_payloads, payload.symbol, payload)
 
     async def on_hypothesis_generated(self, hypothesis: CandidateHypothesis) -> None:
-        """Cache candidate hypothesis by hypothesis_id."""
-        self._hypotheses[hypothesis.hypothesis_id] = hypothesis
+        """Cache candidate hypothesis by hypothesis_id (bounded)."""
+        _bounded_put(self._hypotheses, hypothesis.hypothesis_id, hypothesis)
 
     async def on_verification_completed(self, report: VerificationReport) -> None:
         """Event handler callback triggered when a hypothesis is verified."""
         if not report.is_verified:
-            logger.debug(
-                "Ignoring unverified report %s in StrategyAgent", report.report_id
-            )
+            logger.debug("Ignoring unverified report %s in StrategyAgent", report.report_id)
             return
 
         hypothesis = self._hypotheses.get(report.hypothesis_id)
         if not hypothesis:
-            logger.warning(
-                "Hypothesis %s not found in StrategyAgent cache", report.hypothesis_id
+            logger.warning("Hypothesis %s not found in StrategyAgent cache", report.hypothesis_id)
+            return
+
+        if hypothesis.symbol not in self._market_payloads:
+            logger.info(
+                "NO TRADE for hypothesis %s: market state missing at decision time",
+                report.hypothesis_id,
             )
             return
 
-        current_price = self._market_prices.get(hypothesis.symbol, 100.0)
         logger.info(
             "StrategyAgent processing VERIFICATION_COMPLETED event for hypothesis %s",
             hypothesis.hypothesis_id,
@@ -120,5 +200,4 @@ class StrategyAgent:
         await self.generate_strategy(
             verification_report=report,
             hypothesis=hypothesis,
-            current_price=current_price,
         )

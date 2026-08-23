@@ -150,4 +150,4 @@ The database stack supports four specialized access patterns:
 
 ## 5. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.11: Supporting Systems Specification (Risk, Validation, Infrastructure)**. With the completion of this document, **Phase 1 (Architecture First Documentation & Specifications) is 100% Complete**.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.11: Supporting Systems Specification (Risk, Validation, Infrastructure)**. With the completion of this document, **Phase 1 (Architecture First Documentation & Specifications) is 100% Complete**.

@@ -1,8 +1,7 @@
 """Unit tests for the Risk Firewall module in core/risk_firewall.py."""
 
-import pytest
-from schemas.contracts import generate_uuid, StrategySpecification
 from core.risk_firewall import RiskConfig, RiskEvaluationResult, RiskFirewall
+from schemas.contracts import StrategySpecification, generate_uuid
 
 
 def test_valid_strategy_passes_evaluation() -> None:
@@ -31,7 +30,33 @@ def test_valid_strategy_passes_evaluation() -> None:
     assert result.is_approved is True
     assert result.rejection_reasons == []
     assert result.adjusted_position_size_pct == 3.0
+    # D4 fix: notional derived from portfolio value is returned
+    assert result.position_notional_value == 3000.0
     assert result.emergency_shutdown_triggered is False
+
+
+def test_invalid_portfolio_value_rejected() -> None:
+    """D4 fix: non-positive portfolio value must be rejected, never ignored."""
+    firewall = RiskFirewall(RiskConfig())
+    strategy = StrategySpecification(
+        hypothesis_id=generate_uuid(),
+        symbol="BTC/USD",
+        action="BUY",
+        entry_price=100.0,
+        stop_loss_price=97.0,
+        take_profit_price=106.0,
+        position_size_pct=3.0,
+    )
+
+    for bad_value in (0.0, -50000.0):
+        result = firewall.evaluate_strategy(
+            strategy=strategy,
+            current_portfolio_value=bad_value,
+            current_daily_drawdown_pct=0.0,
+        )
+        assert result.is_approved is False
+        assert "Invalid portfolio value" in result.rejection_reasons
+        assert result.position_notional_value == 0.0
 
 
 def test_rejection_wide_stop_loss() -> None:

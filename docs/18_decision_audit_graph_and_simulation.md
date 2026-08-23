@@ -56,12 +56,25 @@ Audit graph records are indexed in PostgreSQL and mirrored in Community 7 (Memor
 ```python
 class AuditGraphNode(BaseModel):
     node_id: str = Field(default_factory=generate_uuid)
-    node_type: Literal["RAW_DATA", "HYPOTHESIS", "VERIFICATION", "STRATEGY", "ALLOCATION", "RISK_CHECK", "EXECUTION", "OBSERVATION"] = Field(...)
+    node_type: Literal[
+        "RAW_DATA",
+        "HYPOTHESIS",
+        "VERIFICATION",
+        "STRATEGY",
+        "ALLOCATION",
+        "RISK_CHECK",
+        "EXECUTION",
+        "OBSERVATION",
+    ] = Field(...)
     timestamp: datetime = Field(default_factory=generate_utc_now)
     payload_id: str = Field(..., description="ID of the underlying payload contract")
     agent_id: str = Field(..., description="Agent or service responsible for this node")
-    parent_node_ids: list[str] = Field(default_factory=list, description="IDs of ancestor nodes leading to this decision")
-    child_node_ids: list[str] = Field(default_factory=list, description="IDs of descendant nodes resulting from this decision")
+    parent_node_ids: list[str] = Field(
+        default_factory=list, description="IDs of ancestor nodes leading to this decision"
+    )
+    child_node_ids: list[str] = Field(
+        default_factory=list, description="IDs of descendant nodes resulting from this decision"
+    )
     provenance_metadata: dict[str, Any] = Field(default_factory=dict)
 ```
 
@@ -109,4 +122,4 @@ The Digital Twin Environment provides a high-fidelity market sandbox that simula
 
 ## 4. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.18: Decision Audit Graph & Digital Twin Simulation Layer**. It completes **Phase 1.0 – Architecture Baseline (Frozen)**.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.18: Decision Audit Graph & Digital Twin Simulation Layer**. It completes **Phase 1.0 – Architecture Baseline (Frozen)**.

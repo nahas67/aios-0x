@@ -96,40 +96,28 @@ Community 2 outputs instances of `CandidateHypothesis` defined in `schemas/contr
 ```python
 class CandidateHypothesis(BaseModel):
     hypothesis_id: str = Field(
-        default_factory=generate_uuid,
-        description="Unique UUID string representing this hypothesis"
+        default_factory=generate_uuid, description="Unique UUID string representing this hypothesis"
     )
     created_at: datetime = Field(
-        default_factory=generate_utc_now,
-        description="UTC datetime when the hypothesis was created"
+        default_factory=generate_utc_now, description="UTC datetime when the hypothesis was created"
     )
     symbol: str = Field(
-        ...,
-        min_length=1,
-        description="Trading symbol of the asset (e.g., BTC/USD)"
+        ..., min_length=1, description="Trading symbol of the asset (e.g., BTC/USD)"
     )
     thesis: str = Field(
-        ...,
-        min_length=1,
-        description="Detailed thesis presenting the Bull/Bear rationale"
+        ..., min_length=1, description="Detailed thesis presenting the Bull/Bear rationale"
     )
     supporting_arguments: list[str] = Field(
-        ...,
-        description="List of arguments supporting the thesis"
+        ..., description="List of arguments supporting the thesis"
     )
     counter_arguments: list[str] = Field(
-        ...,
-        description="List of arguments warning against or contradicting the thesis"
+        ..., description="List of arguments warning against or contradicting the thesis"
     )
     timeframe: str = Field(
-        ...,
-        min_length=1,
-        description="Timeframe for the expected outcome (e.g., 4h, 1d)"
+        ..., min_length=1, description="Timeframe for the expected outcome (e.g., 4h, 1d)"
     )
     expected_risk_reward_ratio: float = Field(
-        ...,
-        gt=0.0,
-        description="Target risk to reward ratio (minimum 2.0)"
+        ..., gt=0.0, description="Target risk to reward ratio (minimum 2.0)"
     )
 ```
 
@@ -142,4 +130,4 @@ class CandidateHypothesis(BaseModel):
 
 ## 5. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.3: Community 2 Specification (Research & Analysis)**. Implementation code resides in `communities/c2_research/` and unit tests in `tests/test_c2_research.py`.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.3: Community 2 Specification (Research & Analysis)**. Implementation code resides in `communities/c2_research/` and unit tests in `tests/test_c2_research.py`.

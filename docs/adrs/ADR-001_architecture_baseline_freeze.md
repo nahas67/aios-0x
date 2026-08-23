@@ -28,4 +28,4 @@ We hereby declare **Phase 1.0 – Architecture Baseline (Frozen & Locked)**.
 - Proposed architectural changes will incur administrative overhead via the formal ADR process.
 
 ## Compliance & Verification
-- Tracked and verified in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) as the Phase 1.0 completion gate.
+- Tracked and verified in [CHECKPOINT.md](CHECKPOINT.md) as the Phase 1.0 completion gate.

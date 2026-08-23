@@ -1,13 +1,13 @@
 """Community 8: Evolution Agent for continuous self-evaluation and meta-adaptation."""
 
 import logging
-from datetime import datetime, timezone
-from typing import Any
+from collections.abc import Callable
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
-from communities.c7_memory.memory_agent import MemoryAgent
 from core.event_bus import BaseEventBus, EventTopic
-from schemas.contracts import generate_utc_now, generate_uuid
+from schemas.contracts import PerformanceSummary, generate_utc_now, generate_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -29,35 +29,44 @@ class EvolutionSignal(BaseModel):
     recommendations: list[str] = Field(
         ..., description="List of meta-learning system recommendations"
     )
-    performance_summary: dict[str, Any] = Field(
-        ..., description="Snapshot of performance analytics at evaluation time"
+    performance_summary: PerformanceSummary = Field(
+        ..., description="Typed performance snapshot at evaluation time"
     )
 
 
 class EvolutionAgent:
-    """Evolution Agent that analyzes memory insights and triggers self-adaptation signals."""
+    """Evolution Agent that analyzes performance summaries and triggers self-adaptation signals.
 
-    def __init__(self, event_bus: BaseEventBus, memory_agent: MemoryAgent) -> None:
-        """Initialize EvolutionAgent with event bus and memory agent reference.
+    ADR-002/D2: this agent depends on the PerformanceSummary contract via an injected
+    provider callable - never on another community's implementation class.
+    """
+
+    def __init__(
+        self,
+        event_bus: BaseEventBus,
+        performance_provider: Callable[[], PerformanceSummary],
+    ) -> None:
+        """Initialize EvolutionAgent.
 
         Args:
             event_bus: Event bus instance for inter-community messaging.
-            memory_agent: Reference to MemoryAgent for accessing performance analytics.
+            performance_provider: Zero-argument callable returning a typed
+                PerformanceSummary (typically backed by C7 memory).
         """
         self.event_bus = event_bus
-        self.memory_agent = memory_agent
+        self._performance_provider = performance_provider
 
-    async def evaluate_and_evolve(self) -> dict[str, Any]:
-        """Query performance summary and generate system adaptation recommendations.
+    async def evaluate_and_evolve(self) -> EvolutionSignal:
+        """Query the performance provider and generate a system adaptation signal.
 
         Returns:
-            Dictionary containing adjustment_needed, recommendations, and performance_summary.
+            The published EvolutionSignal.
         """
-        summary = self.memory_agent.get_performance_summary()
-        total_trades = summary.get("total_trades", 0)
-        win_rate = summary.get("win_rate", 0.0)
+        summary = self._performance_provider()
+        total_trades = summary.total_trades
+        win_rate = summary.win_rate
 
-        recommendations = []
+        recommendations: list[str] = []
         adjustment_needed = False
 
         if total_trades >= 3 and win_rate < 50.0:
@@ -82,18 +91,9 @@ class EvolutionAgent:
             adjustment_needed,
             EventTopic.EVOLUTION_TRIGGERED,
         )
-
-        return {
-            "adjustment_needed": adjustment_needed,
-            "recommendations": recommendations,
-            "performance_summary": summary,
-        }
+        return signal
 
     async def on_memory_stored(self, payload: BaseModel) -> None:
-        """Event handler callback triggered when new memory is stored.
-
-        Args:
-            payload: Memory stored event payload.
-        """
+        """Event handler callback triggered when new memory is stored."""
         logger.info("EvolutionAgent received MEMORY_STORED event. Triggering self-evaluation.")
         await self.evaluate_and_evolve()

@@ -71,4 +71,4 @@ Constitutional enforcement operates at three system layers:
 
 ## 4. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.12: AI Constitution & Governing Laws**. It represents an immutable core component of Phase 1.0.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.12: AI Constitution & Governing Laws**. It represents an immutable core component of Phase 1.0.

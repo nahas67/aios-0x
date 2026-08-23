@@ -181,6 +181,7 @@ async def get_recent_performance(
         List of performance summary dicts (PnL, win_rate, sharpe, max_drawdown).
     """
 
+
 async def search_similar_historical_setups(
     embedding: list[float],
     k: int = 5,
@@ -197,6 +198,7 @@ async def search_similar_historical_setups(
         List of dicts containing matched thesis, similarity score,
         and associated ObservationReport outcome.
     """
+
 
 async def get_post_mortem_lessons(
     symbol: str,
@@ -222,4 +224,4 @@ async def get_post_mortem_lessons(
 
 ## 5. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.9: Community 7 Specification (Memory Architecture)**. Event topics are defined in [event_bus.py](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/core/event_bus.py). Scalability tiers (local SQLite/in-memory vs. enterprise PostgreSQL/TimescaleDB/Qdrant) are documented in [01_platform_architecture.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/docs/01_platform_architecture.md) Section 5.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.9: Community 7 Specification (Memory Architecture)**. Event topics are defined in [event_bus.py](core/event_bus.py). Scalability tiers (local SQLite/in-memory vs. enterprise PostgreSQL/TimescaleDB/Qdrant) are documented in [01_platform_architecture.md](docs/01_platform_architecture.md) Section 5.

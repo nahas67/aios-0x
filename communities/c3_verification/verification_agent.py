@@ -1,6 +1,7 @@
 """Community 3: Verification Agent for auditing and validating research hypotheses."""
 
 import logging
+
 from core.event_bus import BaseEventBus, EventTopic
 from schemas.contracts import CandidateHypothesis, VerificationReport
 
@@ -10,9 +11,7 @@ logger = logging.getLogger(__name__)
 class VerificationAgent:
     """Verification Agent that audits candidate hypotheses and generates verification reports."""
 
-    def __init__(
-        self, event_bus: BaseEventBus, min_confidence_threshold: float = 70.0
-    ) -> None:
+    def __init__(self, event_bus: BaseEventBus, min_confidence_threshold: float = 70.0) -> None:
         """Initialize VerificationAgent.
 
         Args:
@@ -22,9 +21,7 @@ class VerificationAgent:
         self.event_bus = event_bus
         self.min_confidence_threshold = min_confidence_threshold
 
-    async def verify_hypothesis(
-        self, hypothesis: CandidateHypothesis
-    ) -> VerificationReport:
+    async def verify_hypothesis(self, hypothesis: CandidateHypothesis) -> VerificationReport:
         """Audit candidate hypothesis, compute confidence score, and issue report.
 
         Args:

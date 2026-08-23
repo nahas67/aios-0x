@@ -1,7 +1,9 @@
 """Risk Firewall engine and models for validating strategy specifications in AIOS."""
 
 import logging
+
 from pydantic import BaseModel, Field
+
 from schemas.contracts import StrategySpecification
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,11 @@ class RiskEvaluationResult(BaseModel):
     adjusted_position_size_pct: float = Field(
         ..., description="Final position size percentage after applying risk caps"
     )
+    position_notional_value: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Notional capital at risk derived from portfolio value and adjusted size",
+    )
     emergency_shutdown_triggered: bool = Field(
         default=False,
         description="Indicates if emergency shutdown threshold was triggered",
@@ -74,25 +81,35 @@ class RiskFirewall:
         """Evaluate a strategy specification against risk rules.
 
         Evaluation Rules:
-        1. Daily Drawdown Check: If current_daily_drawdown_pct >= config.max_daily_drawdown_pct,
+        1. Portfolio Sanity: If current_portfolio_value <= 0, reject with
+           "Invalid portfolio value".
+        2. Daily Drawdown Check: If current_daily_drawdown_pct >= config.max_daily_drawdown_pct,
            reject trade immediately, set emergency_shutdown_triggered = True, and append
            "Daily drawdown threshold exceeded".
-        2. Stop-Loss Validation: Calculate stop-loss distance percentage abs(entry - stop_loss) / entry * 100.
+        3. Stop-Loss Validation: Calculate stop-loss distance percentage abs(entry - stop_loss) / entry * 100.
            If > max_stop_loss_pct or stop-loss is missing/invalid, reject trade.
-        3. Risk/Reward Ratio Check: Calculate abs(take_profit - entry) / abs(entry - stop_loss).
+        4. Risk/Reward Ratio Check: Calculate abs(take_profit - entry) / abs(entry - stop_loss).
            If < min_risk_reward_ratio, reject trade.
-        4. Position Size Adjustment: If strategy.position_size_pct > config.max_position_size_pct,
+        5. Position Size Adjustment: If strategy.position_size_pct > config.max_position_size_pct,
            cap adjusted_position_size_pct at max_position_size_pct and add a warning (do not reject if all other checks pass).
+        The approved notional (portfolio_value * adjusted_size_pct / 100) is returned in
+        position_notional_value for downstream sizing (defect D4 fix: the portfolio value
+        parameter is now materially used).
         """
         rejection_reasons: list[str] = []
 
-        # 1. Daily Drawdown Check
+        # 1. Portfolio Sanity
+        if current_portfolio_value <= 0:
+            rejection_reasons.append("Invalid portfolio value")
+
+        # 2. Daily Drawdown Check
         if current_daily_drawdown_pct >= self.config.max_daily_drawdown_pct:
             rejection_reasons.append("Daily drawdown threshold exceeded")
             return RiskEvaluationResult(
                 is_approved=False,
                 rejection_reasons=rejection_reasons,
                 adjusted_position_size_pct=0.0,
+                position_notional_value=0.0,
                 emergency_shutdown_triggered=True,
             )
 
@@ -101,9 +118,7 @@ class RiskFirewall:
             rejection_reasons.append("Invalid entry price or stop-loss price")
         else:
             stop_loss_dist_pct = (
-                abs(strategy.entry_price - strategy.stop_loss_price)
-                / strategy.entry_price
-                * 100.0
+                abs(strategy.entry_price - strategy.stop_loss_price) / strategy.entry_price * 100.0
             )
             if stop_loss_dist_pct > self.config.max_stop_loss_pct:
                 rejection_reasons.append(
@@ -132,10 +147,15 @@ class RiskFirewall:
             )
 
         is_approved = len(rejection_reasons) == 0
+        adjusted_position_size_pct = adjusted_position_size_pct if is_approved else 0.0
+        position_notional_value = round(
+            current_portfolio_value * adjusted_position_size_pct / 100.0, 2
+        )
 
         return RiskEvaluationResult(
             is_approved=is_approved,
             rejection_reasons=rejection_reasons,
-            adjusted_position_size_pct=adjusted_position_size_pct if is_approved else 0.0,
+            adjusted_position_size_pct=adjusted_position_size_pct,
+            position_notional_value=position_notional_value,
             emergency_shutdown_triggered=False,
         )

@@ -1,7 +1,6 @@
 """Unit and integration tests for Research Agent (C2) and Verification Agent (C3)."""
 
 import asyncio
-import pytest
 
 from communities.c1_data.data_agent import DataAcquisitionAgent, SimulatedDataFetcher
 from communities.c2_research.research_agent import ResearchAgent
@@ -17,6 +16,7 @@ from schemas.contracts import (
 
 def test_research_agent_generates_and_publishes_hypothesis() -> None:
     """Test ResearchAgent analyzes MarketDataPayload, generates CandidateHypothesis, and publishes event."""
+
     async def _test() -> None:
         event_bus = InMemoryEventBus()
         await event_bus.start()
@@ -64,6 +64,7 @@ def test_research_agent_generates_and_publishes_hypothesis() -> None:
 
 def test_verification_agent_verified_hypothesis() -> None:
     """Test VerificationAgent approves high confidence hypothesis and publishes VERIFICATION_COMPLETED."""
+
     async def _test() -> None:
         event_bus = InMemoryEventBus()
         await event_bus.start()
@@ -107,6 +108,7 @@ def test_verification_agent_verified_hypothesis() -> None:
 
 def test_verification_agent_rejected_hypothesis() -> None:
     """Test VerificationAgent rejects low confidence hypothesis (<70) and does NOT publish event."""
+
     async def _test() -> None:
         event_bus = InMemoryEventBus()
         await event_bus.start()
@@ -151,6 +153,7 @@ def test_verification_agent_rejected_hypothesis() -> None:
 
 def test_end_to_end_c1_c2_c3_pipeline() -> None:
     """Test end-to-end event chain: C1 (Data) -> C2 (Research) -> C3 (Verification)."""
+
     async def _test() -> None:
         event_bus = InMemoryEventBus()
         await event_bus.start()
@@ -161,22 +164,16 @@ def test_end_to_end_c1_c2_c3_pipeline() -> None:
             pipeline_reports.append(payload)
 
         # Initialize agents
-        data_agent = DataAcquisitionAgent(
-            fetcher=SimulatedDataFetcher(), event_bus=event_bus
-        )
+        data_agent = DataAcquisitionAgent(fetcher=SimulatedDataFetcher(), event_bus=event_bus)
         research_agent = ResearchAgent(event_bus=event_bus)
-        verification_agent = VerificationAgent(
-            event_bus=event_bus, min_confidence_threshold=70.0
-        )
+        verification_agent = VerificationAgent(event_bus=event_bus, min_confidence_threshold=70.0)
 
         # Wire up event subscriptions
         await event_bus.subscribe(EventTopic.DATA_ACQUIRED, research_agent.on_data_acquired)
         await event_bus.subscribe(
             EventTopic.HYPOTHESIS_GENERATED, verification_agent.on_hypothesis_generated
         )
-        await event_bus.subscribe(
-            EventTopic.VERIFICATION_COMPLETED, final_pipeline_handler
-        )
+        await event_bus.subscribe(EventTopic.VERIFICATION_COMPLETED, final_pipeline_handler)
 
         try:
             # Trigger initial event flow from C1

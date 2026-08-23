@@ -73,4 +73,4 @@ If an external dependency introduces breaking changes, performance bottlenecks, 
 
 ## 3. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.16: Open-Source Technology Acquisition Framework**. It completes the full Phase 1.0 documentation suite.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.16: Open-Source Technology Acquisition Framework**. It completes the full Phase 1.0 documentation suite.

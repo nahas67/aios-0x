@@ -29,17 +29,16 @@ class ExperimentRecord(BaseModel):
     timestamp: datetime = Field(default_factory=generate_utc_now)
     creator_agent_id: str = Field(..., min_length=1)
     configuration: dict[str, Any] = Field(
-        ...,
-        description="Strategy parameters, indicators used, asset symbols, and timeframes"
+        ..., description="Strategy parameters, indicators used, asset symbols, and timeframes"
     )
     backtest_results: dict[str, float] = Field(
-        ...,
-        description="Sharpe ratio, max drawdown, win rate, profit factor, total PnL"
+        ..., description="Sharpe ratio, max drawdown, win rate, profit factor, total PnL"
     )
-    decision: Literal["APPROVED_FOR_PAPER", "REJECTED_VERIFICATION", "REJECTED_RISK", "RETIRED"] = Field(...)
+    decision: Literal["APPROVED_FOR_PAPER", "REJECTED_VERIFICATION", "REJECTED_RISK", "RETIRED"] = (
+        Field(...)
+    )
     memory_links: dict[str, str] = Field(
-        ...,
-        description="Links to PostgreSQL audit ID, TimescaleDB run ID, and Qdrant embedding ID"
+        ..., description="Links to PostgreSQL audit ID, TimescaleDB run ID, and Qdrant embedding ID"
     )
 ```
 
@@ -56,15 +55,21 @@ The Model Registry manages all large language models (LLMs) and quantitative ML 
 
 ```python
 class ModelRecord(BaseModel):
-    model_id: str = Field(..., description="Unique model string, e.g., 'gpt-4o', 'claude-3-5-sonnet'")
+    model_id: str = Field(
+        ..., description="Unique model string, e.g., 'gpt-4o', 'claude-3-5-sonnet'"
+    )
     provider: Literal["openai", "anthropic", "google", "ollama", "vllm"] = Field(...)
     version: str = Field(..., description="Model version tag or API snapshot ID")
-    supported_tasks: list[Literal["research_debate", "fact_checking", "code_gen", "summarization", "embedding"]] = Field(...)
+    supported_tasks: list[
+        Literal["research_debate", "fact_checking", "code_gen", "summarization", "embedding"]
+    ] = Field(...)
     avg_latency_ms: float = Field(..., ge=0.0)
     input_token_cost_per_1k: float = Field(..., ge=0.0)
     output_token_cost_per_1k: float = Field(..., ge=0.0)
     max_context_window: int = Field(..., gt=0)
-    deployment_status: Literal["ACTIVE_PRIMARY", "ACTIVE_FALLBACK", "EVALUATION", "DEPRECATED"] = Field(...)
+    deployment_status: Literal["ACTIVE_PRIMARY", "ACTIVE_FALLBACK", "EVALUATION", "DEPRECATED"] = (
+        Field(...)
+    )
 ```
 
 ### 3.1 Model Governance Rules
@@ -108,4 +113,4 @@ Community agents access features via standard non-blocking queries:
 
 ## 5. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.17: Registries & Feature Store Specification**. It forms an integral part of **Phase 1.0 – Architecture Baseline (Frozen)**.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.17: Registries & Feature Store Specification**. It forms an integral part of **Phase 1.0 – Architecture Baseline (Frozen)**.

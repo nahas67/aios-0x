@@ -1,7 +1,7 @@
 """Unit tests for Community 1 Data Acquisition Agent and SimulatedDataFetcher."""
 
 import asyncio
-import pytest
+
 from communities.c1_data.data_agent import (
     BaseDataFetcher,
     DataAcquisitionAgent,
@@ -13,6 +13,7 @@ from schemas.contracts import MarketDataPayload
 
 def test_simulated_data_fetcher_formats() -> None:
     """Test that SimulatedDataFetcher returns valid price and news data formats."""
+
     async def _test() -> None:
         fetcher = SimulatedDataFetcher()
         assert isinstance(fetcher, BaseDataFetcher)
@@ -33,9 +34,7 @@ def test_simulated_data_fetcher_formats() -> None:
         for article in news_sentiment:
             assert isinstance(article, dict)
             assert "title" in article and isinstance(article["title"], str)
-            assert "sentiment_score" in article and isinstance(
-                article["sentiment_score"], float
-            )
+            assert "sentiment_score" in article and isinstance(article["sentiment_score"], float)
             assert -1.0 <= article["sentiment_score"] <= 1.0
             assert "source" in article and isinstance(article["source"], str)
 
@@ -44,6 +43,7 @@ def test_simulated_data_fetcher_formats() -> None:
 
 def test_data_acquisition_agent_collect_and_publish() -> None:
     """Test DataAcquisitionAgent collects data and publishes to DATA_ACQUIRED topic."""
+
     async def _test() -> None:
         event_bus = InMemoryEventBus()
         await event_bus.start()
@@ -80,13 +80,8 @@ def test_data_acquisition_agent_collect_and_publish() -> None:
             assert isinstance(received_payload, MarketDataPayload)
             assert received_payload.symbol == symbol
             assert received_payload.timeframe == timeframe
-            assert (
-                received_payload.price_data.close == returned_payload.price_data.close
-            )
-            assert (
-                len(received_payload.news_sentiment)
-                == len(returned_payload.news_sentiment)
-            )
+            assert received_payload.price_data.close == returned_payload.price_data.close
+            assert len(received_payload.news_sentiment) == len(returned_payload.news_sentiment)
         finally:
             await event_bus.stop()
 

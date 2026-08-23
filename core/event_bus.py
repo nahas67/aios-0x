@@ -4,24 +4,29 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from enum import Enum
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from enum import StrEnum
+
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
 
-class EventTopic(str, Enum):
-    """Event topics for inter-community communication."""
+class EventTopic(StrEnum):
+    """Canonical inter-community event topics.
 
-    DATA_ACQUIRED = "data.acquired"
-    HYPOTHESIS_GENERATED = "research.hypothesis_generated"
-    VERIFICATION_COMPLETED = "verification.completed"
-    STRATEGY_GENERATED = "strategy.generated"
-    TRADE_EXECUTED = "trade.executed"
-    OBSERVATION_COMPLETED = "observation.completed"
-    MEMORY_STORED = "memory.stored"
-    EVOLUTION_TRIGGERED = "evolution.triggered"
+    Wire values follow the Doc 14 / ADR-002 namespace convention
+    ``aios.<community>.<event>``. Member names are stable API; values are canonical.
+    """
+
+    DATA_ACQUIRED = "aios.c1.data_acquired"
+    HYPOTHESIS_GENERATED = "aios.c2.hypothesis_generated"
+    VERIFICATION_COMPLETED = "aios.c3.verification_completed"
+    STRATEGY_GENERATED = "aios.c4.strategy_generated"
+    TRADE_EXECUTED = "aios.c5.order_executed"  # alias: order_executed semantics
+    OBSERVATION_COMPLETED = "aios.c6.observation_completed"
+    MEMORY_STORED = "aios.c7.memory_stored"
+    EVOLUTION_TRIGGERED = "aios.c8.evolution_triggered"
 
 
 # Type alias for event handler callbacks
@@ -58,7 +63,9 @@ class InMemoryEventBus(BaseEventBus):
     def __init__(self, queue_maxsize: int = 0) -> None:
         """Initialize the in-memory event bus."""
         self._subscribers: dict[EventTopic, list[EventHandler]] = defaultdict(list)
-        self._queue: asyncio.Queue[tuple[EventTopic, BaseModel]] = asyncio.Queue(maxsize=queue_maxsize)
+        self._queue: asyncio.Queue[tuple[EventTopic, BaseModel]] = asyncio.Queue(
+            maxsize=queue_maxsize
+        )
         self._worker_task: asyncio.Task[None] | None = None
         self._running: bool = False
 
@@ -67,7 +74,9 @@ class InMemoryEventBus(BaseEventBus):
         if self._running:
             return
         self._running = True
-        self._worker_task = asyncio.create_task(self._run_worker(), name="in_memory_event_bus_worker")
+        self._worker_task = asyncio.create_task(
+            self._run_worker(), name="in_memory_event_bus_worker"
+        )
         logger.info("InMemoryEventBus started successfully.")
 
     async def stop(self) -> None:

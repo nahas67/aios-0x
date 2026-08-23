@@ -165,6 +165,7 @@ class MarketDataPayload(BaseModel):
     news_sentiment: list[NewsSentiment] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+
 class CandidateHypothesis(BaseModel):
     hypothesis_id: str = Field(default_factory=generate_uuid)
     created_at: datetime = Field(default_factory=generate_utc_now)
@@ -175,6 +176,7 @@ class CandidateHypothesis(BaseModel):
     timeframe: str = Field(..., min_length=1)
     expected_risk_reward_ratio: float = Field(..., gt=0.0)
 
+
 class VerificationReport(BaseModel):
     report_id: str = Field(default_factory=generate_uuid)
     hypothesis_id: str = Field(..., min_length=1)
@@ -183,6 +185,7 @@ class VerificationReport(BaseModel):
     verified_claims: list[str]
     flagged_hallucinations: list[str]
     verification_notes: str
+
 
 class StrategySpecification(BaseModel):
     strategy_id: str = Field(default_factory=generate_uuid)
@@ -194,6 +197,7 @@ class StrategySpecification(BaseModel):
     take_profit_price: float = Field(..., gt=0.0)
     position_size_pct: float = Field(..., ge=0.0, le=100.0)
 
+
 class PortfolioAllocationPlan(BaseModel):
     plan_id: str = Field(default_factory=generate_uuid)
     timestamp: datetime = Field(default_factory=generate_utc_now)
@@ -201,6 +205,7 @@ class PortfolioAllocationPlan(BaseModel):
     total_portfolio_exposure_pct: float
     current_portfolio_drawdown_pct: float
     portfolio_status: Literal["HEALTHY", "WARNING", "CAUTION", "CRITICAL_HALT"]
+
 
 class TradeExecutionReceipt(BaseModel):
     execution_id: str = Field(default_factory=generate_uuid)
@@ -211,6 +216,7 @@ class TradeExecutionReceipt(BaseModel):
     slippage: float = Field(..., ge=0.0)
     fees: float = Field(..., ge=0.0)
     executed_at: datetime = Field(default_factory=generate_utc_now)
+
 
 class ObservationReport(BaseModel):
     observation_id: str = Field(default_factory=generate_uuid)
@@ -252,4 +258,4 @@ AIOS is architected for seamless transition between single-machine local prototy
 
 ## 6. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.1: Overall Platform Architecture & Inter-Community Protocols**. Any proposed architectural modifications must update this specification document alongside Pydantic schemas in `schemas/contracts.py`.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.1: Overall Platform Architecture & Inter-Community Protocols**. Any proposed architectural modifications must update this specification document alongside Pydantic schemas in `schemas/contracts.py`.

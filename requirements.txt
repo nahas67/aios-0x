@@ -1,0 +1,17 @@
+# AIOS-0X pinned environment (Python >=3.11; verified on CPython 3.14.4, win32)
+# Matches `python -m pip freeze` of the working environment on 2026-08-23.
+pydantic==2.12.5
+pydantic_core==2.41.5
+pydantic-settings==2.13.1
+annotated-types==0.7.0
+annotated-doc==0.0.4
+typing_extensions==4.16.0
+typing-inspection==0.4.2
+pytest==9.0.2
+pluggy==1.6.0
+iniconfig==2.3.0
+packaging==26.0
+ruff==0.16.4
+mypy==2.3.1
+mypy_extensions==1.1.0
+pathspec==1.1.1

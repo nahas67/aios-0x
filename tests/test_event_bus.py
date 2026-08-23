@@ -1,7 +1,7 @@
 """Unit tests for AIOS event bus in core/event_bus.py."""
 
 import asyncio
-import pytest
+
 from pydantic import BaseModel
 
 from core.event_bus import EventTopic, InMemoryEventBus
@@ -9,19 +9,20 @@ from schemas.contracts import CandidateHypothesis, VerificationReport
 
 
 def test_event_topic_enum_values() -> None:
-    """Verify EventTopic enum string values strictly match specification."""
-    assert EventTopic.DATA_ACQUIRED == "data.acquired"
-    assert EventTopic.HYPOTHESIS_GENERATED == "research.hypothesis_generated"
-    assert EventTopic.VERIFICATION_COMPLETED == "verification.completed"
-    assert EventTopic.STRATEGY_GENERATED == "strategy.generated"
-    assert EventTopic.TRADE_EXECUTED == "trade.executed"
-    assert EventTopic.OBSERVATION_COMPLETED == "observation.completed"
-    assert EventTopic.MEMORY_STORED == "memory.stored"
-    assert EventTopic.EVOLUTION_TRIGGERED == "evolution.triggered"
+    """Verify EventTopic enum string values match the canonical ADR-002 namespace."""
+    assert EventTopic.DATA_ACQUIRED == "aios.c1.data_acquired"
+    assert EventTopic.HYPOTHESIS_GENERATED == "aios.c2.hypothesis_generated"
+    assert EventTopic.VERIFICATION_COMPLETED == "aios.c3.verification_completed"
+    assert EventTopic.STRATEGY_GENERATED == "aios.c4.strategy_generated"
+    assert EventTopic.TRADE_EXECUTED == "aios.c5.order_executed"
+    assert EventTopic.OBSERVATION_COMPLETED == "aios.c6.observation_completed"
+    assert EventTopic.MEMORY_STORED == "aios.c7.memory_stored"
+    assert EventTopic.EVOLUTION_TRIGGERED == "aios.c8.evolution_triggered"
 
 
 def test_publish_and_subscribe_hypothesis_generated() -> None:
     """Test publishing CandidateHypothesis payload to HYPOTHESIS_GENERATED topic."""
+
     async def _test() -> None:
         bus = InMemoryEventBus()
         await bus.start()
@@ -57,6 +58,7 @@ def test_publish_and_subscribe_hypothesis_generated() -> None:
 
 def test_multiple_subscribers_single_topic() -> None:
     """Test dispatching a single event payload to multiple registered subscribers."""
+
     async def _test() -> None:
         bus = InMemoryEventBus()
         await bus.start()
@@ -96,6 +98,7 @@ def test_multiple_subscribers_single_topic() -> None:
 
 def test_subscriber_exception_resilience() -> None:
     """Test that an exception in one subscriber callback does not affect other subscribers or crash the bus."""
+
     async def _test() -> None:
         bus = InMemoryEventBus()
         await bus.start()
@@ -134,6 +137,7 @@ def test_subscriber_exception_resilience() -> None:
 
 def test_publish_to_unsubscribed_topic() -> None:
     """Test publishing to a topic with no subscribers runs without error."""
+
     async def _test() -> None:
         bus = InMemoryEventBus()
         await bus.start()

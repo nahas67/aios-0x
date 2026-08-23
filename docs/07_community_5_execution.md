@@ -168,41 +168,20 @@ Community 5 outputs live `TradeExecutionReceipt` instances defined in `schemas/c
 class TradeExecutionReceipt(BaseModel):
     execution_id: str = Field(
         default_factory=generate_uuid,
-        description="Unique UUID string representing this execution receipt"
+        description="Unique UUID string representing this execution receipt",
     )
     strategy_id: str = Field(
-        ...,
-        min_length=1,
-        description="The strategy ID triggering this execution"
+        ..., min_length=1, description="The strategy ID triggering this execution"
     )
-    symbol: str = Field(
-        ...,
-        min_length=1,
-        description="Trading symbol of the filled trade"
-    )
+    symbol: str = Field(..., min_length=1, description="Trading symbol of the filled trade")
     fill_price: float = Field(
-        ...,
-        gt=0.0,
-        description="Average price at which the order was filled"
+        ..., gt=0.0, description="Average price at which the order was filled"
     )
-    filled_quantity: float = Field(
-        ...,
-        gt=0.0,
-        description="Total quantity filled"
-    )
-    slippage: float = Field(
-        ...,
-        ge=0.0,
-        description="Price slippage encountered during execution"
-    )
-    fees: float = Field(
-        ...,
-        ge=0.0,
-        description="Execution and transaction fees incurred"
-    )
+    filled_quantity: float = Field(..., gt=0.0, description="Total quantity filled")
+    slippage: float = Field(..., ge=0.0, description="Price slippage encountered during execution")
+    fees: float = Field(..., ge=0.0, description="Execution and transaction fees incurred")
     executed_at: datetime = Field(
-        default_factory=generate_utc_now,
-        description="UTC datetime when the execution took place"
+        default_factory=generate_utc_now, description="UTC datetime when the execution took place"
     )
 ```
 
@@ -222,4 +201,4 @@ Live execution receipts are distinguished from paper/simulated receipts by metad
 
 ## 5. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.7: Community 5 Specification (Live Trading Execution)**. Emergency kill-switch thresholds align with `RiskConfig.max_daily_drawdown_pct` in [risk_firewall.py](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/core/risk_firewall.py). API credentials must follow the secrets management rules defined in [.cursorrules](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/.cursorrules).
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.7: Community 5 Specification (Live Trading Execution)**. Emergency kill-switch thresholds align with `RiskConfig.max_daily_drawdown_pct` in [risk_firewall.py](core/risk_firewall.py). API credentials must follow the secrets management rules defined in [.cursorrules](.cursorrules).

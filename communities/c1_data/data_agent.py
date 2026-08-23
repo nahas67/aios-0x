@@ -84,9 +84,7 @@ class DataAcquisitionAgent:
         self.fetcher = fetcher
         self.event_bus = event_bus
 
-    async def collect_and_publish(
-        self, symbol: str, timeframe: str
-    ) -> MarketDataPayload:
+    async def collect_and_publish(self, symbol: str, timeframe: str) -> MarketDataPayload:
         """Fetch price data and news sentiment concurrently and publish payload.
 
         Args:
@@ -103,9 +101,7 @@ class DataAcquisitionAgent:
         )
 
         price_data = PriceData(**price_dict)
-        news_sentiment = (
-            [NewsSentiment(**item) for item in news_list] if news_list else None
-        )
+        news_sentiment = [NewsSentiment(**item) for item in news_list] if news_list else None
 
         payload = MarketDataPayload(
             symbol=symbol,

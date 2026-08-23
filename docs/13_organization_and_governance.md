@@ -109,4 +109,4 @@ $$R_{agent} = 0.30 \cdot W + 0.25 \cdot A + 0.20 \cdot V + 0.15 \cdot Q + 0.05 \
 
 ## 5. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.13: Organization, Governance, Agent Lifecycle & Reputation**.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.13: Organization, Governance, Agent Lifecycle & Reputation**.

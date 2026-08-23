@@ -1,8 +1,20 @@
 # AIOS Specification 1.19: Master Technology Catalog & Evaluation Matrix
 
+> **RECONCILIATION NOTICE (2026-08-23):** This catalog's status vocabulary and scores are
+> SUPERSEDED by the reconciled Phase 2 artifacts: `AIOS_PHASE2_SELECTION_LEDGER.md` (v2.0.0)
+> and `AIOS_PHASE2_RECONCILIATION_REPORT.md`. The ledger's disposition vocabulary
+> (RESEARCH-PREFERENCE / BENCHMARK-CANDIDATE / STUDY / REFERENCE / DEFERRED / REJECTED)
+> replaces this document's `SELECTED`/`EVALUATING`/`REJECTED`, and FORMAL SELECTION remains
+> **0** until Tier-1 benchmark ADRs are ratified. Ledger scores differ from the initial
+> matrix below (e.g. LangGraph 88→91, NATS JetStream 94→96, VectorBT 85→94, NautilusTrader
+> 92→89); where they conflict, the Selection Ledger is authoritative. AutoGen appears in
+> early drafts but is not part of the reconciled 73-candidate universe.
+> A verified mapping of all 73 ZIPs to dispositions also exists at
+> `docs/master/AIOS-0X_OSS_CATALOG.md`.
+
 ## Document Control
-- **Document Version**: 1.0.0
-- **Status**: Active Catalog (Phase 2.0 Evaluation Matrix)
+- **Document Version**: 1.1.0 (reconciliation notice added; historical matrix retained)
+- **Status**: Superseded-in-part by AIOS_PHASE2_SELECTION_LEDGER.md v2.0.0
 - **Target System**: AIOS - Open-Source Technology Selection
 - **Author**: AIOS System Architecture Team
 
@@ -12,7 +24,7 @@
 
 The Master Technology Catalog records all open-source candidate tools, frameworks, databases, message brokers, and quantitative libraries evaluated for integration into AIOS during **Phase 2.0 (Technology Acquisition & Validation)**.
 
-Every project candidate is scored against the 100-point evaluation rubric defined in [docs/16_technology_acquisition_framework.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/docs/16_technology_acquisition_framework.md) before receiving a status tag of `SELECTED`, `EVALUATING`, or `REJECTED`.
+Every project candidate is scored against the 100-point evaluation rubric defined in [docs/16_technology_acquisition_framework.md](docs/16_technology_acquisition_framework.md) before receiving a status tag of `SELECTED`, `EVALUATING`, or `REJECTED`.
 
 ---
 
@@ -68,4 +80,4 @@ Each entry in the catalog adheres to the following structured metadata format:
 
 ## 4. Document Verification & Compliance
 
-This catalog is updated dynamically throughout **Phase 2.0 (Technology Acquisition & Validation)** as candidate benchmarks are finalized. Decisions are recorded in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md).
+This catalog is updated dynamically throughout **Phase 2.0 (Technology Acquisition & Validation)** as candidate benchmarks are finalized. Decisions are recorded in [CHECKPOINT.md](CHECKPOINT.md).

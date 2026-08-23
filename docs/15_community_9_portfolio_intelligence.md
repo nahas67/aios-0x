@@ -92,6 +92,7 @@ class StrategyAllocation(BaseModel):
     correlation_penalty_applied: bool = Field(default=False)
     allocation_notes: str = Field(...)
 
+
 class PortfolioAllocationPlan(BaseModel):
     plan_id: str = Field(default_factory=generate_uuid)
     timestamp: datetime = Field(default_factory=generate_utc_now)
@@ -110,4 +111,4 @@ class PortfolioAllocationPlan(BaseModel):
 
 ## 4. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.15: Community 9 Specification (Portfolio Intelligence)**.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.15: Community 9 Specification (Portfolio Intelligence)**.

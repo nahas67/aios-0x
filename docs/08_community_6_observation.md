@@ -153,24 +153,17 @@ Community 6 outputs instances of `ObservationReport` defined in `schemas/contrac
 class ObservationReport(BaseModel):
     observation_id: str = Field(
         default_factory=generate_uuid,
-        description="Unique UUID string representing this observation report"
+        description="Unique UUID string representing this observation report",
     )
     execution_id: str = Field(
-        ...,
-        min_length=1,
-        description="The execution receipt ID associated with this observation"
+        ..., min_length=1, description="The execution receipt ID associated with this observation"
     )
-    actual_pnl: float = Field(
-        ...,
-        description="The actual realized profit and loss of the trade"
-    )
+    actual_pnl: float = Field(..., description="The actual realized profit and loss of the trade")
     predicted_vs_actual_deviation: float = Field(
-        ...,
-        description="Deviation measure between expected strategy outcome and actual results"
+        ..., description="Deviation measure between expected strategy outcome and actual results"
     )
     lessons_learned: list[str] = Field(
-        ...,
-        description="Key takeaways, insights, or updates extracted from the observation"
+        ..., description="Key takeaways, insights, or updates extracted from the observation"
     )
 ```
 
@@ -183,4 +176,4 @@ class ObservationReport(BaseModel):
 
 ## 5. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.8: Community 6 Specification (Observation & Audit)**. Output payloads align with the `ObservationReport` schema in [contracts.py](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/schemas/contracts.py). Event topics are defined in [event_bus.py](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/core/event_bus.py).
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.8: Community 6 Specification (Observation & Audit)**. Output payloads align with the `ObservationReport` schema in [contracts.py](schemas/contracts.py). Event topics are defined in [event_bus.py](core/event_bus.py).

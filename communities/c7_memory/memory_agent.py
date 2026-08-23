@@ -1,10 +1,13 @@
 """Community 7: Memory Agent for institutional knowledge persistence and performance tracking."""
 
 import logging
-from typing import Any
 
 from core.event_bus import BaseEventBus, EventTopic
-from schemas.contracts import ObservationReport, TradeExecutionReceipt
+from schemas.contracts import (
+    ObservationReport,
+    PerformanceSummary,
+    TradeExecutionReceipt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,23 +48,24 @@ class MemoryAgent:
         )
         await self.event_bus.publish(EventTopic.MEMORY_STORED, report)
 
-    def get_performance_summary(self) -> dict[str, Any]:
+    def get_performance_summary(self) -> PerformanceSummary:
         """Compute institutional performance summary analytics.
 
         Returns:
-            Dictionary containing total_trades, cumulative_pnl, winning_trades, and win_rate.
+            Typed PerformanceSummary contract (ADR-002): consumers depend on this
+            schema, not on this class (removes cross-community import need).
         """
         total_trades = len(self.observation_reports)
         cumulative_pnl = sum(r.actual_pnl for r in self.observation_reports)
         winning_trades = sum(1 for r in self.observation_reports if r.actual_pnl > 0)
         win_rate = (winning_trades / total_trades * 100.0) if total_trades > 0 else 0.0
 
-        return {
-            "total_trades": total_trades,
-            "cumulative_pnl": round(cumulative_pnl, 2),
-            "winning_trades": winning_trades,
-            "win_rate": round(win_rate, 2),
-        }
+        return PerformanceSummary(
+            total_trades=total_trades,
+            cumulative_pnl=round(cumulative_pnl, 2),
+            winning_trades=winning_trades,
+            win_rate=round(win_rate, 2),
+        )
 
     async def on_trade_executed(self, receipt: TradeExecutionReceipt) -> None:
         """Event handler callback triggered when a trade is executed."""

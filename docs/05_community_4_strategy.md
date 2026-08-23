@@ -147,42 +147,21 @@ Community 4 outputs instances of `StrategySpecification` defined in `schemas/con
 class StrategySpecification(BaseModel):
     strategy_id: str = Field(
         default_factory=generate_uuid,
-        description="Unique UUID string representing this strategy specification"
+        description="Unique UUID string representing this strategy specification",
     )
     hypothesis_id: str = Field(
-        ...,
-        min_length=1,
-        description="The source hypothesis ID leading to this strategy"
+        ..., min_length=1, description="The source hypothesis ID leading to this strategy"
     )
-    symbol: str = Field(
-        ...,
-        min_length=1,
-        description="The target trading symbol"
-    )
-    action: Literal["BUY", "SELL", "HOLD"] = Field(
-        ...,
-        description="Action to execute"
-    )
-    entry_price: float = Field(
-        ...,
-        gt=0.0,
-        description="Target entry price trigger"
-    )
-    stop_loss_price: float = Field(
-        ...,
-        gt=0.0,
-        description="Hard stop loss price level"
-    )
-    take_profit_price: float = Field(
-        ...,
-        gt=0.0,
-        description="Take profit target price level"
-    )
+    symbol: str = Field(..., min_length=1, description="The target trading symbol")
+    action: Literal["BUY", "SELL", "HOLD"] = Field(..., description="Action to execute")
+    entry_price: float = Field(..., gt=0.0, description="Target entry price trigger")
+    stop_loss_price: float = Field(..., gt=0.0, description="Hard stop loss price level")
+    take_profit_price: float = Field(..., gt=0.0, description="Take profit target price level")
     position_size_pct: float = Field(
         ...,
         ge=0.0,
         le=100.0,
-        description="Percentage of total portfolio risk allocated (0.0 to 100.0)"
+        description="Percentage of total portfolio risk allocated (0.0 to 100.0)",
     )
 
     @model_validator(mode="after")
@@ -210,4 +189,4 @@ class StrategySpecification(BaseModel):
 
 ## 5. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.5: Community 4 Specification (Strategy Generation)**. The Risk Firewall implementation resides in `core/risk_firewall.py` with unit tests in `tests/test_risk_firewall.py`.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.5: Community 4 Specification (Strategy Generation)**. The Risk Firewall implementation resides in `core/risk_firewall.py` with unit tests in `tests/test_risk_firewall.py`.

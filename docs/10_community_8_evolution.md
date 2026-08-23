@@ -162,4 +162,4 @@ class EvolutionSignal(BaseModel):
 
 ## 5. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.10: Community 8 Specification (Evolution Mechanisms)**. Implementation code resides in `communities/c8_evolution/evolution_agent.py` and unit tests in `tests/test_c8_evolution.py`.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.10: Community 8 Specification (Evolution Mechanisms)**. Implementation code resides in `communities/c8_evolution/evolution_agent.py` and unit tests in `tests/test_c8_evolution.py`.

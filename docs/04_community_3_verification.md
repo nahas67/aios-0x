@@ -87,34 +87,25 @@ Community 3 outputs instances of `VerificationReport` defined in `schemas/contra
 class VerificationReport(BaseModel):
     report_id: str = Field(
         default_factory=generate_uuid,
-        description="Unique UUID string representing this verification report"
+        description="Unique UUID string representing this verification report",
     )
     hypothesis_id: str = Field(
-        ...,
-        min_length=1,
-        description="The target CandidateHypothesis ID being verified"
+        ..., min_length=1, description="The target CandidateHypothesis ID being verified"
     )
     confidence_score: float = Field(
-        ...,
-        ge=0.0,
-        le=100.0,
-        description="Verification confidence score from 0.0 to 100.0"
+        ..., ge=0.0, le=100.0, description="Verification confidence score from 0.0 to 100.0"
     )
     is_verified: bool = Field(
-        default=False,
-        description="Indicates if verified (True if confidence_score >= 70.0)"
+        default=False, description="Indicates if verified (True if confidence_score >= 70.0)"
     )
     verified_claims: list[str] = Field(
-        ...,
-        description="List of claims from the hypothesis successfully verified"
+        ..., description="List of claims from the hypothesis successfully verified"
     )
     flagged_hallucinations: list[str] = Field(
-        ...,
-        description="List of assumptions or claims flagged as hallucinated or incorrect"
+        ..., description="List of assumptions or claims flagged as hallucinated or incorrect"
     )
     verification_notes: str = Field(
-        ...,
-        description="Detailed notes and findings from the verification process"
+        ..., description="Detailed notes and findings from the verification process"
     )
 
     @model_validator(mode="after")
@@ -134,4 +125,4 @@ class VerificationReport(BaseModel):
 
 ## 5. Document Verification & Compliance
 
-This specification is tracked in [CHECKPOINT.md](file:///c:/Users/nahas/OneDrive/Desktop/AIOS/CHECKPOINT.md) under **Doc 1.4: Community 3 Specification (Verification Firewall)**. Implementation code resides in `communities/c3_verification/` and unit tests in `tests/test_c3_verification.py`.
+This specification is tracked in [CHECKPOINT.md](CHECKPOINT.md) under **Doc 1.4: Community 3 Specification (Verification Firewall)**. Implementation code resides in `communities/c3_verification/` and unit tests in `tests/test_c3_verification.py`.
