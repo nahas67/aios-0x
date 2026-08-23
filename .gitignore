@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets & environment
+.env
+.env.*
+!.env.example
+
+# Local data & databases (raw market data, SQLite files)
+data/
+*.db
+*.sqlite3
+
+# OS noise
+Thumbs.db
+.DS_Store
+
+# OneDrive sync placeholders can conflict with git index; ignore office temp files
+~$*

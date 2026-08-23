@@ -1,0 +1,42 @@
+# AIOS Benchmark Result Schema v0.1
+schema_version: "0.1.0"
+benchmark_id: "BMK-GRP-[X]-[000]"
+group_id: "GROUP_[A-K]"
+candidate_name: "CandidateName"
+candidate_version: "0.0.0"
+repository_commit: "commit_hash_here"
+timestamp_utc: "2026-08-19T00:00:00Z"
+operator: "AIOS Benchmark Runner"
+
+environment_id: "ENV-001"
+dataset_id: "DS-001"
+workload_class: "SMALL | MEDIUM | LARGE"
+random_seed: 42
+
+evaluation_types:
+  - "PERF"
+  - "FUNC"
+
+functional_correctness:
+  all_gates_passed: true
+  failed_gate_count: 0
+  assertions_checked: 100
+  determinism_score: 1.0
+
+performance_summary:
+  throughput_ops_sec:
+    mean: 0.0
+    median: 0.0
+    std_dev: 0.0
+  latency_ms:
+    p50: 0.0
+    p95: 0.0
+    p99: 0.0
+    min: 0.0
+    max: 0.0
+  resources:
+    peak_memory_mb: 0.0
+    avg_cpu_percent: 0.0
+
+outcome: "PASS | FAIL | INCONCLUSIVE"
+outcome_rationale: "Summary rationale for benchmark outcome."

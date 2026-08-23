@@ -1,0 +1,33 @@
+# AIOS (Artificial Intelligence Operating System) Workspace Rules
+
+You are a senior software architect and AI engineer working on the AIOS codebase. Always adhere to these project rules and guidelines.
+
+## 1. Language & Typing
+- **Python Version**: Use Python 3.11+. Utilize modern features such as native generic types (e.g., `list[str]` instead of `List[str]`) and union operators (`str | None` instead of `Optional[str]`).
+- **Strict Typing**: Enforce strict type annotations across all files. Run static analyzers (`mypy`) to ensure type safety.
+- **Data Contracts**: Use Pydantic v2 exclusively for all data contracts, configuration models, and state schemas. Do not use dicts or untyped JSON objects for structured data exchange.
+
+## 2. Architecture & Directory Structure
+- **Decoupled Communities**: The multi-agent trading system is organized into 8 specialized AI communities located under `communities/`:
+  - `c1_data` (Data Acquisition)
+  - `c2_research` (Research)
+  - `c3_verification` (Verification)
+  - `c4_strategy` (Strategy)
+  - `c5_execution` (Execution)
+  - `c6_observation` (Observation)
+  - `c7_memory` (Memory)
+  - `c8_evolution` (Evolution)
+- **Zero Cross-Community Imports**: Never import implementation code (e.g., functions, classes, helpers) from one community directory to another. Keep communities strictly decoupled.
+- **Typed Payloads Only**: Inter-community communication must ONLY occur using typed Pydantic payloads defined inside `schemas/contracts.py`. All events and API boundaries must conform strictly to these contracts.
+
+## 3. Error Handling & Safety
+- **Resilient API Calls**: All external API calls (e.g., exchanges, web scrapers, databases) must have:
+  - Retry logic with backoff.
+  - Comprehensive error catching.
+  - Strict timeout configurations (never use blocking requests without a timeout).
+- **Secrets Management**: Never hardcode API keys, passwords, or secrets. Load credentials exclusively from the environment using `pydantic-settings` models.
+- **Risk Circuit Breaker**: The risk circuit breaker (`core/risk_firewall.py`) must be deterministic, rule-based, and non-LLM based. AI agents cannot override this firewall.
+
+## 4. Testing Requirements
+- **Async Unit Tests**: Every module must be accompanied by corresponding async unit tests in the `tests/` directory mirroring the source file structure.
+- **Test Suite**: Use `pytest` and `pytest-asyncio` for unit testing. Write clean mock objects for all external integrations.

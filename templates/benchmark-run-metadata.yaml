@@ -1,0 +1,35 @@
+# AIOS Benchmark Run Metadata Schema v0.1
+benchmark_id: "BMK-GRP-[X]-[000]"
+group_id: "GROUP_[A-K]"
+candidate_name: "CandidateName"
+candidate_version: "0.0.0"
+execution_timestamp_utc: "2026-08-19T00:00:00Z"
+operator: "AIOS Benchmark Runner"
+
+hardware:
+  cpu_model: "RECORD_AT_RUNTIME"
+  physical_cores: 0
+  logical_threads: 0
+  ram_gb: 0.0
+  storage_type: "NVMe SSD / Enterprise SAN"
+  gpu_model: "N/A"
+
+software:
+  os_name: "Linux / Windows"
+  kernel_version: "RECORD_AT_RUNTIME"
+  python_version: "3.11.x"
+  docker_version: "N/A or VERSION"
+
+dependencies:
+  lockfile_path: "poetry.lock / requirements.txt"
+  lockfile_sha256: "RECORD_AT_RUNTIME"
+
+dataset:
+  name: "MKT-DATA-TICK-2024-2025"
+  hash_sha256: "RECORD_AT_RUNTIME"
+  record_count: 0
+
+tuning_parameters:
+  concurrency_workers: 1
+  cpu_affinity: "0-3"
+  custom_flags: {}
