@@ -129,6 +129,12 @@ class ReplayRunner:
         self.symbols = sorted(self.csv_path_by_symbol)
         self.initial_balance = initial_balance
         self.slippage_pct = slippage_pct
+
+        # ---- Constitution gate (Directive 48): refuse to operate on mismatch
+        from core.constitution import enforce_at_boot
+
+        self.constitution_hash = enforce_at_boot()
+
         self.bus = bus or InMemoryEventBus()
         self.store = store or SqliteMemoryStore(store_path)
 

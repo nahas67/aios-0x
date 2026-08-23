@@ -173,6 +173,23 @@ Next: Phase 8 Evolution & Resilience (challenger architecture, agent reputation 
 
 ---
 
+### PHASE 9+ PRODUCTION-READINESS HARDENING — IN PROGRESS (2026-08-23)
+
+#### Session: Constitution + Broker Suite + Walk-Forward Execution
+- [x] **SYSTEM CONSTITUTION RATIFIED** (`CONSTITUTION.md` v1.0.0): capital limits, authority boundaries, honesty laws, amendment procedure — **SHA-256 pinned** in `core/constitution.py`; every runner boot verifies (`enforce_at_boot`), mismatch refuses startup; tamper test proves detection; pin script shipped (`scripts/pin_constitution.py`)
+- [x] **CCXT execution suite completed**: real market-order routing, venue response→receipt mapping (avg price/filled/fee), sell-side routing, symbol-map round-trip on positions_snapshot, cancel_all delegation, sandbox-mode verification — all contract-tested against a fake client mirroring ccxt API shapes; **real-money gate enforced in code**: LIVE venue requires `allow_real_money=True` which the composition root grants only after reading a LIVE_CAPITAL_APPROVAL audit event
+- [x] **Walk-forward harness executed for real**: 7 windows (300 bars, 90/30) → aggregate test PnL −305.89, 0 overfit windows, integrity gates passed pre-run → `research/reports/walk_forward_300b_90t30s.json`
+- [x] Gates: **pytest 124 passed +1 opt-in · ruff clean · mypy strict clean (67 files)**
+
+#### Remaining before ANY live capital (constitution-gated)
+1. Broker testnet keys + live shadow validation of the CCXT suite against a real venue
+2. Tier-1 benchmark ADRs (Group C requires broker infra; A/B require full protocol runs)
+3. Licensed real-market data replacing synthetic goldens
+4. Jurisdiction-specific tax rules signed by licensed professional (CA/CPA)
+5. Human principal records APPROVE_LIVE_CAPITAL + amends CONSTITUTION §1 via ADR
+
+---
+
 ### Phase 1.0 – Architecture Baseline (FROZEN & LOCKED) — 100% COMPLETE
 
 - [x] **System Map & Master Index** ([docs/00_system_map.md](docs/00_system_map.md))
