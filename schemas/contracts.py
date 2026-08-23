@@ -301,6 +301,9 @@ class PerformanceSummary(BaseModel):
     )
 
 
+ExitReason = Literal["TARGET_HIT", "STOP_HIT", "HORIZON_END"]
+
+
 class ObservationReport(BaseModel):
     """Payload representing trade performance and learning insights.
 
@@ -320,4 +323,128 @@ class ObservationReport(BaseModel):
     )
     lessons_learned: list[str] = Field(
         ..., description="Key takeaways, insights, or updates extracted from the observation"
+    )
+    symbol: str | None = Field(default=None, description="Symbol of the observed trade when known")
+    strategy_id: str | None = Field(
+        default=None, description="Originating strategy id for lineage when known"
+    )
+    exit_reason: ExitReason | None = Field(
+        default=None, description="Market-driven reason the position was closed"
+    )
+    direction_correct: bool | None = Field(
+        default=None,
+        description="Whether realized price movement matched the intended direction",
+    )
+
+
+class PredictionRecord(BaseModel):
+    """Prediction-ledger entry recorded BEFORE the outcome is known (Directive 25).
+
+    Written at decision time with an information snapshot; scored later so
+    accuracy/calibration can be measured honestly.
+    """
+
+    prediction_id: str = Field(
+        default_factory=generate_uuid, description="Unique UUID for this prediction"
+    )
+    created_at: datetime = Field(
+        default_factory=generate_utc_now, description="UTC time the prediction was recorded"
+    )
+    hypothesis_id: str = Field(..., min_length=1, description="Source hypothesis id")
+    strategy_id: str | None = Field(
+        default=None,
+        description="Strategy id if this prediction became a trade; reserved for NO_TRADE entries",
+    )
+    symbol: str = Field(..., min_length=1)
+    direction: Literal["BUY", "SELL"] = Field(..., description="Predicted direction")
+    entry_reference_price: float = Field(..., gt=0.0, description="Decision-time reference price")
+    target_price: float = Field(..., gt=0.0, description="Expected take-profit level")
+    stop_price: float = Field(..., gt=0.0, description="Invalidation (stop) level")
+    horizon_timeframe: str = Field(..., min_length=1, description="Expected resolution window")
+    confidence_score: float = Field(
+        ..., ge=0.0, le=100.0, description="Verification confidence at decision time"
+    )
+    expected_risk_reward_ratio: float = Field(..., gt=0.0)
+    decision_bar_timestamp: datetime = Field(
+        ..., description="Timestamp of the decision bar (information snapshot)"
+    )
+    is_simulated: bool = Field(default=False, description="True when derived from simulated data")
+    model_version: str = Field(
+        default="deterministic_baseline_v1", description="Reasoning model/version tag"
+    )
+    status: Literal["PENDING", "SCORED"] = Field(default="PENDING")
+    exit_price: float | None = Field(default=None, gt=0.0)
+    exit_reason: ExitReason | None = None
+    realized_pnl: float | None = None
+    direction_correct: bool | None = None
+    scored_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_scored_fields(self) -> "PredictionRecord":
+        """A SCORED prediction must carry its full outcome set."""
+        if self.status == "SCORED":
+            missing = [
+                name
+                for name in (
+                    "exit_price",
+                    "exit_reason",
+                    "realized_pnl",
+                    "direction_correct",
+                    "scored_at",
+                )
+                if getattr(self, name) is None
+            ]
+            if missing:
+                raise ValueError(f"SCORED prediction missing outcome fields: {missing}")
+        return self
+
+    def score(
+        self,
+        exit_price: float,
+        exit_reason: ExitReason,
+        realized_pnl: float,
+        direction_correct: bool,
+        scored_at: datetime | None = None,
+    ) -> "PredictionRecord":
+        """Return a SCORED copy of this prediction (immutable update)."""
+        return self.model_copy(
+            update={
+                "status": "SCORED",
+                "exit_price": exit_price,
+                "exit_reason": exit_reason,
+                "realized_pnl": round(realized_pnl, 2),
+                "direction_correct": direction_correct,
+                "scored_at": scored_at or generate_utc_now(),
+            }
+        )
+
+
+class PostmortemRecord(BaseModel):
+    """Structured post-mortem for a closed trade (Directive 65).
+
+    Separates decision quality from outcome luck; every field is filled from
+    recorded evidence only.
+    """
+
+    postmortem_id: str = Field(
+        default_factory=generate_uuid, description="Unique UUID for this postmortem"
+    )
+    created_at: datetime = Field(default_factory=generate_utc_now, description="UTC creation time")
+    execution_id: str = Field(..., min_length=1)
+    prediction_id: str | None = None
+    hypothesis_id: str = Field(..., min_length=1)
+    strategy_id: str = Field(..., min_length=1)
+    symbol: str = Field(..., min_length=1)
+    what_we_thought: str = Field(..., description="The original thesis")
+    what_we_knew: list[str] = Field(default_factory=list, description="Evidence available then")
+    what_we_did: str = Field(..., description="Action taken with levels and sizing")
+    what_happened: str = Field(..., description="Market-driven outcome summary")
+    got_right: list[str] = Field(default_factory=list)
+    got_wrong: list[str] = Field(default_factory=list)
+    unknowable: list[str] = Field(
+        default_factory=list, description="Information unavailable at decision time"
+    )
+    luck_assessment: str = Field(..., description="Honest separation of skill vs variance")
+    should_change: list[str] = Field(
+        default_factory=list, description="Concrete process changes proposed"
     )

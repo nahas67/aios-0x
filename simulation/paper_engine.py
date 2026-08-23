@@ -23,10 +23,13 @@ _DEFAULT_TAKER_FEE_PCT = 0.1
 
 @dataclass
 class OpenPaperPosition:
-    """An open simulated position awaiting settlement."""
+    """An open simulated position awaiting settlement, with its bracket levels."""
 
     receipt: TradeExecutionReceipt
     action: str
+    stop_loss_price: float
+    take_profit_price: float
+    allocated_capital: float
 
 
 class PaperEngine:
@@ -38,6 +41,7 @@ class PaperEngine:
         initial_balance: float = 100000.0,
         slippage_pct: float = 0.05,
         taker_fee_pct: float = _DEFAULT_TAKER_FEE_PCT,
+        max_open_positions_per_symbol: int = 1,
     ) -> None:
         """Initialize PaperEngine.
 
@@ -46,14 +50,19 @@ class PaperEngine:
             initial_balance: Initial portfolio capital balance (must be positive).
             slippage_pct: Execution slippage percentage model.
             taker_fee_pct: Simulated exchange fee percentage applied to notional.
+            max_open_positions_per_symbol: Portfolio control limiting stacked
+                exposure per symbol (Doc 11 control set; deterministic).
         """
         if initial_balance <= 0:
             raise ValueError("initial_balance must be positive")
+        if max_open_positions_per_symbol < 1:
+            raise ValueError("max_open_positions_per_symbol must be >= 1")
         self.event_bus = event_bus
         self.initial_balance = initial_balance
         self.cash_balance = initial_balance
         self.slippage_pct = slippage_pct
         self.taker_fee_pct = taker_fee_pct
+        self.max_open_positions_per_symbol = max_open_positions_per_symbol
         self.open_positions: dict[str, OpenPaperPosition] = {}
 
     async def execute_paper_trade(
@@ -78,6 +87,17 @@ class PaperEngine:
         )
         fees = round(allocated_capital * self.taker_fee_pct / 100.0, 2)
         total_debit = allocated_capital
+
+        open_for_symbol = sum(
+            1 for p in self.open_positions.values() if p.receipt.symbol == strategy.symbol
+        )
+        if open_for_symbol >= self.max_open_positions_per_symbol:
+            logger.warning(
+                "Rejected paper order for %s: position limit reached (%d)",
+                strategy.symbol,
+                self.max_open_positions_per_symbol,
+            )
+            return None
 
         if allocated_capital <= 0 or total_debit + fees > self.cash_balance:
             logger.warning(
@@ -108,7 +128,11 @@ class PaperEngine:
             ),
         )
         self.open_positions[receipt.execution_id] = OpenPaperPosition(
-            receipt=receipt, action=strategy.action
+            receipt=receipt,
+            action=strategy.action,
+            stop_loss_price=strategy.stop_loss_price,
+            take_profit_price=strategy.take_profit_price,
+            allocated_capital=allocated_capital,
         )
 
         await self.event_bus.publish(EventTopic.TRADE_EXECUTED, receipt)
@@ -125,8 +149,8 @@ class PaperEngine:
     def settle_position(self, execution_id: str, exit_price: float) -> float | None:
         """Settle an open paper position at a market-supplied exit price.
 
-        Credits sale proceeds back to cash and returns realized PnL
-        ((exit - fill) * qty - fees) for BUY positions; mirrored for SELL.
+        Credits the allocated capital plus realized PnL back to cash, preserving
+        exact conservation: cash_delta per trade == realized PnL (cent-rounded).
 
         Args:
             execution_id: Execution identifier of the open position.
@@ -147,16 +171,17 @@ class PaperEngine:
         else:
             pnl = (exit_price - r.fill_price) * r.filled_quantity - r.fees
 
-        proceeds = round(r.fill_price * r.filled_quantity + pnl, 2)
+        realized = round(pnl, 2)
+        proceeds = round(position.allocated_capital + realized, 2)
         self.cash_balance = round(self.cash_balance + proceeds, 2)
         logger.info(
             "Settled paper position %s at %.4f; realized_pnl=%.2f; cash=%.2f",
             execution_id,
             exit_price,
-            round(pnl, 2),
+            realized,
             self.cash_balance,
         )
-        return round(pnl, 2)
+        return realized
 
     def on_market_price(self, symbol: str, price: float) -> list[float]:
         """Settle every open position for a symbol at an actual market price.

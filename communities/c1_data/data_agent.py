@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from core.event_bus import BaseEventBus, EventTopic
-from schemas.contracts import MarketDataPayload, NewsSentiment, PriceData
+from schemas.contracts import DataProvenance, MarketDataPayload, NewsSentiment, PriceData
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +39,21 @@ class BaseDataFetcher(ABC):
         """
         pass
 
+    def provenance(self) -> DataProvenance | None:
+        """Source/quality metadata attached to payloads built from this fetcher."""
+        return None
+
 
 class SimulatedDataFetcher(BaseDataFetcher):
     """Simulated market data fetcher for testing and local paper trading."""
+
+    def provenance(self) -> DataProvenance:
+        return DataProvenance(
+            source_id="simulated_v1",
+            source_type="SIM",
+            quality_state="FRESH",
+            license="internal-test",
+        )
 
     async def fetch_price_data(self, symbol: str, timeframe: str) -> dict[str, Any]:
         """Return realistic simulated OHLCV price candle data."""
@@ -103,11 +115,14 @@ class DataAcquisitionAgent:
         price_data = PriceData(**price_dict)
         news_sentiment = [NewsSentiment(**item) for item in news_list] if news_list else None
 
+        provenance = self.fetcher.provenance()
         payload = MarketDataPayload(
             symbol=symbol,
             timeframe=timeframe,
             price_data=price_data,
             news_sentiment=news_sentiment,
+            provenance=provenance,
+            is_simulated=bool(provenance and provenance.source_type == "SIM"),
         )
 
         await self.event_bus.publish(EventTopic.DATA_ACQUIRED, payload)

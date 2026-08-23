@@ -32,37 +32,52 @@ class ObservationAgent:
         return len(self._open_positions)
 
     def observe_trade_outcome_sync(
-        self, receipt: TradeExecutionReceipt, exit_price: float
+        self,
+        receipt: TradeExecutionReceipt,
+        exit_price: float,
+        side: str = "BUY",
     ) -> float:
         """Compute realized PnL for a receipt at an externally-supplied exit price.
 
         Args:
             receipt: TradeExecutionReceipt from Community 5 / PaperEngine.
             exit_price: Realized trade exit price from market data (never invented).
+            side: Position side ("BUY" long / "SELL" short) governing profit direction.
 
         Returns:
             Realized PnL in quote currency.
         """
         if exit_price <= 0:
             raise ValueError("Exit price must be positive")
+        if side == "SELL":
+            return round(
+                (receipt.fill_price - exit_price) * receipt.filled_quantity - receipt.fees,
+                2,
+            )
         return round(
             (exit_price - receipt.fill_price) * receipt.filled_quantity - receipt.fees,
             2,
         )
 
     async def observe_trade_outcome(
-        self, receipt: TradeExecutionReceipt, exit_price: float
+        self,
+        receipt: TradeExecutionReceipt,
+        exit_price: float,
+        exit_reason: str | None = None,
+        side: str = "BUY",
     ) -> ObservationReport:
         """Calculate realized PnL, deviation score, and generate observation report.
 
         Args:
             receipt: TradeExecutionReceipt from Community 5 / PaperEngine.
             exit_price: Realized trade exit price sourced from market data.
+            exit_reason: Market-driven close reason (TARGET_HIT/STOP_HIT/HORIZON_END).
+            side: Position side ("BUY"/"SELL") for correct PnL direction.
 
         Returns:
             ObservationReport instance.
         """
-        actual_pnl = self.observe_trade_outcome_sync(receipt, exit_price)
+        actual_pnl = self.observe_trade_outcome_sync(receipt, exit_price, side=side)
 
         price_diff_pct = abs(exit_price - receipt.fill_price) / receipt.fill_price
         slippage_pct = receipt.slippage / receipt.fill_price
@@ -85,6 +100,10 @@ class ObservationAgent:
             actual_pnl=actual_pnl,
             predicted_vs_actual_deviation=round(deviation, 4),
             lessons_learned=lessons_learned,
+            symbol=receipt.symbol,
+            strategy_id=receipt.strategy_id,
+            exit_reason=exit_reason,  # type: ignore[arg-type]
+            direction_correct=actual_pnl > 0,
         )
 
         await self.event_bus.publish(EventTopic.OBSERVATION_COMPLETED, report)

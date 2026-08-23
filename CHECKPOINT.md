@@ -62,6 +62,25 @@ Next: Phase 1 Honest Vertical Slice (historical replay adapter, SQLite persisten
 
 ---
 
+### Phase 1 HONEST VERTICAL SLICE — COMPLETE (2026-08-23)
+
+- [x] **ReplayDataFetcher** (`communities/c1_data/replay_fetcher.py`): CSV OHLCV replay, shared cursor, strict as-of semantics (bar 0 never skipped; exhaustion raises; future bars unreachable) + `Bar` TypedDict
+- [x] **Golden datasets**: seeded regime-switching synthetic generator (`simulation/generate_golden_data.py`) → `data/golden/*_1d.csv` (7 symbols × 730 daily bars, 2024–2025 window, SIM-tagged per Law 1.3); regenerable byte-stable via seed=42
+- [x] **SqliteMemoryStore** (`core/persistence.py`): hash-chained append-only event log (sha256 chain w/ genesis), typed tables for predictions/observations/postmortems; tamper detection pinpoints first bad seq; BaseMemoryStore ABC for later PG/Qdrant swap
+- [x] **Prediction ledger live**: PredictionRecord written on fill (pre-outcome) with decision-bar timestamp snapshot + verification confidence; scored at settlement with direction_correct
+- [x] **PostmortemEngine** (C6): evidence-bound postmortems (thought/knew/did/happened/got_right/got_wrong/unknowable/luck/should_change); fee-noise luck assessment
+- [x] **ReplayRunner** (`simulation/replay_runner.py`): composition root wiring C1→C8 over replay; bracket exits from actual bar highs/lows (stop-first conservative rule, adverse stop slippage); per-symbol position cap; horizon-end force close; equity curve + max drawdown; timestamp-free determinism hash
+- [x] **PaperEngine upgraded**: positions carry bracket levels + allocated capital; settlement conserves cash exactly (cash = initial + Σ realized PnL); side-aware PnL (BUY/SELL) through ObservationAgent too
+- [x] **CLI**: `scripts/run_replay.py`
+- [x] **Exit criteria demonstrated** on full golden universe: 730 bars, 7 symbols → 1,505 trades; PnL **−13,637.68 (honest loss)**; directional accuracy 30.03%; 1,505 predictions scored + postmortems; chain valid across 26,460 events; determinism test green
+- [x] Gates: **pytest 44/44 · ruff clean · mypy strict clean (27 files)**
+
+Note: parquet deferred to Phase 3 data fabric (CSV keeps stdlib-only deps); deviation documented.
+
+Next: Phase 2 Intelligence Onboarding (LLM gateway, model router, Prompt Lab, adversarial C2/C3).
+
+---
+
 ### Phase 1.0 – Architecture Baseline (FROZEN & LOCKED) — 100% COMPLETE
 
 - [x] **System Map & Master Index** ([docs/00_system_map.md](docs/00_system_map.md))

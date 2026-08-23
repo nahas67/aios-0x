@@ -1,0 +1,380 @@
+"""ReplayRunner: composition root for the honest historical-replay vertical slice.
+
+Wires the full community loop over a replay dataset and enforces the Phase 1
+exit criteria: market-driven bracket exits only, predictions written before
+outcomes, postmortems per closed trade, hash-chained audit log, and a
+timestamp-free determinism hash identical across identical runs.
+"""
+
+import hashlib
+import logging
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel
+
+from communities.c1_data.data_agent import DataAcquisitionAgent
+from communities.c1_data.replay_fetcher import ReplayCursor, ReplayDataFetcher
+from communities.c2_research.research_agent import ResearchAgent
+from communities.c3_verification.verification_agent import VerificationAgent
+from communities.c4_strategy.strategy_agent import StrategyAgent
+from communities.c6_observation.observation_agent import ObservationAgent
+from communities.c6_observation.postmortem_engine import PostmortemEngine
+from communities.c7_memory.memory_agent import MemoryAgent
+from communities.c8_evolution.evolution_agent import EvolutionAgent
+from core.event_bus import BaseEventBus, EventTopic, InMemoryEventBus
+from core.persistence import BaseMemoryStore, SqliteMemoryStore
+from core.risk_firewall import RiskConfig, RiskFirewall
+from schemas.contracts import (
+    CandidateHypothesis,
+    PredictionRecord,
+    StrategySpecification,
+    TradeExecutionReceipt,
+    VerificationReport,
+)
+from simulation.paper_engine import PaperEngine
+
+logger = logging.getLogger(__name__)
+
+
+class RunSummary(BaseModel):
+    """Outcome of one replay run (timestamps excluded from determinism hash)."""
+
+    symbols: list[str]
+    total_bars: int
+    trades_closed: int = 0
+    wins: int = 0
+    losses: int = 0
+    cumulative_pnl: float = 0.0
+    final_cash_balance: float = 0.0
+    final_equity: float = 0.0
+    max_drawdown_pct: float = 0.0
+    predictions_scored: int = 0
+    directional_accuracy_pct: float = 0.0
+    postmortems_written: int = 0
+    events_logged: int = 0
+    chain_valid: bool = True
+    determinism_hash: str = ""
+
+
+def _payload_ref_id(payload: Any) -> str | None:
+    for attr in (
+        "hypothesis_id",
+        "report_id",
+        "strategy_id",
+        "execution_id",
+        "observation_id",
+        "signal_id",
+        "symbol",
+    ):
+        value = getattr(payload, attr, None)
+        if isinstance(value, str):
+            return value
+    return None
+
+
+class ReplayRunner:
+    """Orchestrates a deterministic, honest replay across all communities."""
+
+    def __init__(
+        self,
+        csv_path_by_symbol: dict[str, str | Path],
+        store_path: str | Path,
+        initial_balance: float = 100000.0,
+        slippage_pct: float = 0.05,
+        treat_as_real: bool = False,
+        bus: BaseEventBus | None = None,
+        store: BaseMemoryStore | None = None,
+    ) -> None:
+        """Build the runner; call :meth:`run` to execute the replay."""
+        self.csv_path_by_symbol = dict(csv_path_by_symbol)
+        self.symbols = sorted(self.csv_path_by_symbol)
+        self.initial_balance = initial_balance
+        self.slippage_pct = slippage_pct
+        self.bus = bus or InMemoryEventBus()
+        self.store = store or SqliteMemoryStore(store_path)
+
+        self.cursor = ReplayCursor()
+        self.fetcher = ReplayDataFetcher(
+            self.csv_path_by_symbol,
+            cursor=self.cursor,
+            treat_as_real=treat_as_real,
+        )
+
+        self.c1 = DataAcquisitionAgent(fetcher=self.fetcher, event_bus=self.bus)
+        self.c2 = ResearchAgent(event_bus=self.bus)
+        self.c3 = VerificationAgent(event_bus=self.bus, min_confidence_threshold=70.0)
+        self.risk_firewall = RiskFirewall(RiskConfig())
+        self.c4 = StrategyAgent(
+            event_bus=self.bus,
+            risk_firewall=self.risk_firewall,
+            portfolio_value_estimate=initial_balance,
+        )
+        self.paper = PaperEngine(
+            event_bus=self.bus,
+            initial_balance=initial_balance,
+            slippage_pct=slippage_pct,
+            max_open_positions_per_symbol=1,
+        )
+        self.c6 = ObservationAgent(event_bus=self.bus)
+        self.postmortems = PostmortemEngine()
+        self.c7 = MemoryAgent(event_bus=self.bus)
+        self.c8 = EvolutionAgent(
+            event_bus=self.bus, performance_provider=self.c7.get_performance_summary
+        )
+
+        # Decision-time caches (runner-owned; communities stay decoupled)
+        self._hypotheses: dict[str, CandidateHypothesis] = {}
+        self._reports: dict[str, VerificationReport] = {}
+        self._strategies: dict[str, StrategySpecification] = {}
+        self._receipts: dict[str, TradeExecutionReceipt] = {}
+        self._pending_predictions: dict[str, PredictionRecord] = {}
+        self._scored_predictions: list[PredictionRecord] = []
+        self._filled_this_bar: set[str] = set()
+
+        # Outcome collection
+        self.trade_lines: list[str] = []
+        self.equity_curve: list[float] = []
+
+        self._subscriptions: list[tuple[EventTopic, Any]] = [
+            (EventTopic.DATA_ACQUIRED, self.c2.on_data_acquired),
+            (EventTopic.DATA_ACQUIRED, self.c4.on_data_acquired),
+            (EventTopic.HYPOTHESIS_GENERATED, self.c3.on_hypothesis_generated),
+            (EventTopic.HYPOTHESIS_GENERATED, self.c4.on_hypothesis_generated),
+            (EventTopic.HYPOTHESIS_GENERATED, self._on_hypothesis),
+            (EventTopic.VERIFICATION_COMPLETED, self.c4.on_verification_completed),
+            (EventTopic.VERIFICATION_COMPLETED, self._on_verification),
+            (EventTopic.STRATEGY_GENERATED, self.paper.on_strategy_generated),
+            (EventTopic.STRATEGY_GENERATED, self._on_strategy_generated),
+            (EventTopic.TRADE_EXECUTED, self.c6.on_trade_executed),
+            (EventTopic.TRADE_EXECUTED, self.c7.on_trade_executed),
+            (EventTopic.TRADE_EXECUTED, self._on_receipt),
+            (EventTopic.OBSERVATION_COMPLETED, self.c7.on_observation_completed),
+            (EventTopic.MEMORY_STORED, self.c8.on_memory_stored),
+        ]
+
+    async def _log_event(self, payload: Any) -> None:
+        kind = type(payload).__name__
+        self.store.append_event(kind, _payload_ref_id(payload), payload.model_dump(mode="json"))
+
+    async def _on_hypothesis(self, hypothesis: CandidateHypothesis) -> None:
+        self._hypotheses[hypothesis.hypothesis_id] = hypothesis
+
+    async def _on_verification(self, report: VerificationReport) -> None:
+        self._reports[report.hypothesis_id] = report
+
+    async def _on_strategy_generated(self, strategy: StrategySpecification) -> None:
+        self._strategies[strategy.strategy_id] = strategy
+
+    async def _on_receipt(self, receipt: TradeExecutionReceipt) -> None:
+        """Register a real fill and open its prediction-ledger entry.
+
+        Predictions are written for executed trades only (before any outcome),
+        because strategies blocked by portfolio limits were never decisions
+        taken - scoring them would corrupt calibration statistics.
+        """
+        self._receipts[receipt.execution_id] = receipt
+        self._filled_this_bar.add(receipt.execution_id)
+
+        if receipt.strategy_id in self._pending_predictions:
+            return
+        strategy = self._strategies.get(receipt.strategy_id)
+        hypothesis_id = strategy.hypothesis_id if strategy else ""
+        hypothesis = self._hypotheses.get(hypothesis_id)
+        report = self._reports.get(hypothesis_id)
+        direction: str = strategy.action if strategy else "BUY"
+        prediction = PredictionRecord(
+            hypothesis_id=hypothesis_id or "unknown",
+            strategy_id=receipt.strategy_id,
+            symbol=receipt.symbol,
+            direction="BUY" if direction == "BUY" else "SELL",
+            entry_reference_price=strategy.entry_price if strategy else receipt.fill_price,
+            target_price=strategy.take_profit_price if strategy else receipt.fill_price * 1.02,
+            stop_price=strategy.stop_loss_price if strategy else receipt.fill_price * 0.99,
+            horizon_timeframe=hypothesis.timeframe if hypothesis else "1d",
+            confidence_score=report.confidence_score if report else 70.0,
+            expected_risk_reward_ratio=(
+                hypothesis.expected_risk_reward_ratio if hypothesis else 2.0
+            ),
+            decision_bar_timestamp=self.fetcher.current_timestamp(),
+            is_simulated=True,
+        )
+        self._pending_predictions[receipt.strategy_id] = prediction
+        self.store.save_prediction(prediction)
+
+    def _evaluate_bracket_exits(self) -> list[tuple[TradeExecutionReceipt, float, str]]:
+        """Check open positions against the CURRENT bar; conservative stop-first rule."""
+        exits: list[tuple[TradeExecutionReceipt, float, str]] = []
+        slip_frac = self.slippage_pct / 100.0
+        for execution_id, position in list(self.paper.open_positions.items()):
+            if execution_id in self._filled_this_bar:
+                continue  # never exit on the entry bar itself
+            bar = self.fetcher.current_bar(position.receipt.symbol)
+            low, high = bar["low"], bar["high"]
+            r = position.receipt
+            exit_price: float
+            reason: str
+            if position.action == "BUY":
+                if low <= position.stop_loss_price:
+                    exit_price, reason = (
+                        round(position.stop_loss_price * (1 - slip_frac), 4),
+                        "STOP_HIT",
+                    )
+                elif high >= position.take_profit_price:
+                    exit_price, reason = position.take_profit_price, "TARGET_HIT"
+                else:
+                    continue
+            else:
+                if high >= position.stop_loss_price:
+                    exit_price, reason = (
+                        round(position.stop_loss_price * (1 + slip_frac), 4),
+                        "STOP_HIT",
+                    )
+                elif low <= position.take_profit_price:
+                    exit_price, reason = position.take_profit_price, "TARGET_HIT"
+                else:
+                    continue
+            exits.append((r, exit_price, reason))
+        return exits
+
+    async def _settle(self, receipt: TradeExecutionReceipt, exit_price: float, reason: str) -> None:
+        pnl_opt = self.paper.settle_position(receipt.execution_id, exit_price)
+        if pnl_opt is None:
+            logger.warning("Settlement skipped for unknown execution %s", receipt.execution_id)
+            return
+
+        strategy = self._strategies.get(receipt.strategy_id)
+        hypothesis = self._hypotheses.get(strategy.hypothesis_id) if strategy else None
+        prediction = self._pending_predictions.pop(receipt.strategy_id, None)
+
+        await self.c6.observe_trade_outcome(
+            receipt,
+            exit_price,
+            exit_reason=reason,
+            side=strategy.action if strategy else "BUY",
+        )
+        await self.bus.wait_until_idle()  # ensure C7 has persisted the report
+
+        observation = next(
+            (
+                r
+                for r in reversed(self.c7.observation_reports)
+                if r.execution_id == receipt.execution_id
+            ),
+            None,
+        )
+
+        if prediction is not None:
+            direction_correct = bool(
+                (prediction.direction == "BUY" and exit_price > receipt.fill_price)
+                or (prediction.direction == "SELL" and exit_price < receipt.fill_price)
+            )
+        elif observation is not None and observation.direction_correct is not None:
+            direction_correct = observation.direction_correct
+        else:
+            direction_correct = False
+
+        if strategy and hypothesis and observation:
+            self.store.save_observation(observation)
+            postmortem = self.postmortems.build(
+                hypothesis=hypothesis,
+                strategy=strategy,
+                receipt=receipt,
+                observation=observation,
+                exit_price=exit_price,
+                exit_reason=reason,
+                prediction_id=prediction.prediction_id if prediction else None,
+            )
+            self.store.save_postmortem(postmortem)
+
+        if prediction is not None:
+            scored = prediction.score(
+                exit_price=exit_price,
+                exit_reason=reason,  # type: ignore[arg-type]
+                realized_pnl=pnl_opt,
+                direction_correct=direction_correct,
+            )
+            self.store.save_prediction(scored)
+            self._scored_predictions.append(scored)
+            self.trade_lines.append(
+                f"{strategy.symbol if strategy else receipt.symbol}"
+                f"|{prediction.decision_bar_timestamp.isoformat()}"
+                f"|{prediction.direction}|{receipt.fill_price}|{reason}|{exit_price}|{round(pnl_opt, 2)}"
+            )
+
+    async def run(self) -> RunSummary:
+        """Execute the replay to exhaustion and return an honest summary."""
+        await self.bus.start()
+        for topic, handler in self._subscriptions:
+            await self.bus.subscribe(topic, handler)
+        for topic in EventTopic:
+            await self.bus.subscribe(topic, self._log_event)
+
+        total_bars = min(self.fetcher.bar_count(s) for s in self.symbols)
+        try:
+            for _ in range(total_bars):
+                self.cursor.advance()
+                self._filled_this_bar.clear()
+                exhausted = False
+                for symbol in self.symbols:
+                    try:
+                        await self.c1.collect_and_publish(symbol, "1d")
+                    except IndexError:
+                        exhausted = True
+                await self.bus.wait_until_idle()
+
+                for receipt, exit_price, reason in self._evaluate_bracket_exits():
+                    await self._settle(receipt, exit_price, reason)
+
+                open_value = 0.0
+                for p in self.paper.open_positions.values():
+                    close = self.fetcher.current_bar(p.receipt.symbol)["close"]
+                    open_value += p.receipt.filled_quantity * close
+                self.equity_curve.append(round(self.paper.cash_balance + open_value, 2))
+
+                if exhausted:
+                    break
+
+            # Horizon end: force-close remaining positions at last close
+            for position in list(self.paper.open_positions.values()):
+                bar = self.fetcher.current_bar(position.receipt.symbol)
+                await self._settle(position.receipt, bar["close"], "HORIZON_END")
+
+            # Final equity sample after all settlements (all cash, no open positions)
+            self.equity_curve.append(round(self.paper.cash_balance, 2))
+        finally:
+            await self.bus.stop()
+
+        return self._summarize(total_bars)
+
+    def _summarize(self, total_bars: int) -> RunSummary:
+        perf = self.c7.get_performance_summary()
+        scored = self._scored_predictions
+        correct = sum(1 for p in scored if p.direction_correct)
+        equity = self.equity_curve or [self.initial_balance]
+        peak = equity[0]
+        max_dd = 0.0
+        for value in equity:
+            peak = max(peak, value)
+            if peak > 0:
+                max_dd = max(max_dd, (peak - value) / peak * 100.0)
+        digest = hashlib.sha256("|".join(self.trade_lines).encode()).hexdigest()
+        chain_ok, _ = self.store.verify_chain()
+        counts = self.store.counts()
+        return RunSummary(
+            symbols=self.symbols,
+            total_bars=total_bars,
+            trades_closed=int(perf.total_trades),
+            wins=int(perf.winning_trades),
+            losses=int(perf.total_trades - perf.winning_trades),
+            cumulative_pnl=float(perf.cumulative_pnl),
+            final_cash_balance=self.paper.cash_balance,
+            final_equity=equity[-1],
+            max_drawdown_pct=round(max_dd, 2),
+            predictions_scored=len(scored),
+            directional_accuracy_pct=(round(correct / len(scored) * 100.0, 2) if scored else 0.0),
+            postmortems_written=counts["postmortems"],
+            events_logged=counts["event_log"],
+            chain_valid=chain_ok,
+            determinism_hash=digest,
+        )

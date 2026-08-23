@@ -56,6 +56,10 @@ class BaseEventBus(ABC):
         """Stop the event bus worker tasks and clean up resources."""
         pass
 
+    async def wait_until_idle(self) -> None:
+        """Block until queued events are processed. No-op for always-live buses."""
+        return None
+
 
 class InMemoryEventBus(BaseEventBus):
     """In-memory event bus implementation using asyncio.Queue and background workers."""
