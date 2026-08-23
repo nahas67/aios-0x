@@ -58,6 +58,23 @@ trials, agent reputation, disaster drills, constitution-pinned boot.
 
 ---
 
+### RE-INSPECTION & INTEGRATION PASS — COMPLETE (2026-08-23)
+
+Fresh audit: 190 code files / ~10.9k LOC · 129→132 tests green · OSS archive 74 zips
+(1 duplicate copy of an already-catalogued repo; no new entries). Four target
+architectures verified against code reality; genuine gaps closed:
+
+| Target | Verified working | Gap found & CLOSED this pass |
+|---|---|---|
+| Multi-agent research/verification | DebateEngine BULL→BEAR→QUANT→MODERATOR w/ structured contracts + fallback; C3 evidence-grounded hallucination detection | **Agent roster**: `core/agents.py` AgentIdentity registrations persisted as AGENT_REGISTERED events for all 11 operational components |
+| Provenance + memory + evaluation | Hash-chained store, prediction ledger, calibration/Brier, postmortems | **Vector memory wired in**: every settlement upserts lessons (`postmortem_lessons`); DebateEngine retrieves similar past lessons into moderator context (MEMORY turn in transcript) — retrieval failures can never break research |
+| Risk/governor controls | Governor gate, kill-switch+persisted lockout, reconciliation, emergency machine, constitution boot pin | ACL mechanism shipped earlier; per-agent bus wiring documented as deployment-phase (composition-root trust domain today) |
+| Accounting/tax/CA | Double-entry books balanced across replays; FIFO lots; cited rules; filing gate | **Auto-finalization wired**: run end aggregates all disposals → single cited TaxComputation (TAX_COMPUTATION event) → CA review item auto-PREPARED; export still blocked without human APPROVED_BY_CA |
+
+Gates after integration: **pytest 132 passed · ruff clean · mypy strict clean (71 files)**
+
+---
+
 ### Phase 0 DISCOVERY — COMPLETE (2026-08-23)
 
 Full filesystem inspection + test execution (32/32 pytest green). Deliverables in `docs/master/`:

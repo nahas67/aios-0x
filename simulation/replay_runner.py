@@ -51,6 +51,7 @@ from schemas.contracts import (
     PredictionRecord,
     ReconciliationReport,
     StrategySpecification,
+    TaxComputation,
     TradeExecutionReceipt,
     VerificationReport,
 )
@@ -248,6 +249,79 @@ class ReplayRunner:
         self.ca_workflow = CAWorkflow()
         self.surveillance = Surveillance(event_bus=self.bus)
         self._disposals_by_execution: dict[str, list[Disposal]] = {}
+        self._all_disposals: list[Disposal] = []
+        self._tax_computation: TaxComputation | None = None
+
+        # ---- Semantic memory (provenance-linked retrieval, Phase 2.0 closure)
+        from core.vector_memory import InMemoryVectorMemory
+
+        self.vector_memory = InMemoryVectorMemory()
+
+        # ---- Agent identity roster (Directive 15/79)
+        from core.agents import AgentIdentity, register_roster
+
+        register_roster(
+            self.store,
+            [
+                AgentIdentity(agent_id="c1-data-fabric", community="C1", role="data"),
+                AgentIdentity(
+                    agent_id="c2-research",
+                    community="C2",
+                    role="research",
+                    publishes=["aios.c2.hypothesis_generated"],
+                ),
+                AgentIdentity(
+                    agent_id="c3-verification",
+                    community="C3",
+                    role="verification",
+                    subscribes=["aios.c2.hypothesis_generated"],
+                    publishes=["aios.c3.verification_completed"],
+                ),
+                AgentIdentity(
+                    agent_id="c4-strategy",
+                    community="C4",
+                    role="strategy",
+                    publishes=["aios.c4.strategy_generated", "aios.c4.opportunity_ranked"],
+                ),
+                AgentIdentity(
+                    agent_id="c5-execution",
+                    community="C5",
+                    role="execution",
+                    publishes=["aios.c5.order_submitted", "aios.c5.order_filled"],
+                ),
+                AgentIdentity(
+                    agent_id="c6-observation",
+                    community="C6",
+                    role="observation",
+                    publishes=["aios.c6.observation_completed"],
+                ),
+                AgentIdentity(
+                    agent_id="c7-memory",
+                    community="C7",
+                    role="memory",
+                    publishes=["aios.c7.memory_stored"],
+                ),
+                AgentIdentity(agent_id="c8-evolution", community="C8", role="evolution"),
+                AgentIdentity(
+                    agent_id="c9-governor",
+                    community="C9",
+                    role="portfolio",
+                    publishes=["aios.c9.portfolio_allocated", "aios.c9.portfolio_rejected"],
+                ),
+                AgentIdentity(
+                    agent_id="risk-governor",
+                    community="RISK",
+                    role="authority",
+                    publishes=["aios.risk.emergency"],
+                ),
+                AgentIdentity(
+                    agent_id="c11-finance",
+                    community="C11",
+                    role="back_office",
+                    publishes=["aios.c11.ledger_posted", "aios.c11.compliance_alert"],
+                ),
+            ],
+        )
 
         # Decision-time caches (runner-owned; communities stay decoupled)
         self._hypotheses: dict[str, CandidateHypothesis] = {}
@@ -630,6 +704,27 @@ class ReplayRunner:
 
         if strategy and hypothesis and observation:
             self.store.save_observation(observation)
+            # Semantic memory: lessons retrievable by future research cycles
+            try:
+                self.vector_memory.upsert(
+                    "postmortem_lessons",
+                    f"{receipt.execution_id}:{strategy.symbol}",
+                    (
+                        f"{strategy.symbol} {strategy.action} exit {reason} pnl "
+                        f"{observation.actual_pnl:+.2f}: " + " | ".join(observation.lessons_learned)
+                    ),
+                    {
+                        "execution_id": receipt.execution_id,
+                        "family": strategy.family,
+                        "pnl": observation.actual_pnl,
+                        "decision_ts": prediction.decision_bar_timestamp.isoformat()
+                        if prediction
+                        else None,
+                    },
+                )
+            except Exception as exc:  # noqa: BLE001 - memory must not break trading loop
+                logger.warning("vector upsert skipped: %s", exc)
+
             postmortem = self.postmortems.build(
                 hypothesis=hypothesis,
                 strategy=strategy,
@@ -655,6 +750,41 @@ class ReplayRunner:
                 f"|{prediction.decision_bar_timestamp.isoformat()}"
                 f"|{prediction.direction}|{receipt.fill_price}|{reason}|{exit_price}|{round(pnl_opt, 2)}"
             )
+
+    def _finalize_finance(self) -> None:
+        """C11 closure: aggregate all disposals -> cited tax computation -> CA item.
+
+        The computation is ADVISORY and lands in DRAFT/PREPARED review state;
+        filing remains impossible until a licensed professional approves it.
+        """
+        if not self._all_disposals:
+            self._all_disposals = [
+                d
+                for exec_disposals in self._disposals_by_execution.values()
+                for d in exec_disposals
+            ]
+        if not self._all_disposals:
+            return
+
+        computation: TaxComputation = self.tax_engine.compute(self._all_disposals)
+        self._tax_computation = computation
+        self.store.append_event(
+            "TAX_COMPUTATION",
+            computation.computation_id,
+            computation.model_dump(mode="json"),
+        )
+
+        item = self.ca_workflow.create(
+            subject_kind="tax_computation", subject_ref=computation.computation_id
+        )
+        self.ca_workflow.prepare(item.item_id, prepared_by="c11-back-office")
+        item.state  # noqa: B018 - prepared; approval requires a human reviewer
+        logger.info(
+            "Finance finalized: tax %s (%s) queued for CA review as %s",
+            computation.computation_id,
+            computation.rule_id,
+            item.item_id,
+        )
 
     async def run(self) -> RunSummary:
         """Execute the replay to exhaustion and return an honest summary."""
@@ -715,6 +845,8 @@ class ReplayRunner:
 
             # Final equity sample after all settlements (all cash, no open positions)
             self.equity_curve.append(round(self.paper.cash_balance, 2))
+
+            self._finalize_finance()
         finally:
             await self.bus.stop()
 

@@ -12,6 +12,7 @@ Replaces the template hypothesis generator when a model gateway is configured
 
 import logging
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -141,11 +142,15 @@ class DebateEngine:
         registry: PromptRegistry,
         settings: Settings,
         model_call_sink: ModelCallSink | None = None,
+        memory: Any = None,
     ) -> None:
+        """``memory`` is an optional BaseVectorMemory (core boundary, allowed)
+        used to surface similar past postmortem lessons to the moderator."""
         self._router = router
         self._registry = registry
         self._settings = settings
         self._sink = model_call_sink
+        self._memory = memory
 
     async def _ask(
         self,
@@ -212,6 +217,29 @@ class DebateEngine:
                 "QUANT",
                 transcript,
             )
+
+            memory_context = ""
+            if self._memory is not None:
+                try:
+                    hits = self._memory.search(
+                        "postmortem_lessons",
+                        f"{payload.symbol} {v['momentum_pct']} momentum {v['sentiment']} sentiment",
+                        k=2,
+                    )
+                    lessons = [h.text for h in hits if h.score > 0.05]
+                    if lessons:
+                        memory_context = "; ".join(lessons)
+                        transcript.turns.append(
+                            DebateTurn(
+                                role="MEMORY",
+                                content=memory_context,
+                                model=None,
+                                provider="vector_memory",
+                            )
+                        )
+                except Exception as exc:  # noqa: BLE001 - memory must never break research
+                    logger.warning("memory retrieval skipped: %s", exc)
+
             synthesis: ModeratorSynthesis = await self._ask(  # type: ignore[assignment]
                 ModeratorSynthesis,
                 self._registry.get("research-moderator-synthesis").render(
@@ -219,7 +247,8 @@ class DebateEngine:
                     timeframe=v["timeframe"],
                     bull_argument=bull.argument,
                     bear_argument=bear.argument,
-                    quant_weaknesses="; ".join(quant.weaknesses),
+                    quant_weaknesses="; ".join(quant.weaknesses)
+                    + (f" || MEMORY: {memory_context}" if memory_context else ""),
                     rr_target=f"{_MIN_RR:.1f}",
                 ),
                 TaskTier.REASONING,
