@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from communities.c1_data.data_agent import DataAcquisitionAgent
+from communities.c1_data.data_agent import BaseDataFetcher, DataAcquisitionAgent
 from communities.c1_data.replay_fetcher import ReplayCursor, ReplayDataFetcher
 from communities.c2_research.debate_engine import DebateEngine, DebateResearchAgent
 from communities.c2_research.research_agent import ResearchAgent
@@ -34,7 +34,7 @@ from communities.c11_finance.ca_review import CAWorkflow
 from communities.c11_finance.compliance import Surveillance
 from communities.c11_finance.ledger import DoubleEntryLedger
 from communities.c11_finance.tax import BUILTIN_RULES, LotBook, TaxEngine
-from core.config import Settings, get_settings
+from core.config import Settings
 from core.data_quality import AnomalyDetector, SymbolHealthRegistry
 from core.event_bus import BaseEventBus, EventTopic, InMemoryEventBus
 from core.model_gateway import BaseModelGateway, ModelResponse, build_gateway
@@ -120,6 +120,7 @@ class ReplayRunner:
         settings: Settings | None = None,
         macro_calendar_path: str | Path | None = None,
         shadow_mode: bool = False,
+        use_live_news: bool = False,
     ) -> None:
         """Build the runner; call :meth:`run` to execute the replay.
 
@@ -140,7 +141,10 @@ class ReplayRunner:
         self.bus = bus or InMemoryEventBus()
         self.store = store or SqliteMemoryStore(store_path)
 
-        self.settings = settings or get_settings()
+        # Library default = OFFLINE deterministic mode. Environment (.env) is
+        # consulted only by explicit entry points (scripts/serve_command_center)
+        # that pass settings=get_settings() — keeps tests deterministic & free.
+        self.settings = settings or Settings(model_provider="none")
         self.gateway = gateway if gateway is not None else build_gateway(self.settings)
         self.router = ModelRouter(self.gateway, self.settings)
 
@@ -151,7 +155,18 @@ class ReplayRunner:
             treat_as_real=treat_as_real,
         )
 
-        self.c1 = DataAcquisitionAgent(fetcher=self.fetcher, event_bus=self.bus)
+        # ---- Optional live news sentiment (Finnhub) wrapped around replay prices
+        if use_live_news and self.settings.finnhub_api_key:
+            from communities.c1_data.data_agent import CompositeDataFetcher
+            from communities.c1_data.news_providers import FinnhubNewsProvider
+
+            provider = FinnhubNewsProvider(self.settings.finnhub_api_key)
+            self.fetcher_any: BaseDataFetcher = CompositeDataFetcher(self.fetcher, provider)
+            logger.warning("LIVE NEWS ENABLED (finnhub): headlines will hit the network")
+        else:
+            self.fetcher_any = self.fetcher
+
+        self.c1 = DataAcquisitionAgent(fetcher=self.fetcher_any, event_bus=self.bus)
 
         # ---- Data-quality pipeline (Directive 9 reactions)
         self.anomaly_detector = AnomalyDetector()

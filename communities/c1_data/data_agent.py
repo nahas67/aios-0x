@@ -44,6 +44,30 @@ class BaseDataFetcher(ABC):
         return None
 
 
+class CompositeDataFetcher(BaseDataFetcher):
+    """Combines a price fetcher with an independent news provider.
+
+    Lets real venues (CCXT prices) pair with real news sentiment
+    (e.g. Finnhub) without either adapter knowing about the other.
+    """
+
+    def __init__(self, price_fetcher: BaseDataFetcher, news_provider: Any) -> None:
+        self.price_fetcher = price_fetcher
+        self.news_provider = news_provider
+
+    def provenance(self) -> DataProvenance | None:
+        return self.price_fetcher.provenance()
+
+    async def fetch_price_data(self, symbol: str, timeframe: str) -> dict[str, Any]:
+        return await self.price_fetcher.fetch_price_data(symbol, timeframe)
+
+    async def fetch_news_sentiment(self, symbol: str) -> list[dict[str, Any]]:
+        from communities.c1_data.news_providers import headlines_to_sentiment
+
+        headlines = await self.news_provider.fetch_headlines(symbol)
+        return headlines_to_sentiment(headlines)
+
+
 class SimulatedDataFetcher(BaseDataFetcher):
     """Simulated market data fetcher for testing and local paper trading."""
 

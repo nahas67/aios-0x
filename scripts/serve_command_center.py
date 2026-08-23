@@ -39,11 +39,15 @@ def main() -> None:
         dataset[symbol] = path
 
     db_path = ROOT / "data" / "command_center.db"
+    from core.config import get_settings
+
     runner = ReplayRunner(
         csv_path_by_symbol=dataset,
         store_path=db_path,
         initial_balance=args.balance,
         shadow_mode=args.shadow,
+        settings=get_settings(),  # explicit .env opt-in for live LLM/news
+        use_live_news=bool(get_settings().finnhub_api_key),
     )
     summary = asyncio_run(runner.run())
 

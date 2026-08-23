@@ -29,9 +29,16 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, repr=False)
     anthropic_api_key: str | None = Field(default=None, repr=False)
     openai_base_url: str = Field(
-        default="https://api.openai.com/v1",
-        description="OpenAI-compatible endpoint (works for many providers)",
+        default="https://api.xkiro.com/v1",
+        description="OpenAI-compatible endpoint (DeepSeek, Together, local vLLM, OpenRouter...)",
     )
+
+    # ---------------------------------------------------------- data providers
+    finnhub_api_key: str | None = Field(default=None, repr=False)
+    gnews_api_key: str | None = Field(default=None, repr=False)
+    newsdata_api_key: str | None = Field(default=None, repr=False)
+    marketstack_api_key: str | None = Field(default=None, repr=False)
+    fred_api_key: str | None = Field(default=None, repr=False)
 
     # ------------------------------------------------------------- routing
     research_model_cheap: str = Field(
