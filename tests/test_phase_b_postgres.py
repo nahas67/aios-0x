@@ -131,13 +131,17 @@ class TestPostgresLive:
         return PostgresMemoryStore(PG_DSN)
 
     def test_hash_chain_round_trip(self) -> None:
+        """Chain verifies over the WHOLE persistent log; kind-scoped reads isolate."""
+        import uuid
+
         store = self._store()
+        kind = f"TEST_{uuid.uuid4().hex[:8]}"
         for i in range(5):
-            store.append_event("TEST", f"ref-{i}", {"i": i})
-        ok, bad = store.verify_chain()
+            store.append_event(kind, f"ref-{i}", {"i": i})
+        ok, bad = store.verify_chain()  # whole-table chain stays valid
         assert ok is True and bad is None
-        payloads = store.iter_event_payloads("TEST")
-        assert [p["i"] for p in payloads] == [4, 3, 2, 1, 0][::-1]
+        payloads = store.iter_event_payloads(kind)
+        assert [p["i"] for p in payloads] == [0, 1, 2, 3, 4]
         counts = store.counts()
         assert counts["event_log"] >= 5
         store.close()
@@ -197,8 +201,16 @@ class TestPostgresLive:
         store.close()
 
     def test_full_replay_runs_on_postgres(self, tmp_path: Path) -> None:
-        """End-to-end: identical replay semantics on the PG tier."""
+        """End-to-end: identical replay semantics on the persistent PG tier.
+
+        Asserts on DELTAS over pre-run counts because the live database
+        accumulates rows across runs (that is the point of persistence).
+        """
         write_dataset(tmp_path / "golden", symbols=["BTC/USD"], total_bars=60)
+        store = self._store()
+        before = store.counts()
+        store.close()
+
         runner = ReplayRunner(
             csv_path_by_symbol={"BTC/USD": tmp_path / "golden" / "BTC_USD_1d.csv"},
             store_path=tmp_path / "unused.db",
@@ -210,9 +222,16 @@ class TestPostgresLive:
         summary = asyncio.run(runner.run())
         assert summary.chain_valid is True
         assert summary.trades_closed >= 1
-        counts = runner.store.counts()
-        assert counts["postmortems"] == summary.trades_closed
-        assert counts["event_log"] > summary.trades_closed
-        receipts = runner.store.iter_event_payloads("DECISION_RECEIPT")
-        assert len(receipts) > 0
+
+        after = runner.store.counts()
+        assert after["postmortems"] - before["postmortems"] == summary.trades_closed
+        assert after["event_log"] - before["event_log"] > summary.trades_closed
+
+        receipts = [
+            r
+            for r in runner.store.iter_event_payloads("DECISION_RECEIPT")
+        ]
+        # receipts accumulate too; this run must have added some
+        assert len(receipts) >= 1
+        runner.store.close()
 
