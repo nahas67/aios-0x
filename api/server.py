@@ -83,6 +83,10 @@ def make_handler(
                     self._json(builder.research_quality())
                 elif path == "/api/v1/health":
                     self._json(builder.health())
+                elif path == "/api/v1/settings":
+                    self._json(builder.settings_view())
+                elif path == "/api/v1/approvals":
+                    self._json({"approvals": builder.approvals_view()})
                 elif path == "/metrics":
                     self._text(prometheus_metrics(builder.executive()), ctype="text/plain")
                 else:

@@ -37,6 +37,17 @@ class OperatorRole(StrEnum):
     ADMIN = "ADMIN"
 
 
+class AutonomyMode(StrEnum):
+    MANUAL = "MANUAL"  # no auto-execution at all
+    ASSISTED = "ASSISTED"  # research only; proposals rejected pre-trade
+    SUPERVISED = "SUPERVISED"  # plans queue for explicit human approval
+    AUTONOMOUS = "AUTONOMOUS"  # executes within governor/firewall limits
+
+
+EXECUTING_MODES = frozenset({AutonomyMode.AUTONOMOUS})
+QUEUING_MODES = frozenset({AutonomyMode.SUPERVISED})
+
+
 class ControlAction(StrEnum):
     PAUSE_TRADING = "pause_trading"
     RESUME_TRADING = "resume_trading"
@@ -49,6 +60,10 @@ class ControlAction(StrEnum):
     RESET_LOCKOUT = "reset_lockout"
     APPROVE_LIVE_CAPITAL = "approve_live_capital"
     PROMOTE_CHALLENGER = "promote_challenger"
+    SET_AUTONOMY = "set_autonomy"
+    APPROVE_PLAN = "approve_plan"
+    REJECT_PLAN = "reject_plan"
+    SET_RESEARCH_MODE = "set_research_mode"
 
 
 def _build_matrix() -> dict[OperatorRole, frozenset[ControlAction]]:
@@ -67,6 +82,10 @@ def _build_matrix() -> dict[OperatorRole, frozenset[ControlAction]]:
         ControlAction.TRIGGER_KILL_SWITCH,
         ControlAction.RESET_LOCKOUT,
         ControlAction.PROMOTE_CHALLENGER,
+        ControlAction.SET_AUTONOMY,
+        ControlAction.APPROVE_PLAN,
+        ControlAction.REJECT_PLAN,
+        ControlAction.SET_RESEARCH_MODE,
     }
     admin = risk_admin | {ControlAction.APPROVE_LIVE_CAPITAL}
     return {
@@ -95,6 +114,7 @@ class ControlPlane:
         governor: Any = None,
         paper_engine: Any = None,
         challenge_registry: Any = None,
+        settings_ref: Any = None,
         price_lookup: Callable[[str], float] | None = None,
         flatten_callback: Callable[[str, float], Awaitable[None]] | None = None,
         positions_view: Callable[[], dict[str, dict[str, str]]] | None = None,
@@ -107,11 +127,14 @@ class ControlPlane:
         self.governor = governor
         self.paper_engine = paper_engine
         self.challenge_registry = challenge_registry
+        self.settings_ref = settings_ref
         self._price_lookup = price_lookup or (lambda symbol: 0.0)
         self._flatten = flatten_callback
         self._positions_view = positions_view or (lambda: {})
         self.paused = False
         self.live_capital_approved_by: str | None = None
+        self.autonomy: AutonomyMode = AutonomyMode.AUTONOMOUS
+        self.pending_approvals: dict[str, dict[str, Any]] = {}  # plan_id -> plan dump
 
     # ------------------------------------------------------------------ authz
 
@@ -282,6 +305,87 @@ class ControlPlane:
             return promoted
         rejected: dict[str, Any] = self.challenge_registry.reject(trial_name, operator_id)
         return rejected
+
+    # ------------------------------------------------- autonomy & approvals
+
+    async def _do_set_autonomy(self, operator_id: str, mode: str = "") -> dict[str, Any]:
+        try:
+            new_mode = AutonomyMode(mode.upper())
+        except ValueError as exc:
+            raise ValueError(
+                f"unknown autonomy mode {mode!r}; valid: {[m.value for m in AutonomyMode]}"
+            ) from exc
+        previous = self.autonomy
+        self.autonomy = new_mode
+        return {"autonomy": new_mode.value, "previous": previous.value}
+
+    def classify_plan(self, plan: Any) -> str:
+        """Where should this approved plan go under current autonomy?"""
+        if self.autonomy in EXECUTING_MODES and not self.paused:
+            return "EXECUTE"
+        if self.autonomy in QUEUING_MODES and not self.paused:
+            return "QUEUE"
+        return "HOLD"
+
+    async def queue_for_approval(self, plan: Any) -> dict[str, Any]:
+        """SUPERVISED mode: park an approved plan pending human action."""
+        dump = plan.model_dump(mode="json")
+        self.pending_approvals[plan.plan_id] = dump
+        self.store.append_event(
+            "APPROVAL_REQUESTED",
+            plan.plan_id,
+            {"symbol": plan.strategy.symbol, "action": plan.strategy.action},
+        )
+        return {"plan_id": plan.plan_id, "status": "PENDING_APPROVAL"}
+
+    async def _do_approve_plan(self, operator_id: str, plan_id: str = "") -> dict[str, Any]:
+        from schemas.contracts import PortfolioAllocationPlan
+
+        if not plan_id:
+            raise ValueError("plan_id required")
+        dump = self.pending_approvals.pop(plan_id, None)
+        if dump is None:
+            raise KeyError(f"no pending approval for {plan_id}")
+        plan = PortfolioAllocationPlan.model_validate(dump)
+        result: dict[str, Any] | None = getattr(self, "_execute_approved_plan", None)
+        if result is None:
+            raise RuntimeError("execution bridge not wired")
+        if self._execute_approved_plan is None:
+            raise RuntimeError("execution bridge not wired")
+        receipt = await self._execute_approved_plan(plan)
+        self.store.append_event(
+            "APPROVAL_DECISION",
+            plan_id,
+            {"decision": "APPROVED", "by": operator_id, "executed": receipt is not None},
+        )
+        return {"approved": True, "executed": receipt is not None}
+
+    async def _do_reject_plan(
+        self, operator_id: str, plan_id: str = "", note: str = ""
+    ) -> dict[str, Any]:
+        dump = self.pending_approvals.pop(plan_id, None)
+        if dump is None:
+            raise KeyError(f"no pending approval for {plan_id}")
+        self.store.append_event(
+            "APPROVAL_DECISION",
+            plan_id,
+            {"decision": "REJECTED", "by": operator_id, "note": note},
+        )
+        return {"rejected": True}
+
+    _execute_approved_plan: Callable[[Any], Awaitable[Any]] | None = None
+
+    def _execute_bridge(self, fn: Callable[[Any], Awaitable[Any]]) -> None:
+        """Composition root injects the real execution path (order manager)."""
+        object.__setattr__(self, "_execute_approved_plan", fn)
+
+    async def _do_set_research_mode(self, operator_id: str, mode: str = "") -> dict[str, Any]:
+        if mode not in ("auto", "deterministic"):
+            raise ValueError("research_mode must be 'auto' or 'deterministic'")
+        if self.settings_ref is None:
+            raise RuntimeError("settings reference not wired")
+        self.settings_ref.research_mode = mode
+        return {"research_mode": mode}
 
     def _require_governor(self) -> None:
         if self.governor is None:

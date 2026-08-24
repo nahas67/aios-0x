@@ -2,145 +2,384 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>AIOS-0X Command Center</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIOS-0X · Command Center</title>
 <style>
-  :root { --bg:#0b0f14; --panel:#121821; --line:#1e2836; --text:#d7e0ea; --dim:#8494a7; --ok:#3fb96f; --warn:#d9a03c; --bad:#e05252; }
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:var(--bg); color:var(--text); font:14px/1.45 "Segoe UI", system-ui, sans-serif; }
-  header { display:flex; gap:18px; align-items:center; padding:14px 22px; border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; z-index:5;}
-  h1 { font-size:16px; font-weight:600; letter-spacing:.08em; }
-  .pill { padding:3px 10px; border-radius:12px; font-size:12px; background:#182231; color:var(--dim);}
-  .pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)}
-  nav { display:flex; gap:4px; margin-left:auto; flex-wrap:wrap;}
-  nav button { background:none; border:1px solid transparent; color:var(--dim); padding:6px 10px; cursor:pointer; font-size:13px;}
-  nav button.active, nav button:hover { color:var(--text); border-color:var(--line); background:#16202e;}
-  main { padding:20px 22px; max-width:1200px; margin:0 auto;}
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:18px;}
-  .card { background:var(--panel); border:1px solid var(--line); padding:12px 14px;}
-  .card b{display:block; font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; font-weight:600;}
-  .card span{font-size:20px; font-weight:600;}
-  table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line);}
-  th,td { padding:8px 12px; border-bottom:1px solid var(--line); text-align:left; font-size:13px;}
-  th{color:var(--dim); font-weight:600; text-transform:uppercase; font-size:10.5px; letter-spacing:.08em;}
-  tr.click{cursor:pointer} tr.click:hover td{background:#16202e}
-  .pos{color:var(--ok)} .neg{color:var(--bad)}
-  section{display:none} section.active{display:block}
-  pre{white-space:pre-wrap; word-break:break-word; background:var(--panel); border:1px solid var(--line); padding:14px; font-size:12.5px; color:var(--dim);}
-  .chain span{margin-right:6px; padding:2px 8px; border-radius:10px; background:#182231; font-size:11.5px;}
-  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
-  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+:root{
+  --bg:#0a0e13;--panel:#10161f;--panel2:#151d29;--line:#1d2836;--line2:#26344a;
+  --text:#dae3ee;--dim:#7f92a8;--faint:#4a5b70;
+  --ok:#34c07c;--warn:#e0a63c;--bad:#e05555;--accent:#5b9dff;
+  --mono:"Cascadia Code",Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+
+/* ---------- shell ---------- */
+header{display:flex;align-items:center;gap:14px;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:20}
+.logo{font-weight:700;letter-spacing:.12em;font-size:13px;color:var(--dim)}
+.pill{padding:3px 11px;border-radius:11px;font-size:12px;background:#141d2a;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.pill.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
+.pill.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
+.pill.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
+.spacer{flex:1}
+select#autonomy{background:var(--panel2);color:var(--text);border:1px solid var(--line2);border-radius:8px;padding:5px 9px;font-size:12.5px;cursor:pointer}
+nav{display:flex;flex-direction:column;gap:2px;width:170px;position:fixed;top:53px;bottom:0;left:0;padding:12px 8px;border-right:1px solid var(--line);background:var(--panel)}
+nav button{display:block;width:100%;text-align:left;background:none;border:none;color:var(--dim);padding:9px 12px;font-size:13.5px;cursor:pointer;border-radius:8px;letter-spacing:.03em}
+nav button:hover{background:var(--panel2);color:var(--text)}
+nav button.active{background:var(--panel2);color:var(--accent);font-weight:600}
+main{margin-left:170px;padding:22px 26px;max-width:1280px}
+h2{font-size:12px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase;margin:0 0 14px;font-weight:600}
+section{display:none}section.active{display:block}
+.grid{display:grid;gap:12px}
+.cards{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+.card b{display:block;font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.09em;margin-bottom:7px;font-weight:600}
+.card .v{font-size:21px;font-weight:650}
+.card .s{font-size:11.5px;color:var(--faint);margin-top:3px}
+.pos{color:var(--ok)}.neg{color:var(--bad)}.warnT{color:var(--warn)}
+
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{padding:9px 14px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}
+th{color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;font-weight:600;background:var(--panel2)}
+tbody tr:hover td{background:#141d2a}
+tr.rowlink{cursor:pointer}
+
+.badge{display:inline-block;padding:2px 9px;border-radius:9px;font-size:11px;font-weight:600;letter-spacing:.04em}
+.b-buy{background:rgba(52,192,124,.14);color:var(--ok)}
+.b-sell{background:rgba(224,85,85,.14);color:var(--bad)}
+.b-ok{background:rgba(52,192,124,.14);color:var(--ok)}
+.b-warn{background:rgba(224,166,60,.14);color:var(--warn)}
+.b-bad{background:rgba(224,85,85,.16);color:var(--bad)}
+.b-dim{background:#182231;color:var(--dim)}
+.b-acc{background:rgba(91,157,255,.15);color:var(--accent)}
+
+.bar{height:5px;background:#1a2432;border-radius:3px;overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;background:var(--ok)}
+
+pre.raw{background:#0d1219;border:1px solid var(--line);border-radius:8px;padding:13px;font-family:var(--mono);font-size:12px;color:#93a7bd;white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto}
+.btn{background:var(--panel2);border:1px solid var(--line2);color:var(--text);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.danger:hover{border-color:var(--bad);color:var(--bad)}
+.btn.primary{background:rgba(91,157,255,.14);border-color:color-mix(in srgb,var(--accent) 45%,transparent);color:var(--accent)}
+.hidden{display:none!important}
+
+/* modal */
+#modal-back{position:fixed;inset:0;background:rgba(4,7,11,.72);z-index:50;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:36px 18px}
+#modal{background:var(--panel);border:1px solid var(--line2);border-radius:14px;width:min(880px,96vw);padding:24px 26px}
+.mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.mhead h3{font-size:17px}.mhead .x{cursor:pointer;color:var(--dim);font-size:20px;background:none;border:none}
+.vrow{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.vrow:last-child{border-bottom:none}
+.vrow .k{color:var(--dim)}
+.sect{margin-top:18px}
+.sect>h4{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.09em;margin-bottom:8px}
+ul.clean{list-style:none}ul.clean li{padding:4px 0;font-size:13.5px}
+ul.clean li:before{content:"— ";color:var(--faint)}
+ul.cOUNTER li:before{content:"✗ ";color:var(--bad)}
+
+/* settings */
+.acc{border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:10px;overflow:hidden}
+.acc>.head{padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:13.5px}
+.acc>.head small{color:var(--dim);font-weight:400;margin-left:10px}
+.acc>.body{padding:4px 16px 14px;border-top:1px solid var(--line)}
+.kv{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px dashed #17202d;font-size:13px}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--dim)}
+.kv input,.kv select{background:var(--panel2);border:1px solid var(--line2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12.5px;width:150px}
+.expert-only{display:none}.expert .expert-only{display:flex}
+label.chk{display:flex;gap:7px;align-items:center;font-size:12.5px;color:var(--dim);cursor:pointer}
 </style>
 </head>
 <body>
+
 <header>
-  <h1>AIOS&#8209;0X COMMAND CENTER</h1>
-  <span id="p-state" class="pill">STATE -</span>
-  <span id="p-dd" class="pill">DD -</span>
-  <span id="p-chain" class="pill">CHAIN -</span>
-  <span id="p-cash" class="pill">CASH -</span>
-  <nav id="tabs"></nav>
+  <span class="logo">AIOS-0X</span>
+  <span id="p-state" class="pill">STATE —</span>
+  <span id="p-dd" class="pill">DD —</span>
+  <span id="p-chain" class="pill">CHAIN —</span>
+  <span id="p-cash" class="pill">CASH —</span>
+  <div class="spacer"></div>
+  <label class="chk" title="Show advanced parameters"><input type="checkbox" id="expert"> Expert</label>
+  <select id="autonomy" title="Autonomy mode">
+    <option value="MANUAL">MANUAL</option>
+    <option value="ASSISTED">ASSISTED</option>
+    <option value="SUPERVISED">SUPERVISED</option>
+    <option value="AUTONOMOUS" selected>AUTONOMOUS</option>
+  </select>
 </header>
+
+<nav id="nav"></nav>
 <main>
-  <section data-tab="executive" class="active">
-    <div class="cards" id="exec-cards"></div>
-    <div class="grid2">
-      <div><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">RESEARCH QUALITY</h3><pre id="research-box">loading...</pre></div>
-      <div><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">HEALTH</h3><pre id="health-box">loading...</pre></div>
+  <section data-t="executive" class="active">
+    <h2>Executive Summary</h2>
+    <div class="grid cards" id="cards"></div>
+    <h2 style="margin-top:6px">Market Regimes</h2>
+    <div class="grid cards" id="regime-cards"></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:4px">
+      <div><h2>Research Quality</h2><div id="rq-box" class="card" style="font-size:13px">loading…</div></div>
+      <div><h2>Pending Approvals</h2><div id="appr-box" class="card" style="font-size:13px">loading…</div></div>
     </div>
   </section>
 
-  <section data-tab="decisions">
-    <table id="exec-table"><thead><tr>
-      <th>Execution</th><th>Symbol</th><th>Fill</th><th>Realized PnL</th></tr></thead><tbody></tbody></table>
-    <div id="drilldown" style="margin-top:16px;display:none">
-      <div class="cards" id="dd-cards"></div>
-      <p class="chain" id="dd-chain" style="margin:10px 0"></p>
-      <div class="grid2">
-        <div><h3 style="font-size:12px;color:var(--dim)">REASON / EVIDENCE</h3><pre id="dd-reason"></pre></div>
-        <div><h3 style="font-size:12px;color:var(--dim)">VERIFICATION + RISK</h3><pre id="dd-risk"></pre></div>
-        <div><h3 style="font-size:12px;color:var(--dim)">OUTCOME</h3><pre id="dd-outcome"></pre></div>
-      </div>
+  <section data-t="decisions">
+    <h2>Recent Decisions</h2>
+    <table><thead><tr><th>Symbol</th><th>Action</th><th>Verification</th><th>Confidence</th><th>Outcome</th></tr></thead>
+    <tbody id="dec-rows"></tbody></table>
+  </section>
+
+  <section data-t="approvals">
+    <h2>Awaiting Your Approval <small style="color:var(--dim);font-weight:400">(SUPERVISED mode)</small></h2>
+    <table><thead><tr><th>Plan</th><th>Symbol</th><th>Action</th><th>Entry</th><th>Size %</th><th></th></tr></thead>
+    <tbody id="apr-rows"></tbody></table>
+  </section>
+
+  <section data-t="risk">
+    <h2>Risk & Compliance</h2>
+    <div id="risk-banner" style="margin-bottom:16px"></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr">
+      <div><h2>Active Limits</h2><div id="limits-box" class="card"></div></div>
+      <div><h2>Recent Events</h2><div id="events-box" class="card" style="max-height:340px;overflow:auto"></div></div>
     </div>
   </section>
 
-  <section data-tab="risk"><pre id="risk-box">loading...</pre></section>
-  <section data-tab="accounting"><pre id="acct-box">loading...</pre></section>
+  <section data-t="accounting">
+    <h2>Ledger Accounts <span id="tb-badge"></span></h2>
+    <table><thead><tr><th>Account</th><th>Balance (minor)</th><th>Direction</th></tr></thead><tbody id="acct-rows"></tbody></table>
+    <h2 style="margin-top:20px">Tax Position <span class="badge b-warn">ADVISORY — CA SIGN-OFF REQUIRED</span></h2>
+    <div id="tax-box" class="card" style="margin-top:-6px">loading…</div>
+  </section>
+
+  <section data-t="settings">
+    <h2>Settings Center</h2>
+    <div id="settings-root"></div>
+  </section>
 </main>
+
+<div id="modal-back"><div id="modal">
+  <div class="mhead">
+    <h3 id="m-title">Decision</h3>
+    <button class="x" onclick="closeModal()">✕</button>
+  </div>
+  <div id="m-body"></div>
+</div></div>
+
 <script>
-const $=id=>document.getElementById(id);
-const fmt=v=>v==null?"-":v;
-const money=v=>v==null?"-":(v<0?`-$${Math.abs(v).toFixed(2)}`:`$${Number(v).toFixed(2)}`);
+const $=i=>document.getElementById(i);
+const fmt=v=>v==null||v===undefined?"—":v;
+const money=v=>v==null?"—":(v<0?`−$${Math.abs(Number(v)).toFixed(2)}`:`$${Number(v).toFixed(2)}`);
 const cls=v=>v>0?"pos":v<0?"neg":"";
-async function j(url){const r=await fetch(url);if(!r.ok)throw new Error(await r.text());return r.json();}
+async function j(u,o){const r=await fetch(u,o);if(!r.ok)throw new Error((await r.json()).error||r.status);return r.json()}
+function badge(t,c){return `<span class="badge ${c}">${t}</span>`}
 
-function pill(id,text,cls_){const e=$(id);e.textContent=text;e.className="pill "+(cls_||"");}
+/* ---------------- nav ---------------- */
+const TABS=["executive","decisions","approvals","risk","accounting","settings"];
+const nav=$("nav");let current="executive";
+TABS.forEach(t=>{const b=document.createElement("button");b.textContent=t.toUpperCase();b.dataset.t=t;
+ if(t==="executive")b.classList.add("active");
+ b.onclick=()=>showTab(t);nav.appendChild(b);});
+function showTab(t){current=t;
+ document.querySelectorAll("section").forEach(s=>s.classList.toggle("active",s.dataset.tab===t));
+ nav.querySelectorAll("button").forEach(b=>b.classList.toggle("active",b.dataset.t===t));
+ refresh(true);}
 
-async function loadExecutive(){
-  const d=await j("/api/v1/executive");
-  pill("p-state", "STATE "+fmt(d.emergency_state), d.emergency_state==="NORMAL"?"ok":"bad");
-  const dd=d.drawdown_pct??0;
-  pill("p-dd","DD "+dd+"%", dd>=2.5?"bad":dd>=1.5?"warn":"ok");
-  pill("p-chain","CHAIN "+(d.chain_valid?"OK":"BROKEN"), d.chain_valid?"ok":"bad");
-  pill("p-cash","CASH "+money(d.cash_balance));
-  const cards=[["Cash",money(d.cash_balance)],["Open Positions",fmt(d.open_positions)],
-    ["Realized PnL",money(d.cumulative_realized_pnl),cls(d.cumulative_realized_pnl)],
-    ["Closed Trades",fmt(d.closed_trades)],["Events Logged",fmt(d.events_logged)],
-    ["Predictions Scored",fmt(d.predictions_scored)],["Postmortems",fmt(d.postmortems)]];
-  $("exec-cards").innerHTML=cards.map(([k,v,c])=>`<div class="card"><b>${k}</b><span class="${c||""}">${fmt(v)}</span></div>`).join("");
+/* ---------------- executive ---------------- */
+async function loadExec(){
+ const d=await j("/api/v1/executive");
+ pill("p-state","STATE "+(d.emergency_state||"—"),d.emergency_state==="NORMAL"?"ok":d.emergency_state?"bad":"");
+ const dd=d.drawdown_pct??0;
+ pill("p-dd",`DD ${dd}%`,dd>=2.5?"bad":dd>=1.5?"warn":"ok");
+ pill("p-chain","CHAIN "+(d.chain_valid?"OK":"BROKEN"),d.chain_valid?"ok":"bad");
+ pill("p-cash","CASH "+money(d.cash_balance));
+ $("cards").innerHTML=[
+  ["Portfolio Value",money(d.cash_balance),""],
+  ["Realized P&L",money(d.cumulative_realized_pnl),cls(d.cumulative_realized_pnl)],
+  ["Closed Trades",fmt(d.closed_trades),""],
+  ["Drawdown",`${fmt(dd)}%`,dd>=1.5?"warnT":""],
+  ["Open Positions",fmt(d.open_positions),""],
+  ["Events Audited",fmt(d.events_logged),""],
+ ].map(([k,v,c])=>`<div class="card"><b>${k}</b><span class="v ${c}">${fmt(v)}</span></div>`).join("");
+
+ try{const rq=await j("/api/v1/research");
+  const rel=rq.reliable;
+  $("rq-box").innerHTML=`<div class="kv"><span class="k">Scored predictions</span><span>${rq.total_scored}</span></div>
+   <div class="kv"><span class="k">Brier score (lower=better)</span><span>${rq.brier_score}</span></div>
+   <div class="kv"><span class="k">Directional accuracy</span><span>${rq.directional_accuracy_pct}%</span></div>
+   <div class="kv"><span class="k">Reliable sample?</span><span>${rel?badge("YES","b-ok"):badge("NOT YET","b-dim")}</span></div>`;
+ }catch(e){$("rq-box").textContent=e.message}
+ try{const a=(await j("/api/v1/approvals")).approvals;
+  $("appr-box").innerHTML=a.length?a.map(x=>`<div class="kv"><span>${badge(x.action,x.action==="BUY"?"b-buy":"b-sell")} ${x.symbol}</span><button class="btn primary" onclick="gotoApprovals()">Review →</button></div>`).join(""):`<span style="color:var(--faint)">No plans awaiting approval.</span>`;
+ }catch(e){$("appr-box").textContent=e.message}
 }
+function gotoApprovals(){showTab("approvals")}
 
+/* ---------------- decisions ---------------- */
 async function loadDecisions(){
-  const d=await j("/api/v1/executions");
-  const tb=$("exec-table").querySelector("tbody");
-  tb.innerHTML=(d.executions||[]).map(e=>`
-    <tr class="click" data-id="${e.execution_id}">
-      <td>${String(e.execution_id).slice(0,8)}</td><td>${fmt(e.symbol)}</td>
-      <td>${fmt(e.fill_price)}</td><td class="${cls(e.realized_pnl)}">${money(e.realized_pnl)}</td></tr>`).join("");
-  tb.querySelectorAll("tr").forEach(tr=>tr.onclick=()=>drill(tr.dataset.id));
+ const d=await j("/api/v1/executions");
+ $("dec-rows").innerHTML=(d.executions||[]).map(e=>{
+  const okPnl=e.realized_pnl>0;
+  return `<tr class="rowlink" onclick="drill('${e.execution_id}')">
+   <td><b>${fmt(e.symbol)}</b></td>
+   <td>${badge(fmt(e.action||"?"),e.action==="SELL"?"b-sell":"b-buy")}</td>
+   <td>${badge("VERIFIED ✓","b-ok")}</td>
+   <td><div style="min-width:90px">${fmt(e.confidence_pct!=null?e.confidence_pct+"%":"100%")}
+       <div class="bar"><i style="width:${e.confidence_pct||100}%"></i></div></div></td>
+   <td class="${cls(e.realized_pnl)}">${money(e.realized_pnl)}<br><small style="color:var(--faint)">${fmt(e.exit_reason)}</small></td>
+  </tr>`;}).join("")||`<tr><td colspan=5 style="color:var(--faint)">No closed trades yet.</td></tr>`;
 }
 
-async function drill(executionId){
-  const d=await j("/api/v1/decisions/"+executionId);
-  $("drilldown").style.display="block";
-  $("dd-cards").innerHTML=[
-    ["Action",(d.decision.action||"-")+" "+(d.decision.symbol||"")],
-    ["Family",d.decision.family||"-"],
-    ["Size %",fmt(d.decision.position_size_pct)],
-    ["PnL",money(d.outcome.actual_pnl)]
-  ].map(([k,v])=>`<div class="card"><b>${k}</b><span>${v}</span></div>`).join("");
-  $("dd-chain").innerHTML="CHAIN: "+["execution","strategy","hypothesis","verification"]
-    .map(k=>`<span>${k}: ${d[k]&&Object.keys(d[k]).length?"OK":"missing"}</span>`).join("")
-    +(d.chain_complete?' <span class="pos">COMPLETE</span>':' <span class="bad">INCOMPLETE</span>');
-  $("dd-reason").textContent=JSON.stringify({thesis:d.reason.thesis,supporting:d.evidence.supporting_arguments,counters:d.evidence.counter_arguments},null,1);
-  $("dd-risk").textContent=JSON.stringify({verification:{conf:d.verification.confidence_score,fact:d.verification.fact_score,bal:d.verification.balance_score,math:d.verification.math_score},flagged:d.verification.flagged_hallucinations,risk:{stop:d.risk.stop_loss_price,target:d.risk.take_profit_price}},null,1);
-  $("dd-outcome").textContent=JSON.stringify({pnl:d.outcome.actual_pnl,exit:d.outcome.exit_reason,direction_correct:d.outcome.direction_correct,lessons:d.outcome.lessons_learned},null,1);
-  $("drilldown").scrollIntoView({behavior:"smooth"});
+async function drill(id){
+ const d=await j("/api/v1/decisions/"+id);
+ const v=d.verification,o=d.outcome,s=d.decision,r=d.reason,ev=d.evidence,rk=d.risk;
+ $("m-title").innerHTML=`${s.symbol} · DECISION VERIFICATION ${o.actual_pnl!=null?(o.actual_pnl>=0?badge("CLOSED +","b-ok"):badge("CLOSED −","b-bad")):badge("OPEN","b-dim")}`;
+ const conf=v.confidence_score??0;
+ const evOK=(ev.supporting_arguments||[]).length;
+ $("m-body").innerHTML=`
+  <div class="cards grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+    <div class="card"><b>Verified</b><span class="v">${conf>=70?"✓ YES":"✗ NO"}</span></div>
+    <div class="card"><b>Confidence</b><span class="v">${conf}%</span><div class="bar"><i style="width:${conf}%"></i></div></div>
+    <div class="card"><b>Evidence</b><span class="v">${evOK}/${evOK+(ev.counter_arguments||[]).length}</span></div>
+    <div class="card"><b>Risk Checks</b><span class="v ${chainOK(d)?"pos":"neg"}">${chainOK(d)?"PASS":"FAIL"}</span></div>
+  </div>
+  <div class="sect"><h4>Thesis</h4><div style="font-size:13.5px">${r.thesis||"—"}</div></div>
+  <div class="sect grid" style="grid-template-columns:1fr 1fr">
+    <div><h4>Supporting Evidence</h4><ul class="clean">${(ev.supporting_arguments||[]).map(x=>`<li>${x}</li>`).join("")||"<li style='color:var(--faint)'>none recorded</li>"}</ul></div>
+    <div><h4>Counter-Arguments</h4><ul class="clean cOUNTER">${(ev.counter_arguments||[]).map(x=>`<li>${x}</li>`).join("")||"<li style='color:var(--faint)'>none recorded</li>"}</ul></div>
+  </div>
+  <div class="sect"><h4>Execution & Outcome</h4>
+   <div class="kv"><span class="k">Action / Entry</span><span>${s.action} @ ${fmt(s.entry_price??rk.stop_loss_price&&"—")}</span></div>
+   <div class="kv"><span class="k">Stop / Target</span><span>${fmt(rk.stop_loss_price)} / ${fmt(rk.take_profit_price)}</span></div>
+   <div class="kv"><span class="k">Position size</span><span>${fmt(s.position_size_pct)}%</span></div>
+   <div class="kv"><span class="k">Exit reason</span><span>${fmt(o.exit_reason)}</span></div>
+   <div class="kv"><span class="k">Realized P&L</span><span class="${cls(o.actual_pnl)}">${money(o.actual_pnl)}</span></div>
+   <ul class="clean" style="margin-top:6px">${(o.lessons_learned||[]).map(l=>`<li>${l}</li>`).join("")}</ul>
+  </div>
+  <div class="sect" style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn" onclick="toggle('raw-evidence')">Inspect Evidence</button>
+    <button class="btn" onclick="toggle('raw-trace')">Agent Trace</button>
+    <button class="btn" onclick="toggle('raw-audit')">Audit Trail</button>
+    <button class="btn danger" onclick="toggle('raw-json')">Raw Data</button>
+  </div>
+  <pre class="raw hidden" id="raw-evidence">${esc(JSON.stringify({supporting:ev.supporting_arguments,counters:ev.counter_arguments,flagged:v.flagged_hallucinations},null,2))}</pre>
+  <pre class="raw hidden" id="raw-trace">${esc(JSON.stringify({verification_scores:{fact:v.fact_score,balance:v.balance_score,math:v.math_score}},null,2))}</pre>
+  <pre class="raw hidden" id="raw-audit">${esc(JSON.stringify({chain_complete:d.chain_complete,execution_id:d.execution_id,strategy_id:s.strategy_id??d.execution_id},null,2))}</pre>
+  <pre class="raw hidden" id="raw-json">${esc(JSON.stringify(d,null,2))}</pre>`;
+ $("modal-back").style.display="flex";
+}
+function chainOK(d){return !!d.chain_complete}
+function toggle(id){$(id).classList.toggle("hidden")}
+function esc(s){return s.replace(/</g,"&lt;")}
+function closeModal(){$("modal-back").style.display="none"}
+$("modal-back").onclick=e=>{if(e.target.id==="modal-back")closeModal()};
+
+/* ---------------- approvals ---------------- */
+async function loadApprovals(){
+ const d=await j("/api/v1/approvals");
+ $("apr-rows").innerHTML=(d.approvals||[]).map(a=>`
+  <tr><td>${String(a.plan_id).slice(0,8)}</td><td><b>${fmt(a.symbol)}</b></td>
+  <td>${badge(a.action,a.action==="BUY"?"b-buy":"b-sell")}</td><td>${fmt(a.entry_price)}</td><td>${fmt(a.position_size_pct)}%</td>
+  <td style="white-space:nowrap">
+   <button class="btn primary" onclick="decide('${a.plan_id}','approve')">Approve</button>
+   <button class="btn danger" onclick="decide('${a.plan_id}','reject')">Reject</button></td></tr>`
+ ).join("")||`<tr><td colspan=6 style="color:var(--faint)">Nothing pending — switch to SUPERVISED mode to route orders here.</td></tr>`;
+}
+async function decide(pid,kind){
+ await j("/api/v1/control/"+(kind==="approve"?"approve_plan":"reject_plan"),{method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{plan_id:pid}})});
+ loadApprovals();
 }
 
-async function loadRisk(){$("risk-box").textContent=JSON.stringify(await j("/api/v1/risk"),null,2);}
-async function loadAcct(){$("acct-box").textContent=JSON.stringify(await j("/api/v1/accounting"),null,2);}
-
-const tabs=["executive","decisions","risk","accounting"];
-const nav=$("tabs");let current="executive";
-tabs.forEach(t=>{const b=document.createElement("button");b.textContent=t.toUpperCase();b.dataset.t=t;
-  if(t===current)b.classList.add("active");
-  b.onclick=()=>{current=t;document.querySelectorAll("section").forEach(s=>s.classList.toggle("active",s.dataset.tab===t));
-    nav.querySelectorAll("button").forEach(x=>x.classList.toggle("active",x.dataset.t===t));};
-  nav.appendChild(b);});
-
-async function refreshAll(){
-  try{
-    await loadExecutive();
-    if(current==="decisions")await loadDecisions();
-    if(current==="risk")await loadRisk();
-    if(current==="accounting")await loadAcct();
-    j("/api/v1/research").then(d=>$("research-box").textContent=JSON.stringify(d,null,1)).catch(()=>{});
-    j("/api/v1/health").then(d=>$("health-box").textContent=JSON.stringify(d,null,1)).catch(()=>{});
-  }catch(e){console.error(e);}
+/* ---------------- risk / accounting / settings ---------------- */
+async function loadRisk(){
+ const d=await j("/api/v1/risk");
+ const st=d.current_state||"UNKNOWN";
+ const bad=st!=="NORMAL";
+ $("risk-banner").innerHTML=`<div class="card" style="border-color:${bad?"var(--bad)":"var(--ok)"}">
+  <b>Emergency State</b><span class="v ${bad?"neg":"pos"}">${st}</span>
+  <div class="s">Locked out: ${d.locked_out?"YES — human reset required":"no"} · Drawdown ${fmt(d.drawdown_pct)}%</div></div>`;
+ $("limits-box").innerHTML=[["Max class exposure",fmt(d.max_class_exposure_pct)+"%"],["Halt drawdown",fmt(d.halt_dd_pct)+"%"],
+  ["Warning drawdown",fmt(d.warning_dd_pct)+"%"],["Caution drawdown",fmt(d.caution_dd_pct)+"%"]]
+  .map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span>${v}</span></div>`).join("");
+ const events=[...(d.compliance_alerts||[]).map(a=>({t:"COMPLIANCE",d:a.detail,s:a.severity})),
+               ...(d.emergency_events||[]).map(e=>({t:"EMERGENCY",d:e.reason,s:e.lockout_engaged?"CRITICAL":"WARN"}))];
+ $("events-box").innerHTML=events.length?events.map(e=>`<div style="padding:6px 0;border-bottom:1px dashed #17202d;font-size:12.5px">
+   ${badge(e.t,e.s==="CRITICAL"?"b-bad":"b-warn")} <span style="color:var(--dim)">${e.d}</span></div>`).join("")
+   :`<span style="color:var(--faint)">No recent risk or compliance events.</span>`;
 }
-refreshAll();
-loadDecisions().catch(()=>{});
-setInterval(refreshAll,5000);
+async function loadAcct(){
+ const d=await j("/api/v1/accounting");
+ $("tb-badge").innerHTML=d.balanced?badge("TRIAL BALANCE OK","b-ok"):badge("OUT OF BALANCE","b-bad");
+ $("acct-rows").innerHTML=Object.entries(d.accounts_minor||{}).map(([acc,v])=>`
+  <tr><td>${acc}</td><td class="${cls(v)}">${Number(v).toLocaleString()}</td>
+  <td>${v>0?badge("DEBIT","b-dim"):badge("CREDIT","b-dim")}</td></tr>`).join("");
+ try{const t=await j("/api/v1/accounting");const tax=t.tax||{};
+ const state=tax.ca_state||"UNKNOWN";
+ $("tax-box").innerHTML=`<div class="kv"><span class="k">Rule</span><span style="text-align:right">${fmt(tax.rule_citation)}</span></div>
+  <div class="kv"><span class="k">Jurisdiction</span><span>${fmt(tax.jurisdiction)}</span></div>
+  <div class="kv"><span class="k">Taxable gain</span><span>${Number(tax.taxable_gain_minor??0).toLocaleString()} minor</span></div>
+  <div class="kv"><span class="k">Tax due (advisory)</span><span>${Number(tax.tax_due_minor??0).toLocaleString()} minor</span></div>
+  <div class="kv"><span class="k">CA review state</span><span>${badge(state,state==="APPROVED_BY_CA"?"b-ok":state==="UNDER_REVIEW"?"b-warn":"b-dim")}</span></div>`;
+ }catch(e){$("tax-box").textContent=e.message}
+}
+async function loadSettings(){
+ const d=await j("/api/v1/settings");
+ const groups=[
+  ["SYSTEM","system",[["Model provider","model_provider"],["Research mode","research_mode","select_research"],["LLM configured","llm_configured_bool"],["Shadow mode","shadow_bool"]]],
+  ["AI & AGENTS","ai",[["Cheap model","research_model_cheap"],["Reasoning model","research_model_reasoning"],["Verifier model","verification_model"],["Temperature","llm_temperature"]]],
+  ["DATA PROVIDERS","data",[["Finnhub","finnhub_bool"],["GNews","gnews_bool"],["NewsData","newsdata_bool"],["MarketStack","marketstack_bool"],["FRED","fred_bool"]]],
+  ["RISK LIMITS","risk",[["Max class exposure %","max_class_exposure_pct"],["Halt drawdown %","halt_dd_pct"],["Warning drawdown %","warning_dd_pct"],["Caution drawdown %","caution_dd_pct"]]],
+  ["EXECUTION RAILS","execution_rails",[["Live execution (env)","live_execution_allowed_env"],["Micro-live cap $","micro_live_cap_usd"],["Constitution pinned","constitution_pinned_bool"]]],
+ ];
+ const boolKeys=new Set(["llm_configured","shadow_mode","finnhub","gnews","newsdata","marketstack","fred","live_execution_allowed_env","constitution_pinned"]);
+ $("settings-root").innerHTML=groups.map(([title,key,rows])=>`
+  <div class="acc"><div class="head" onclick="this.parentElement.querySelector('.body').classList.toggle('hidden')">
+   ${title}<small>effective values</small></div><div class="body">
+   ${rows.map(([label,k,edit])=>{
+     let v=d[key]?.[k];
+     if(k.endsWith("_bool")){v=v===true||v==="1"?badge("CONFIGURED","b-ok"):badge("OFF","b-dim");}
+     else if(typeof v==="boolean"){v=v?badge("ON","b-ok"):badge("OFF","b-dim");}
+     let control="";
+     if(edit==="select_research"&&!k.endsWith("_bool")){
+       control=`<select onchange="setResearch(this.value)"><option value="auto"${v==="auto"?" selected":""}>auto</option><option value="deterministic"${v==="deterministic"?" selected":""}>deterministic</option></select>`;
+     }else if(!k.endsWith("_bool")&&(key==="risk")){control=`<input value="${fmt(v)}" data-k="${k}" onchange="setLimit(this.dataset.k,this.value)">`;}
+     return `<div class="kv ${String(k).includes("bool")?"":"expert-only"} ${boolKeys.has(k)?"":"expert-only"}"><span class="k">${label}</span><span>${control||(typeof v==="boolean"?badge(String(v),"b-dim"):fmt(v))}</span></div>`;
+   }).join("")}
+  </div></div>`).join("")
+  +`<div class="acc expert-only"><div class="head">RAW CONFIGURATION<small>/api/v1/settings</small></div><div class="body"><pre class="raw">${esc(JSON.stringify(d,null,2))}</pre></div></div>`;
+ document.body.classList.toggle("expert",$("expert").checked);
+}
+async function setResearch(m){
+ await j("/api/v1/control/set_research_mode",{method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{mode:m}})});
+ loadSettings();
+}
+async function setLimit(k,v){
+ const action=k==="max_class_exposure_pct"?"set_max_position_pct":k==="halt_dd_pct"?"set_halt_drawdown_pct":null;
+ if(!action)return;
+ await j("/api/v1/control/"+action,{method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{pct:Number(v)}})});
+ loadSettings();
+}
+
+/* ---------------- autonomy ---------------- */
+$("autonomy").onchange=async e=>{
+ try{await j("/api/v1/control/set_autonomy",{method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{mode:e.target.value}})});
+  refresh(true);}
+ catch(err){alert(err.message);e.target.value="AUTONOMOUS";}
+};
+async function syncAutonomy(){try{const s=await j("/api/v1/settings");if(s.autonomy)$("autonomy").value=s.autonomy;}catch(e){}}
+
+function pill(id,text,c){const e=$(id);e.textContent=text;e.className="pill "+(c||"")}
+async function refresh(force){
+ try{await loadExec()}catch(e){}
+ if(current==="decisions"||force)loadDecisions().catch(()=>{});
+ if(current==="approvals"||force)loadApprovals().catch(()=>{});
+ if(current==="risk")loadRisk().catch(()=>{});
+ if(current==="accounting")loadAcct().catch(()=>{});
+ if(current==="settings")loadSettings().catch(()=>{});
+}
+$("expert").onchange=()=>{document.body.classList.toggle("expert",$("expert").checked);if(current==="settings")loadSettings();};
+syncAutonomy();refresh(true);setInterval(refresh,5000);
 </script>
 </body>
 </html>

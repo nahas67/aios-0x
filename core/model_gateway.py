@@ -11,6 +11,7 @@ Design invariants (Directive 62/78, ADR-002 honesty):
 """
 
 import asyncio
+import json
 import logging
 import re
 import time
@@ -95,7 +96,7 @@ class OpenAICompatibleGateway(BaseModelGateway):
         base_url: str,
         default_model: str,
         settings: Settings,
-        timeout_seconds: float = 30.0,
+        timeout_seconds: float = 15.0,
         max_attempts: int = 3,
     ) -> None:
         if not api_key:
@@ -106,6 +107,11 @@ class OpenAICompatibleGateway(BaseModelGateway):
         self._settings = settings
         self._timeout = timeout_seconds
         self._max_attempts = max_attempts
+        # FIX 2: one shared client — avoids TLS handshake per request.
+        self._client = httpx.AsyncClient(timeout=self._timeout)
+
+    async def close(self) -> None:
+        await self._client.aclose()
 
     @property
     def provider(self) -> str:
@@ -131,12 +137,15 @@ class OpenAICompatibleGateway(BaseModelGateway):
         for attempt in range(1, self._max_attempts + 1):
             started = time.perf_counter()
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
-                    resp = await client.post(url, json=payload, headers=headers)
+                resp = await asyncio.wait_for(
+                    self._client.post(url, json=payload, headers=headers),
+                    timeout=self._timeout + 5,
+                )
                 if resp.status_code in (429, 500, 502, 503):
                     raise GatewayHTTPError(f"provider status {resp.status_code}")
                 resp.raise_for_status()
-                body = resp.json()
+                raw = await asyncio.wait_for(resp.aread(), timeout=5)
+                body = json.loads(raw)
                 usage = body.get("usage", {}) or {}
                 prompt_tokens = int(usage.get("prompt_tokens") or 0)
                 completion_tokens = int(usage.get("completion_tokens") or 0)
@@ -167,7 +176,7 @@ class AnthropicGateway(BaseModelGateway):
         api_key: str,
         default_model: str,
         settings: Settings,
-        timeout_seconds: float = 30.0,
+        timeout_seconds: float = 15.0,
         max_attempts: int = 3,
     ) -> None:
         if not api_key:
@@ -177,6 +186,10 @@ class AnthropicGateway(BaseModelGateway):
         self._settings = settings
         self._timeout = timeout_seconds
         self._max_attempts = max_attempts
+        self._client = httpx.AsyncClient(timeout=self._timeout)
+
+    async def close(self) -> None:
+        await self._client.aclose()
 
     @property
     def provider(self) -> str:
@@ -203,12 +216,14 @@ class AnthropicGateway(BaseModelGateway):
         for attempt in range(1, self._max_attempts + 1):
             started = time.perf_counter()
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
-                    resp = await client.post(
+                resp = await asyncio.wait_for(
+                    self._client.post(
                         "https://api.anthropic.com/v1/messages",
                         json=payload,
                         headers=headers,
-                    )
+                    ),
+                    timeout=self._timeout + 5,
+                )
                 if resp.status_code in (429, 500, 502, 503):
                     raise GatewayHTTPError(f"provider status {resp.status_code}")
                 resp.raise_for_status()

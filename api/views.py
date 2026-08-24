@@ -22,6 +22,8 @@ class SystemSnapshotBuilder:
         risk_governor: Any = None,
         paper_engine: Any = None,
         lot_book: Any = None,
+        settings: Any = None,
+        control_plane: Any = None,
     ) -> None:
         self.store = store
         self.ledger = ledger
@@ -29,6 +31,8 @@ class SystemSnapshotBuilder:
         self.risk_governor = risk_governor
         self.paper = paper_engine
         self.lot_book = lot_book
+        self.settings = settings
+        self.control_plane = control_plane
 
     # ------------------------------------------------------------- executive
 
@@ -56,7 +60,6 @@ class SystemSnapshotBuilder:
 
     def executions(self, limit: int = 25) -> list[dict[str, Any]]:
         rows = self.store.pnl_series()[-limit:]
-        out: list[dict[str, Any]] = []
         receipts: dict[str, dict[str, Any]] = {}
         for payload in self.store.iter_event_payloads("aios.c5.order_executed"):
             receipts[payload.get("execution_id", "")] = {
@@ -64,14 +67,44 @@ class SystemSnapshotBuilder:
                 "fill_price": payload.get("fill_price"),
                 "strategy_id": payload.get("strategy_id"),
             }
+        strategies: dict[str, dict[str, Any]] = {}
+        for payload in self.store.iter_event_payloads("aios.c4.strategy_generated"):
+            strategies[payload.get("strategy_id", "")] = {
+                "action": payload.get("action"),
+                "confidence": None,
+            }
+        verifications: dict[str, float] = {}
+        for payload in self.store.iter_event_payloads("aios.c3.verification_completed"):
+            verifications[payload.get("hypothesis_id", "")] = float(
+                payload.get("confidence_score") or 0
+            )
+        observations: dict[str, dict[str, Any]] = {}
+        for payload in self.store.iter_event_payloads("aios.c6.observation_completed"):
+            observations[payload.get("execution_id", "")] = {
+                "exit_reason": payload.get("exit_reason"),
+                "direction_correct": payload.get("direction_correct"),
+            }
+        hypotheses_by_strategy: dict[str, str] = {}
+        for payload in self.store.iter_event_payloads("aios.c4.strategy_generated"):
+            hypotheses_by_strategy[payload.get("strategy_id", "")] = payload.get(
+                "hypothesis_id", ""
+            )
+
+        out: list[dict[str, Any]] = []
         for execution_id, pnl in reversed(rows):
             meta = receipts.get(execution_id, {})
+            sid = meta.get("strategy_id", "")
+            hyp_id = hypotheses_by_strategy.get(sid, "")
+            obs = observations.get(execution_id, {})
             out.append(
                 {
                     "execution_id": execution_id,
                     "symbol": meta.get("symbol"),
                     "fill_price": meta.get("fill_price"),
                     "realized_pnl": pnl,
+                    "action": (strategies.get(sid) or {}).get("action"),
+                    "confidence_pct": verifications.get(hyp_id),
+                    "exit_reason": obs.get("exit_reason"),
                 }
             )
         return out
@@ -151,6 +184,9 @@ class SystemSnapshotBuilder:
 
     def accounting(self) -> dict[str, Any]:
         balances = self.ledger.balances() if self.ledger else {}
+        tax_events = self.store.iter_event_payloads("TAX_COMPUTATION")
+        latest_tax = tax_events[-1] if tax_events else None
+        review_items = [p for p in reversed(self.store.iter_event_payloads("REVIEW_ITEM"))][:5]
         return {
             "trial_balance_total": sum(balances.values()) if balances is not None else None,
             "balanced": (sum(balances.values()) == 0) if balances is not None else None,
@@ -160,6 +196,17 @@ class SystemSnapshotBuilder:
             }
             if self.lot_book
             else {},
+            "tax": {
+                "rule_citation": (latest_tax or {}).get("rule_citation"),
+                "jurisdiction": (latest_tax or {}).get("jurisdiction"),
+                "taxable_gain_minor": (latest_tax or {}).get("taxable_gain_minor"),
+                "tax_due_minor": (latest_tax or {}).get("tax_due_minor"),
+                "requires_signoff": (latest_tax or {}).get("requires_professional_signoff", True),
+                "ca_state": (review_items[0] or {}).get("state") if review_items else None,
+            },
+            "ca_review_queue": [
+                {"subject_ref": r.get("subject_ref"), "state": r.get("state")} for r in review_items
+            ],
         }
 
     # -------------------------------------------------------------- research
@@ -170,6 +217,82 @@ class SystemSnapshotBuilder:
         assert isinstance(self.store, SqliteMemoryStore), "calibration needs SQLite store"
         report = calibration_report(self.store._conn)  # noqa: SLF001 - same package family
         return report.model_dump()
+
+    # -------------------------------------------------------------- settings
+
+    def settings_view(self) -> dict[str, Any]:
+        """Effective configuration for the Settings Center. Secrets masked."""
+        s = self.settings
+
+        def configured(value: Any) -> bool:
+            return bool(value)
+
+        view: dict[str, Any] = {
+            "system": {
+                "model_provider": getattr(s, "model_provider", "none"),
+                "research_mode": getattr(s, "research_mode", "deterministic"),
+                "llm_configured": bool(
+                    getattr(s, "openai_api_key", None) or getattr(s, "anthropic_api_key", None)
+                ),
+                "shadow_mode": getattr(
+                    getattr(self.paper, "shadow_mode", False), "__bool__", lambda: False
+                )(),
+            },
+            "ai": {
+                "research_model_cheap": getattr(s, "research_model_cheap", None),
+                "research_model_reasoning": getattr(s, "research_model_reasoning", None),
+                "verification_model": getattr(s, "verification_model", None),
+                "llm_temperature": getattr(s, "llm_temperature", None),
+            },
+            "data": {
+                "finnhub": configured(getattr(s, "finnhub_api_key", None)),
+                "gnews": configured(getattr(s, "gnews_api_key", None)),
+                "newsdata": configured(getattr(s, "newsdata_api_key", None)),
+                "marketstack": configured(getattr(s, "marketstack_api_key", None)),
+                "fred": configured(getattr(s, "fred_api_key", None)),
+            },
+            "risk": {
+                "max_class_exposure_pct": getattr(self.governor, "max_class_exposure_pct", None)
+                if self.governor
+                else None,
+                "halt_dd_pct": getattr(self.governor, "halt_dd_pct", None)
+                if self.governor
+                else None,
+                "warning_dd_pct": getattr(self.governor, "warning_dd_pct", None)
+                if self.governor
+                else None,
+                "caution_dd_pct": getattr(self.governor, "caution_dd_pct", None)
+                if self.governor
+                else None,
+            },
+            "execution_rails": {
+                "live_execution_allowed_env": configured(
+                    __import__("os").environ.get("AIOS_ALLOW_LIVE_EXECUTION", "")
+                ),
+                "micro_live_cap_usd": 100.0,
+                "constitution_pinned": True,
+            },
+            "autonomy": (self.control_plane.autonomy.value if self.control_plane else None),
+            "pending_approvals": len(getattr(self.control_plane, "pending_approvals", {}) or {}),
+        }
+        return view
+
+    def approvals_view(self) -> list[dict[str, Any]]:
+        pending = getattr(self.control_plane, "pending_approvals", {}) or {}
+        out = []
+        for plan_id, dump in pending.items():
+            strategy = dump.get("strategy", {})
+            out.append(
+                {
+                    "plan_id": plan_id,
+                    "symbol": strategy.get("symbol"),
+                    "action": strategy.get("action"),
+                    "entry_price": strategy.get("entry_price"),
+                    "position_size_pct": dump.get("final_position_size_pct"),
+                    "status": "PENDING_APPROVAL",
+                }
+            )
+        return out
 
     # ---------------------------------------------------------------- health
 

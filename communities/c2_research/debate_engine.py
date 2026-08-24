@@ -10,6 +10,7 @@ Replaces the template hypothesis generator when a model gateway is configured
   the system never pretends an LLM contributed.
 """
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -152,23 +153,28 @@ class DebateEngine:
         self._sink = model_call_sink
         self._memory = memory
 
-    async def _ask(
+    async def _call_model(
         self,
         contract: type[BaseModel],
         prompt_text: str,
         tier: str,
-        role: str,
-        transcript: DebateTranscript,
-    ) -> BaseModel:
+    ) -> tuple[BaseModel, ModelResponse]:
         decision = self._router.resolve(tier)
         assert self._router.gateway is not None and decision.available
-        parsed, response = await complete_structured(
+        return await complete_structured(
             gateway=self._router.gateway,
             contract=contract,
             messages=[ChatMessage(role="user", content=prompt_text)],
             settings=self._settings,
             model_hint=decision.model_id,
         )
+
+    def _record(
+        self,
+        transcript: DebateTranscript,
+        role: str,
+        response: ModelResponse,
+    ) -> None:
         transcript.turns.append(
             DebateTurn(
                 role=role,
@@ -178,9 +184,10 @@ class DebateEngine:
             )
         )
         transcript.total_cost_usd = round(transcript.total_cost_usd + response.cost_usd, 8)
+
+    async def _emit_sink(self, role: str, response: ModelResponse) -> None:
         if self._sink:
             await self._sink(role.lower(), response)
-        return parsed
 
     async def debate(self, payload: MarketDataPayload) -> DebateResult:
         transcript = DebateTranscript(symbol=payload.symbol, timeframe=payload.timeframe)
@@ -194,21 +201,21 @@ class DebateEngine:
 
         v = snapshot_vars(payload)
         try:
-            bull: BullBearCase = await self._ask(  # type: ignore[assignment]
-                BullBearCase,
-                self._registry.get("research-bull-thesis").render(**v),
-                TaskTier.CHEAP,
-                "BULL",
-                transcript,
+            # FIX 1: BULL and BEAR are independent -> run in parallel.
+            bull_spec = self._registry.get("research-bull-thesis")
+            bear_spec = self._registry.get("research-bear-thesis")
+            (bull_raw, bull_resp), (bear_raw, bear_resp) = await asyncio.gather(
+                self._call_model(BullBearCase, bull_spec.render(**v), TaskTier.CHEAP),
+                self._call_model(BullBearCase, bear_spec.render(**v), TaskTier.CHEAP),
             )
-            bear: BullBearCase = await self._ask(  # type: ignore[assignment]
-                BullBearCase,
-                self._registry.get("research-bear-thesis").render(**v),
-                TaskTier.CHEAP,
-                "BEAR",
-                transcript,
-            )
-            quant: QuantVerdict = await self._ask(  # type: ignore[assignment]
+            bull: BullBearCase = bull_raw  # type: ignore[assignment]
+            bear: BullBearCase = bear_raw  # type: ignore[assignment]
+            self._record(transcript, "BULL", bull_resp)
+            await self._emit_sink("BULL", bull_resp)
+            self._record(transcript, "BEAR", bear_resp)
+            await self._emit_sink("BEAR", bear_resp)
+
+            quant_raw = await self._ask(
                 QuantVerdict,
                 self._registry.get("research-quant-review").render(
                     bull_argument=bull.argument, bear_argument=bear.argument
@@ -217,6 +224,7 @@ class DebateEngine:
                 "QUANT",
                 transcript,
             )
+            quant: QuantVerdict = quant_raw  # type: ignore[assignment]
 
             memory_context = ""
             if self._memory is not None:
@@ -240,21 +248,24 @@ class DebateEngine:
                 except Exception as exc:  # noqa: BLE001 - memory must never break research
                     logger.warning("memory retrieval skipped: %s", exc)
 
-            synthesis: ModeratorSynthesis = await self._ask(  # type: ignore[assignment]
+            synthesis_raw = await self._ask(
                 ModeratorSynthesis,
                 self._registry.get("research-moderator-synthesis").render(
                     symbol=v["symbol"],
                     timeframe=v["timeframe"],
                     bull_argument=bull.argument,
                     bear_argument=bear.argument,
-                    quant_weaknesses="; ".join(quant.weaknesses)
-                    + (f" || MEMORY: {memory_context}" if memory_context else ""),
+                    quant_weaknesses=(
+                        "; ".join(quant.weaknesses)
+                        + (f" || MEMORY: {memory_context}" if memory_context else "")
+                    ),
                     rr_target=f"{_MIN_RR:.1f}",
                 ),
                 TaskTier.REASONING,
                 "MODERATOR",
                 transcript,
             )
+            synthesis: ModeratorSynthesis = synthesis_raw  # type: ignore[assignment]
         except (ModelUnavailableError, GatewayHTTPError, DecodeError) as exc:
             logger.warning("debate falling back to deterministic mode: %s", exc)
             transcript.fell_back = True
@@ -281,6 +292,19 @@ class DebateEngine:
         transcript.used_llm = True
         return DebateResult(hypothesis=hypothesis, transcript=transcript)
 
+    async def _ask(
+        self,
+        contract: type[BaseModel],
+        prompt_text: str,
+        tier: str,
+        role: str,
+        transcript: DebateTranscript,
+    ) -> BaseModel:
+        parsed, response = await self._call_model(contract, prompt_text, tier)
+        self._record(transcript, role, response)
+        await self._emit_sink(role, response)
+        return parsed
+
 
 class DebateResearchAgent:
     """Drop-in replacement for ResearchAgent with the same event-handler shape."""
@@ -290,13 +314,35 @@ class DebateResearchAgent:
         event_bus: BaseEventBus,
         engine: DebateEngine,
         transcript_sink: Callable[[str], Awaitable[None]] | None = None,
+        debate_timeout_s: float = 35.0,
     ) -> None:
         self.event_bus = event_bus
         self.engine = engine
         self._transcript_sink = transcript_sink
+        self.debate_timeout_s = debate_timeout_s
 
     async def on_data_acquired(self, payload: MarketDataPayload) -> None:
-        result = await self.engine.debate(payload)
+        try:
+            result = await asyncio.wait_for(
+                self.engine.debate(payload), timeout=self.debate_timeout_s
+            )
+        except TimeoutError:
+            logger.warning(
+                "debate exceeded %.0fs for %s; falling back to deterministic",
+                self.debate_timeout_s,
+                payload.symbol,
+            )
+            from communities.c2_research.debate_engine import _deterministic_hypothesis
+
+            result = DebateResult(
+                hypothesis=_deterministic_hypothesis(payload),
+                transcript=DebateTranscript(
+                    symbol=payload.symbol,
+                    timeframe=payload.timeframe,
+                    fell_back=True,
+                    fallback_reason=f"debate timeout >{self.debate_timeout_s:.0f}s",
+                ),
+            )
         if self._transcript_sink and result.transcript.used_llm:
             await self._transcript_sink(result.transcript.model_dump_json())
         if result.hypothesis is None:

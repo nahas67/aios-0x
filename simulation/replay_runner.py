@@ -434,10 +434,35 @@ class ReplayRunner:
         )
 
     async def _on_plan_execute(self, plan: PortfolioAllocationPlan) -> None:
-        """Governor-approved plans enter the order lifecycle here."""
-        if plan.approved:
-            self._strategies[plan.strategy.strategy_id] = plan.strategy
-        await self.order_manager.on_plan(plan, locked_out=self.risk_governor.locked_out)
+        """Governor-approved plans enter autonomy routing here."""
+        self._strategies[plan.strategy.strategy_id] = plan.strategy
+        if not hasattr(self, "_control_plane"):
+            self.build_control_plane()
+        plane = self._control_plane
+
+        disposition = plane.classify_plan(plan)
+        if disposition == "EXECUTE":
+            await self.order_manager.on_plan(plan, locked_out=self.risk_governor.locked_out)
+        elif disposition == "QUEUE":
+            await plane.queue_for_approval(plan)
+            logger.info(
+                "SUPERVISED: plan %s queued for human approval (%s %s)",
+                plan.plan_id[:8],
+                plan.strategy.action,
+                plan.strategy.symbol,
+            )
+        else:
+            logger.info(
+                "%s mode: order for %s held (plan %s)",
+                plane.autonomy.value,
+                plan.strategy.symbol,
+                plan.plan_id[:8],
+            )
+            self.store.append_event(
+                "PLAN_HELD",
+                plan.plan_id,
+                {"autonomy": plane.autonomy.value, "symbol": plan.strategy.symbol},
+            )
 
     def _positions_view(self) -> dict[str, dict[str, str]]:
         return {
@@ -461,19 +486,29 @@ class ReplayRunner:
 
         if not hasattr(self, "_challenge_registry"):
             self._challenge_registry = ChallengeRegistry(self.store)
-        return ControlPlane(
-            store=self.store,
-            event_bus=self.bus,
-            risk_governor=self.risk_governor,
-            strategy_agent=self.c4,
-            order_manager=self.order_manager,
-            governor=self.governor,
-            paper_engine=self.paper,
-            challenge_registry=self._challenge_registry,
-            price_lookup=self._last_price_of,
-            flatten_callback=self._flatten_position,
-            positions_view=self._positions_view,
-        )
+        if not hasattr(self, "_control_plane"):
+            plane = ControlPlane(
+                store=self.store,
+                event_bus=self.bus,
+                risk_governor=self.risk_governor,
+                strategy_agent=self.c4,
+                order_manager=self.order_manager,
+                governor=self.governor,
+                paper_engine=self.paper,
+                challenge_registry=self._challenge_registry,
+                settings_ref=self.settings,
+                price_lookup=self._last_price_of,
+                flatten_callback=self._flatten_position,
+                positions_view=self._positions_view,
+            )
+            # SUPERVISED approvals must reach the real execution path:
+            plane._execute_bridge(  # noqa: SLF001 - composition-root wiring
+                lambda plan: self.order_manager.on_plan(
+                    plan, locked_out=self.risk_governor.locked_out
+                )
+            )
+            self._control_plane = plane
+        return self._control_plane
 
     def build_challenge_registry(self) -> "ChallengeRegistry":
         if not hasattr(self, "_challenge_registry"):
@@ -493,6 +528,8 @@ class ReplayRunner:
             risk_governor=self.risk_governor,
             paper_engine=self.paper,
             lot_book=self.lot_book,
+            settings=self.settings,
+            control_plane=self.build_control_plane(),
         )
 
     def serve(self, port: int = 8787) -> Any:
@@ -793,7 +830,15 @@ class ReplayRunner:
             subject_kind="tax_computation", subject_ref=computation.computation_id
         )
         self.ca_workflow.prepare(item.item_id, prepared_by="c11-back-office")
-        item.state  # noqa: B018 - prepared; approval requires a human reviewer
+        self.store.append_event(
+            "REVIEW_ITEM",
+            item.item_id,
+            {
+                "subject_ref": computation.computation_id,
+                "state": item.state.value,
+                "prepared_by": item.prepared_by,
+            },
+        )
         logger.info(
             "Finance finalized: tax %s (%s) queued for CA review as %s",
             computation.computation_id,

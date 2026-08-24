@@ -6,6 +6,7 @@ later without touching callers - the contract returns plain dicts matching
 NewsSentiment.
 """
 
+import asyncio
 import logging
 import re
 from abc import ABC, abstractmethod
@@ -121,8 +122,8 @@ class FinnhubNewsProvider(NewsProvider):
     async def _default_get(url: str) -> dict[str, Any]:
         import httpx
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await asyncio.wait_for(client.get(url), timeout=12.0)
             resp.raise_for_status()
             return resp.json()  # type: ignore[no-any-return]
 
