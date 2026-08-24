@@ -184,6 +184,11 @@ class ReplayRunner:
             self.expectation_engine = ExpectationEngine(event_bus=self.bus)
             self.scenario_engine = ScenarioEngine(event_bus=self.bus)
 
+        # ---- Trading memory log (closed learning loop, created before C2)
+        from core.memory_log import TradingMemoryLog
+
+        self.memory_log = TradingMemoryLog(max_entries=200)
+
         # ---- C2: adversarial debate when intelligence is available, else template
         if self.settings.research_mode == "auto" and self.router.llm_available:
             self.registry = PromptRegistry()
@@ -194,6 +199,7 @@ class ReplayRunner:
                 registry=self.registry,
                 settings=self.settings,
                 model_call_sink=self._on_model_call,
+                past_context_provider=self.memory_log.get_past_context,
             )
             self.c2: ResearchAgent | DebateResearchAgent = DebateResearchAgent(
                 event_bus=self.bus,
@@ -651,6 +657,17 @@ class ReplayRunner:
         self.lot_book.open_from_fill(receipt, opened_at=self.fetcher.current_timestamp())
         await self.surveillance.check_fill(receipt, action_hint="BUY")
 
+        # Memory log: store the decision (Phase A pending)
+        strategy = self._strategies.get(receipt.strategy_id)
+        hypothesis = self._hypotheses.get(strategy.hypothesis_id) if strategy else None
+        if strategy and hypothesis:
+            self.memory_log.store_decision(
+                symbol=receipt.symbol,
+                trade_date=self.fetcher.current_timestamp().strftime("%Y-%m-%d"),
+                action=strategy.action,
+                decision=hypothesis.thesis[:500],
+            )
+
         if receipt.strategy_id in self._pending_predictions:
             return
         strategy = self._strategies.get(receipt.strategy_id)
@@ -738,6 +755,17 @@ class ReplayRunner:
             )
         except ValueError as exc:
             logger.error("lot consumption failed for %s: %s", receipt.execution_id, exc)
+
+        # Memory log: resolve pending decision with outcome (Phase B)
+        if pnl_opt is not None:
+            raw_ret = pnl_opt / (self.initial_balance * 0.05) * 100  # approx % on position
+            await self.memory_log.update_with_outcome(
+                symbol=receipt.symbol,
+                trade_date=self.fetcher.current_timestamp().strftime("%Y-%m-%d"),
+                raw_return=round(raw_ret, 2),
+                alpha_return=round(raw_ret, 2),  # alpha vs self until benchmark wired
+                holding_days=1,
+            )
 
         strategy = self._strategies.get(receipt.strategy_id)
         hypothesis = self._hypotheses.get(strategy.hypothesis_id) if strategy else None

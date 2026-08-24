@@ -149,14 +149,18 @@ class DebateEngine:
         settings: Settings,
         model_call_sink: ModelCallSink | None = None,
         memory: Any = None,
+        past_context_provider: Any = None,
     ) -> None:
         """``memory`` is an optional BaseVectorMemory (core boundary, allowed)
-        used to surface similar past postmortem lessons to the moderator."""
+        used to surface similar past postmortem lessons to the moderator.
+        ``past_context_provider`` is an optional zero-arg callable returning
+        a string of prior decision lessons (TradingMemoryLog.get_past_context)."""
         self._router = router
         self._registry = registry
         self._settings = settings
         self._sink = model_call_sink
         self._memory = memory
+        self._past_context_provider = past_context_provider
 
     async def _call_model(
         self,
@@ -257,6 +261,7 @@ class DebateEngine:
                 transcript.total_cost_usd = round(transcript.total_cost_usd + resp.cost_usd, 8)
                 await self._emit_sink(role.lower(), resp)
 
+            # Quant review
             quant_raw = await self._ask(
                 QuantVerdict,
                 self._registry.get("research-quant-review").render(
@@ -268,6 +273,7 @@ class DebateEngine:
             )
             quant: QuantVerdict = quant_raw  # type: ignore[assignment]
 
+            # Vector memory retrieval
             memory_context = ""
             if self._memory is not None:
                 try:
@@ -287,8 +293,22 @@ class DebateEngine:
                                 provider="vector_memory",
                             )
                         )
-                except Exception as exc:  # noqa: BLE001 - memory must never break research
+                except Exception as exc:  # noqa: BLE001
                     logger.warning("memory retrieval skipped: %s", exc)
+
+            # Past context: prior decision lessons injected into the final judge
+            past_context = ""
+            if self._past_context_provider:
+                try:
+                    past_context = self._past_context_provider(payload.symbol)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("past_context retrieval failed: %s", exc)
+
+            quant_weaknesses = "; ".join(quant.weaknesses)
+            if memory_context:
+                quant_weaknesses += f" || MEMORY: {memory_context}"
+            if past_context:
+                quant_weaknesses += f"\n\nLESSONS FROM PRIOR DECISIONS:\n{past_context}"
 
             synthesis_raw = await self._ask(
                 ModeratorSynthesis,
@@ -297,10 +317,7 @@ class DebateEngine:
                     timeframe=v["timeframe"],
                     bull_argument=bull.argument,
                     bear_argument=bear.argument,
-                    quant_weaknesses=(
-                        "; ".join(quant.weaknesses)
-                        + (f" || MEMORY: {memory_context}" if memory_context else "")
-                    ),
+                    quant_weaknesses=quant_weaknesses,
                     rr_target=f"{_MIN_RR:.1f}",
                 ),
                 TaskTier.REASONING,
