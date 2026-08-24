@@ -5,6 +5,7 @@ export) consumes. No framework, no I/O; the HTTP server is a thin shell.
 """
 
 import json
+from collections import defaultdict
 from typing import Any
 
 from communities.c11_finance.audit_graph import decision_provenance
@@ -27,6 +28,7 @@ class SystemSnapshotBuilder:
         control_plane: Any = None,
         order_manager: Any = None,
         regime_engine: Any = None,
+        equity_curve: Any = None,
     ) -> None:
         self.store = store
         self.ledger = ledger
@@ -38,6 +40,7 @@ class SystemSnapshotBuilder:
         self.control_plane = control_plane
         self.order_manager = order_manager
         self.regime_engine = regime_engine
+        self.equity_curve = equity_curve if equity_curve is not None else []
 
     # ------------------------------------------------------------- executive
 
@@ -511,6 +514,166 @@ class SystemSnapshotBuilder:
                 "ORDER BY seq DESC LIMIT 500"
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------- analytics (Phase: charts)
+
+    def equity(self) -> dict[str, Any]:
+        """Equity curve + derived drawdown series for the performance chart."""
+        curve = list(self.equity_curve or [])
+        peak = curve[0] if curve else 0.0
+        dd: list[float] = []
+        for value in curve:
+            peak = max(peak, value)
+            dd.append(round((peak - value) / peak * 100.0, 3) if peak else 0.0)
+        return {
+            "equity": curve,
+            "drawdown_pct": dd,
+            "start": curve[0] if curve else None,
+            "end": curve[-1] if curve else None,
+            "points": len(curve),
+        }
+
+    def _family_join(self) -> dict[str, dict[str, Any]]:
+        """execution_id -> {family, symbol} joined from strategy events."""
+        fam_by_strategy: dict[str, str] = {}
+        sym_by_strategy: dict[str, str] = {}
+        for p in self.store.iter_event_payloads("aios.c4.strategy_generated"):
+            sid = p.get("strategy_id")
+            if sid:
+                fam_by_strategy[sid] = p.get("family", "unknown")
+                sym_by_strategy[sid] = p.get("symbol", "?")
+        exec_map: dict[str, dict[str, Any]] = {}
+        for p in self.store.iter_event_payloads("aios.c5.order_executed"):
+            eid = p.get("execution_id")
+            sid = p.get("strategy_id")
+            if eid and sid:
+                exec_map[eid] = {
+                    "family": fam_by_strategy.get(sid, "unknown"),
+                    "symbol": sym_by_strategy.get(sid, "?"),
+                }
+        return exec_map
+
+    def pnl(self) -> dict[str, Any]:
+        """Realized P&L broken down by strategy family and symbol + fee totals."""
+        exec_map = self._family_join()
+        by_family: dict[str, dict[str, Any]] = defaultdict(
+            lambda: {"trades": 0, "wins": 0, "pnl": 0.0}
+        )
+        by_symbol: dict[str, dict[str, Any]] = defaultdict(
+            lambda: {"trades": 0, "wins": 0, "pnl": 0.0}
+        )
+        total = {"trades": 0, "wins": 0, "pnl": 0.0}
+        for execution_id, pnl in self.store.pnl_series():
+            meta = exec_map.get(execution_id, {"family": "unknown", "symbol": "?"})
+            win = pnl > 0
+            for bucket, key in ((by_family, meta["family"]), (by_symbol, meta["symbol"])):
+                b = bucket[key]
+                b["trades"] += 1
+                b["wins"] += int(win)
+                b["pnl"] = round(b["pnl"] + pnl, 2)
+            total["trades"] += 1
+            total["wins"] += int(win)
+            total["pnl"] = round(total["pnl"] + pnl, 2)
+
+        fees_minor = (self.ledger.balances() if self.ledger else {}).get(
+            "EXPENSE:FEES", 0
+        )
+        return {
+            "totals": {
+                **total,
+                "win_rate_pct": round(total["wins"] / total["trades"] * 100, 2)
+                if total["trades"]
+                else 0.0,
+                "fees": round(fees_minor / 100.0, 2),
+            },
+            "by_family": dict(by_family),
+            "by_symbol": dict(by_symbol),
+        }
+
+    def strategies(self) -> list[dict[str, Any]]:
+        """Per-family performance stats for the Strategy Center."""
+        breakdown = self.pnl()
+        out = []
+        for family, stats in sorted(breakdown["by_family"].items()):
+            out.append(
+                {
+                    "family": family,
+                    "trades": stats["trades"],
+                    "wins": stats["wins"],
+                    "losses": stats["trades"] - stats["wins"],
+                    "win_rate_pct": round(stats["wins"] / stats["trades"] * 100, 2)
+                    if stats["trades"]
+                    else 0.0,
+                    "pnl": stats["pnl"],
+                    "active": True,
+                }
+            )
+        return out
+
+    def alerts(self) -> list[dict[str, Any]]:
+        """Aggregated alert center: critical/warning across all guard rails."""
+        alerts: list[dict[str, Any]] = []
+        for p in self.store.iter_event_payloads("aios.risk.emergency")[-20:]:
+            alerts.append(
+                {
+                    "severity": "CRITICAL" if p.get("lockout_engaged") else "WARNING",
+                    "category": "RISK",
+                    "message": p.get("reason", "risk event"),
+                    "ts": p.get("created_at"),
+                }
+            )
+        for p in self.store.iter_event_payloads("aios.c11.compliance_alert")[-20:]:
+            alerts.append(
+                {
+                    "severity": p.get("severity", "WARNING"),
+                    "category": "COMPLIANCE",
+                    "message": p.get("detail", "compliance alert"),
+                    "symbol": p.get("symbol"),
+                    "ts": p.get("created_at"),
+                }
+            )
+        for p in self.store.iter_event_payloads("aios.c1.data_anomaly")[-20:]:
+            alerts.append(
+                {
+                    "severity": p.get("severity", "WARNING"),
+                    "category": "DATA",
+                    "message": p.get("detail", "data anomaly"),
+                    "symbol": p.get("symbol"),
+                    "ts": p.get("created_at"),
+                }
+            )
+        for p in self.store.iter_event_payloads("aios.c5.reconciliation_failed")[-5:]:
+            alerts.append(
+                {
+                    "severity": "CRITICAL",
+                    "category": "EXECUTION",
+                    "message": "reconciliation failed",
+                    "ts": p.get("created_at"),
+                }
+            )
+        severity_rank = {"CRITICAL": 0, "WARNING": 1, "IMPORTANT": 2, "INFO": 3}
+        alerts.sort(key=lambda a: severity_rank.get(a["severity"], 9))
+        return alerts
+
+    def memory_center(self) -> dict[str, Any]:
+        counts = self.store.counts()
+        lessons = self.store.iter_event_payloads("aios.c6.observation_completed")[-50:]
+        sample = []
+        for obs in reversed(lessons):
+            for lesson in obs.get("lessons_learned", [])[:1]:
+                sample.append(
+                    {
+                        "execution_id": obs.get("execution_id"),
+                        "lesson": lesson,
+                        "exit_reason": obs.get("exit_reason"),
+                    }
+                )
+        return {
+            "counts": counts,
+            "lesson_samples": sample[:10],
+            "vector_collections": ["postmortem_lessons"],
+            "note": "Raw log is immutable; summaries always reference evidence ids.",
+        }
 
     # ---------------------------------------------------------------- health
 

@@ -124,7 +124,10 @@ label.chk input{accent-color:var(--accent)}
   <span id="p-chain" class="pill">CHAIN —</span>
   <span id="p-nav" class="pill">NAV —</span>
   <div class="spacer"></div>
-  <input id="search" placeholder="Search  ( / )" aria-label="Global search">
+  <div style="position:relative">
+  <input id="search" autocomplete="off" style="width:230px;background:var(--panel2);border:1px solid var(--line-soft);color:var(--text);border-radius:8px;padding:6px 11px;font-size:12.5px" placeholder="Search  ( / )" aria-label="Global search">
+  <div id="search-dd" class="hidden" style="position:absolute;top:110%;right:0;width:340px;max-height:420px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;z-index:50;box-shadow:0 12px 30px rgba(0,0,0,.5)"></div>
+</div>
   <label class="chk" title="Expert mode: show advanced + raw"><input type="checkbox" id="expert"> Expert</label>
   <select id="autonomy" class="btn" aria-label="Autonomy mode">
     <option>MANUAL</option><option>ASSISTED</option><option>SUPERVISED</option>
@@ -153,15 +156,16 @@ const money=v=>v==null?"—":(v<0?`−$${Math.abs(Number(v)).toFixed(2)}`:`$${Nu
 const cls=v=>v>0?"pos":v<0?"neg":"";
 const badge=(t,c="b-dim")=>`<span class="badge ${c}">${esc(t)}</span>`;
 async function j(u,o){const r=await fetch(u,o);const b=await r.json();if(!r.ok)throw new Error(b.error||r.status);return b}
+const SYNC={};
 function pill(id,text,c){$(id).textContent=text;$(id).className="pill "+(c||"")}
 function toggle(id){$(id).classList.toggle("hidden")}
 
 /* ================================================================ nav */
 const NAV={
- "COMMAND":[["cmd","Command Center"],["opps","Opportunities"],["decisions","Decisions"],["portfolio","Portfolio"],["positions","Positions"],["execution","Execution"],["risk","Risk"]],
- "INTELLIGENCE":[["agents","Agent Network"],["events","Global Events"],["memory","Memory & Research"],["strategies","Strategies"]],
- "OPERATIONS":[["accounting","Accounting"],["tax","Tax & CA"],["audit","Audit"]],
- "SYSTEM":[["health","System Health"],["settings","Settings"]],
+ "COMMAND":[["cmd","Command Center"],["opps","Opportunities"],["decisions","Decisions"],["pnl","P&L Analysis"],["portfolio","Portfolio"],["positions","Positions"],["execution","Execution"],["risk","Risk"]],
+ "INTELLIGENCE":[["agents","Agent Network"],["events","Global Events"],["memory","Memory & Research"],["strategies","Strategy Center"]],
+ "OPERATIONS":[["accounting","Accounting"],["tax","Tax & CA"],["ca","CA Review"],["audit","Audit"]],
+ "SYSTEM":[["alerts","Alerts"],["health","System Health"],["settings","Settings"]],
 };
 let current="cmd";
 const nav=$("nav");
@@ -181,9 +185,39 @@ for(const t of Object.keys(NAV).flatMap(g=>NAV[g].map(i=>i[0]))){
   const s=document.createElement("section");s.dataset.t=t;MAIN.appendChild(s);
 }
 
+/* ================================================================ charts */
+function drawChart(canvas,series,dd,color){
+ const ctx=canvas.getContext("2d");const w=canvas.width=canvas.offsetWidth*2;const h=canvas.height=canvas.offsetHeight*2;
+ ctx.clearRect(0,0,w,h);
+ if(!series||series.length<2){ctx.fillStyle="#5b6b82";ctx.font="24px Fira Sans";ctx.fillText("Not enough data",w/2-90,h/2);return;}
+ const min=Math.min(...series),max=Math.max(...series);const range=(max-min)||1;
+ const pad=34;const iw=w-pad*2,ih=h-pad*1.7;
+ const xy=i=>[pad+i/(series.length-1)*iw, pad+(1-(series[i]-min)/range)*ih];
+ ctx.strokeStyle="#1e2740";ctx.lineWidth=1;
+ for(let g=0;g<=4;g++){const y=pad+g/4*ih;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke();
+  ctx.fillStyle="#5b6b82";ctx.font="19px Fira Code";ctx.fillText((max-g/4*range).toFixed(0),2,y+6);}
+ ctx.beginPath();ctx.moveTo(...xy(0));
+ for(let i=1;i<series.length;i++)ctx.lineTo(...xy(i));
+ ctx.lineTo(w-pad,h-pad*0.85);ctx.lineTo(pad,h-pad*0.85);ctx.closePath();
+ ctx.fillStyle="rgba(56,189,248,0.06)";ctx.fill();
+ ctx.beginPath();ctx.moveTo(...xy(0));
+ for(let i=1;i<series.length;i++)ctx.lineTo(...xy(i));
+ ctx.strokeStyle=color||"#38bdf8";ctx.lineWidth=3;ctx.stroke();
+ const [lx,ly]=xy(series.length-1);
+ ctx.beginPath();ctx.arc(lx,ly,6,0,Math.PI*2);ctx.fillStyle=color||"#38bdf8";ctx.fill();
+ if(dd&&dd.length===series.length){
+  const dmax=Math.max(...dd,0.01);
+  ctx.beginPath();
+  for(let i=0;i<dd.length;i++){const x=pad+i/(dd.length-1)*iw;const y=pad+(1-dd[i]/dmax)*ih*0.5;ctx.lineTo(x,y);}
+  ctx.strokeStyle="rgba(239,68,68,0.55)";ctx.lineWidth=2;ctx.stroke();
+ }
+}
+
 /* ================================================================ command center */
 SECTIONS={};
 SECTIONS.cmd=`
+ <h2 class="sec">Performance</h2>
+ <div id="chart-holder" class="card" style="padding:8px"><canvas style="width:100%;height:200px"></canvas></div>
  <h2 class="sec">Portfolio</h2>
  <div class="grid cards" id="c-cards"></div>
  <h2 class="sec">Market Regime</h2>
@@ -198,9 +232,10 @@ SECTIONS.cmd=`
  <div id="c-events"></div>`;
 
 async function loadCmd(){
- const [ex,pf,reg,opps,evts,decs]=await Promise.all([
+ const [ex,pf,reg,opps,evts,decs,eq]=await Promise.all([
   j("/api/v1/executive"),j("/api/v1/portfolio"),j("/api/v1/regimes"),
-  j("/api/v1/opportunities"),j("/api/v1/events"),j("/api/v1/executions")]);
+  j("/api/v1/opportunities"),j("/api/v1/events"),j("/api/v1/executions"),j("/api/v1/equity")]);
+ SYNC.equity=eq;
  pill("p-state","STATE "+(ex.emergency_state||"—"),ex.emergency_state==="NORMAL"?"ok":"bad");
  const dd=ex.drawdown_pct??0;
  pill("p-dd",`DD ${dd}%`,dd>=2.5?"bad":dd>=1.5?"warn":"ok");
@@ -215,6 +250,15 @@ async function loadCmd(){
   ["Closed Trades",fmt(pf.closed_trades),""],
   ["Events Audited",fmt(ex.events_logged),""],
  ].map(([k,v,c])=>`<div class="card"><b>${k}</b><span class="v ${c}">${fmt(v)}</span></div>`).join("");
+
+ // clickable card routing (Directive §5)
+ const routes={"Drawdown":"risk","Realized P&L":"pnl","Open Positions":"positions","Portfolio NAV":"portfolio"};
+ $("c-cards").querySelectorAll(".card").forEach((el,i)=>{
+  const label=el.querySelector("b").textContent;
+  if(routes[label]){el.style.cursor="pointer";el.onclick=()=>showTab(routes[label]);}
+ });
+
+ requestAnimationFrame(()=>{const cv=$("chart-holder")?.querySelector("canvas");if(cv)drawChart(cv,eq.equity||[],eq.drawdown_pct||[]);});
 
  $("c-regimes").innerHTML=(reg.regimes||[]).map(r=>{
    const tone=r.trend==="UP"?"b-ok":r.trend==="DOWN"?"b-bad":"b-dim";
@@ -382,8 +426,13 @@ async function loadMemory(){
   <div class="kv"><span class="k">Audit chain</span><span>${h.audit_chain_valid?badge("OK","b-ok"):badge("BROKEN","b-bad")}</span></div>
   ${Object.entries(h.counts||{}).map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span>${v}</span></div>`).join("")}</div>`;}
 
-/* ---------------- strategies (empty state per §33) ---------------- */
-SECTIONS.strategies=`<h2 class="sec">Strategy Library</h2><div class="empty">Strategy library UI is not wired to a backend registry yet. Active families today: <b>momentum</b>, <b>mean_reversion</b> (see Settings → AI). This workspace will light up when the strategy registry ships.</div>`;
+/* ---------------- strategy center (live family performance) ---------------- */
+SECTIONS.strategies=`<h2 class="sec">Strategy Center <small style="color:var(--faint);text-transform:none">live family performance — confidence is not a profit guarantee</small></h2><div id="st-body"></div>`;
+async function loadStrategies(){const d=await j("/api/v1/strategies");
+ $("st-body").innerHTML=(d.strategies||[]).length?`<table><thead><tr><th>Family</th><th>Status</th><th>Trades</th><th>Win rate</th><th>Wins / Losses</th><th>P&L</th></tr></thead><tbody>${
+  d.strategies.map(s=>`<tr><td>${badge(s.family,"b-acc")}</td><td>${s.active?badge("ACTIVE","b-ok"):badge("OFF","b-dim")}</td>
+  <td>${s.trades}</td><td>${s.win_rate_pct}%</td><td>${s.wins} / ${s.losses}</td><td class="${cls(s.pnl)}">${money(s.pnl)}</td></tr>`).join("")}</tbody></table>`
+ :`<div class="empty">No strategy trades recorded yet.</div>`;}
 
 /* ---------------- accounting / tax ---------------- */
 SECTIONS.accounting=`<h2 class="sec">Ledger Accounts <span id="a-badge"></span></h2><table><thead><tr><th>Account</th><th>Balance (minor)</th><th>Side</th></tr></thead><tbody id="ac-rows"></tbody></table>
@@ -405,6 +454,45 @@ async function loadTax(){const d=await j("/api/v1/accounting");
   q.map(x=>`<tr><td style="font-family:var(--mono);font-size:11.5px">${esc(x.subject_ref)}</td><td>${badge(x.state,x.state==="APPROVED_BY_CA"?"b-ok":"b-warn")}</td></tr>`).join("")}</tbody></table>`
   :`<div class="empty">Review queue empty.</div>`)
   +`<p style="color:var(--faint);font-size:12px;margin-top:10px">Filing is code-blocked until a licensed professional sets APPROVED_BY_CA (Directive 42).</p>`;}
+
+/* ---------------- pnl analysis ---------------- */
+SECTIONS.pnl=`<h2 class="sec">P&L Analysis</h2><div id="pnl-tot" class="grid cards"></div>
+ <h2 class="sec">By Strategy Family</h2><div id="pnl-fam"></div>
+ <h2 class="sec">By Symbol</h2><div id="pnl-sym"></div>`;
+async function loadPnl(){const d=await j("/api/v1/pnl");
+ const t=d.totals;
+ $("pnl-tot").innerHTML=[["Realized P&L",money(t.pnl),cls(t.pnl)],["Trades",t.trades,""],
+  ["Win rate",t.win_rate_pct+"%",t.win_rate_pct>=50?"pos":"warnT"],["Fees (ledger)",money(t.fees),""]]
+  .map(([k,v,c])=>`<div class="card"><b>${k}</b><span class="v ${c}">${fmt(v)}</span></div>`).join("");
+ const fam=Object.entries(d.by_family).map(([f,s])=>`<tr><td>${badge(f,"b-acc")}</td><td>${s.trades}</td><td>${s.wins}</td><td>${s.trades-s.wins}</td><td class="${cls(s.pnl)}">${money(s.pnl)}</td></tr>`).join("");
+ $("pnl-fam").innerHTML=`<table><thead><tr><th>Family</th><th>Trades</th><th>Wins</th><th>Losses</th><th>P&L</th></tr></thead><tbody>${fam}</tbody></table>`;
+ const sym=Object.entries(d.by_symbol).map(([s2,s])=>`<tr><td><b>${esc(s2)}</b></td><td>${s.trades}</td><td>${s.wins}</td><td class="${cls(s.pnl)}">${money(s.pnl)}</td></tr>`).join("");
+ $("pnl-sym").innerHTML=`<table><thead><tr><th>Symbol</th><th>Trades</th><th>Wins</th><th>P&L</th></tr></thead><tbody>${sym}</tbody></table>`;}
+
+/* ---------------- CA review center ---------------- */
+SECTIONS.ca=`<h2 class="sec">CA / Accountant Review Center</h2>
+ <p style="color:var(--faint);font-size:12.5px;margin-bottom:12px">AI prepares; a licensed professional approves. Filing is code-blocked without APPROVED_BY_CA (Directive 42).</p>
+ <div id="ca-body"></div>`;
+async function loadCA(){const d=await j("/api/v1/accounting");
+ const q=d.ca_review_queue||[];const t=d.tax||{};
+ $("ca-body").innerHTML=`<div class="card" style="margin-bottom:10px"><b>Latest Tax Computation</b>
+  <div class="kv"><span class="k">Rule citation</span><span style="text-align:right">${esc(t.rule_citation||"—")}</span></div>
+  <div class="kv"><span class="k">Tax due (advisory)</span><span>${Number(t.tax_due_minor??0).toLocaleString()} minor</span></div>
+  <div class="kv"><span class="k">Sign-off required</span><span>${t.requires_signoff!==false?badge("YES — PROFESSIONAL","b-warn"):badge("NO","b-dim")}</span></div></div>
+  ${q.length?`<table><thead><tr><th>Subject</th><th>State</th></tr></thead><tbody>${q.map(x=>`<tr><td style="font-family:var(--mono);font-size:11.5px">${esc(x.subject_ref)}</td><td>${badge(x.state,x.state==="APPROVED_BY_CA"?"b-ok":"b-warn")}</td></tr>`).join("")}</tbody></table>`
+  :`<div class="empty">Review queue empty.</div>`}`;}
+
+/* ---------------- alert center ---------------- */
+SECTIONS.alerts=`<h2 class="sec">Alert Center</h2><div id="al-body"></div>`;
+async function loadAlerts(){const d=await j("/api/v1/alerts");
+ const sevB=s=>s==="CRITICAL"?badge("CRITICAL","b-bad"):s==="WARNING"?badge("WARNING","b-warn"):badge(s||"INFO","b-dim");
+ const groups={};
+ (d.alerts||[]).forEach(a=>{(groups[a.category]=groups[a.category]||[]).push(a)});
+ $("al-body").innerHTML=Object.keys(groups).length?Object.entries(groups).map(([cat,items])=>`
+  <h2 class="sec">${cat} (${items.length})</h2>${items.map(a=>`
+   <div class="kv"><span>${sevB(a.severity)} ${esc(a.message).slice(0,120)} ${a.symbol?badge(a.symbol,"b-dim"):""}</span>
+   <span style="color:var(--faint);font-size:11px">${esc(String(a.ts||"")).slice(11,19)}</span></div>`).join("")}`).join("")
+ :`<div class="empty">✓ No alerts — all guard rails quiet.</div>`;}
 
 /* ---------------- audit ---------------- */
 SECTIONS.audit=`<h2 class="sec">Audit Trail</h2>
@@ -428,45 +516,155 @@ async function loadHealth(){const h=await j("/api/v1/health");
 
 /* ---------------- settings (deep, grouped) ---------------- */
 SECTIONS.settings=`<h2 class="sec">Settings Center</h2>
- <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="expert2"> Expert mode (show advanced)</label>
+ <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+  <input id="set-q" class="btn" style="width:260px" placeholder="Filter settings…" oninput="filterSettings(this.value)" aria-label="Search settings">
+  <span style="color:var(--faint);font-size:11.5px">Presets:</span>
+  <button class="btn sm" onclick="applyPreset('CONSERVATIVE')">Conservative</button>
+  <button class="btn sm" onclick="applyPreset('BALANCED')">Balanced</button>
+  <button class="btn sm" onclick="applyPreset('AGGRESSIVE')">Aggressive</button>
+  <div class="spacer"></div>
+  <label class="chk"><input type="checkbox" id="expert2" onchange="document.body.classList.toggle('expert',this.checked);loadSettings()"> Expert</label>
+ </div>
  <div id="s-root"></div>`;
+const PRESETS={
+ CONSERVATIVE:{max_class_exposure_pct:20,halt_dd_pct:2.0,research_mode:"deterministic",
+  warn:"Tightest capital protection; LLM research disabled (deterministic mode)."},
+ BALANCED:{max_class_exposure_pct:35,halt_dd_pct:3.0,research_mode:"auto",
+  warn:"Matches ratified CONSTITUTION v1.0.0 defaults."},
+ AGGRESSIVE:{max_class_exposure_pct:50,halt_dd_pct:4.0,research_mode:"auto",
+  warn:"Widens permitted loss bounds beyond ratified constitution defaults — requires explicit risk acceptance."},
+};
 async function loadSettings(){const d=await j("/api/v1/settings");
+ SYNC.settings=d;
  const groups=[
   ["SYSTEM","system",[["Model provider","model_provider"],["Research mode","research_mode","research"],["LLM configured","llm_configured_bool"],["Shadow mode","shadow_bool"]]],
   ["AI & AGENTS","ai",[["Cheap model","research_model_cheap"],["Reasoning model","research_model_reasoning"],["Verifier","verification_model"],["Temperature","llm_temperature"]]],
   ["DATA PROVIDERS","data",[["Finnhub","finnhub_bool"],["GNews","gnews_bool"],["NewsData","newsdata_bool"],["MarketStack","marketstack_bool"],["FRED","fred_bool"]]],
-  ["RISK LIMITS","risk",[["Max class exposure %","max_class_exposure_pct","limit"],["Halt drawdown %","halt_dd_pct","limit"],["Caution drawdown %","caution_dd_pct","limit"],["Warning drawdown %","warning_dd_pct","limit"]]],
+  ["RISK LIMITS","risk",[["Max class exposure %","max_class_exposure_pct","limit"],["Halt drawdown %","halt_dd_pct","limit"],["Caution drawdown %","caution_dd_pct"],["Warning drawdown %","warning_dd_pct"]]],
   ["EXECUTION RAILS","execution_rails",[["Live execution (env)","live_execution_allowed_env_bool"],["Micro-live cap $","micro_live_cap_usd"],["Constitution pinned","constitution_pinned_bool"]]],
  ];
  const bools=new Set(["llm_configured_bool","shadow_bool","finnhub_bool","gnews_bool","newsdata_bool","marketstack_bool","fred_bool","live_execution_allowed_env_bool","constitution_pinned_bool"]);
  $("s-root").innerHTML=groups.map(([title,key,rows])=>`
-  <div class="acc"><div class="head" onclick="this.nextElementSibling.classList.toggle('hidden')">${title}<small>effective values</small></div><div class="body">
+  <div class="acc" data-group="${key}"><div class="head" onclick="this.nextElementSibling.classList.toggle('hidden')">${title}<small>effective values</small></div><div class="body">
   ${rows.map(([label,k,edit])=>{
     let v=d[key]?.[k];
     let control="";
     if(edit==="research")control=`<select class="btn" onchange="setResearch(this.value)"><option value="auto"${v==="auto"?" selected":""}>auto</option><option value="deterministic"${v==="deterministic"?" selected":""}>deterministic</option></select>`;
-    else if(edit==="limit")control=`<input class="btn" style="width:110px" value="${fmt(v)}" data-k="${k}" onchange="setLimit(this.dataset.k,this.value)">`;
+    else if(edit==="limit")control=`<input class="btn" style="width:110px" value="${fmt(v)}" data-k="${k}" onchange="confirmLimit(this.dataset.k,this.value)">`;
     if(bools.has(k))v=typeof v==="boolean"&&v||v==="1"?badge("CONFIGURED","b-ok"):badge("OFF","b-dim");
-    return `<div class="kv"><span class="k">${label}</span><span>${control||fmt(v)}</span></div>`;
+    return `<div class="kv setrow" data-label="${label.toLowerCase()}"><span class="k">${label}</span><span>${control||fmt(v)}</span></div>`;
   }).join("")}
   </div></div>`).join("")
   +`<div class="acc"><div class="head" onclick="this.nextElementSibling.classList.toggle('hidden')">RAW CONFIGURATION<small>/api/v1/settings</small></div><div class="body hidden"><pre class="raw">${esc(JSON.stringify(d,null,2))}</pre></div></div>`;
 }
+function filterSettings(q){
+ q=(q||"").toLowerCase();
+ document.querySelectorAll("#s-root .setrow").forEach(row=>{
+  row.style.display=row.dataset.label.includes(q)?"":"none";});
+}
 async function setResearch(m){await j("/api/v1/control/set_research_mode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{mode:m}})});loadSettings();}
-async function setLimit(k,v){const map={max_class_exposure_pct:"set_max_position_pct",halt_dd_pct:"set_halt_drawdown_pct",caution_dd_pct:null,warning_dd_pct:null};
- const action=map[k];if(!action)return;
- await j("/api/v1/control/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{pct:Number(v)}})});loadSettings();}
+async function confirmLimit(k,v){
+ const current=(SYNC.settings?.risk?.[k])??null;
+ const nv=Number(v);
+ if(isNaN(nv)||nv<=0){alert("Value must be a positive number");loadSettings();return;}
+ if(current!=null&&Math.abs(nv-current)<1e-9)return; // no-op
+ const labels={max_class_exposure_pct:"Max class exposure",halt_dd_pct:"Halt drawdown"};
+ const riskNote=k==="halt_dd_pct"&&nv>3
+  ?`<p style="color:#f87171;font-size:12.5px;margin:8px 0">⚠ This increases permitted portfolio loss beyond the ratified constitution default (3%).</p>`:"";
+ $("modal").innerHTML=`<h3 style="margin-bottom:12px">Confirm configuration change</h3>
+  <div class="kv"><span class="k">Setting</span><span>${labels[k]||k}</span></div>
+  <div class="kv"><span class="k">Before</span><span>${fmt(current)}${k==="halt_dd_pct"||k==="max_class_exposure_pct"?"%":""}</span></div>
+  <div class="kv"><span class="k">After</span><span class="warnT">${nv}${k==="halt_dd_pct"||k==="max_class_exposure_pct"?"%":""}</span></div>
+  ${riskNote}
+  <div class="kv"><span class="k">Audit</span><span style="color:var(--faint)">CONTROL_ACTION recorded (operator: console, RISK_ADMIN)</span></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+   <button class="btn" onclick="closeModal();loadSettings()">Cancel</button>
+   <button class="btn primary" id="confirm-limit">Confirm change</button></div>`;
+ $("modal-back").style.display="flex";
+ $("confirm-limit").onclick=async()=>{
+  const map={max_class_exposure_pct:"set_max_position_pct",halt_dd_pct:"set_halt_drawdown_pct"};
+  const action=map[k];if(!action){closeModal();return;}
+  await j("/api/v1/control/"+action,{method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{pct:nv}})});
+  closeModal();loadSettings();
+ };
+}
+async function setLimit(k,v){confirmLimit(k,v);}
+function applyPreset(name){
+ const preset=PRESETS[name];if(!preset)return;
+ const risk=SYNC.settings?.risk||{};
+ const curMode=SYNC.settings?.system?.research_mode;
+ const changes=[];
+ const push=(label,before,after,action,params)=>{
+  if(before==null||String(before)!==String(after))changes.push({label,before,after,action,params});};
+ push("Max class exposure",risk.max_class_exposure_pct,preset.max_class_exposure_pct,
+  "set_max_position_pct",{pct:preset.max_class_exposure_pct});
+ push("Halt drawdown",risk.halt_dd_pct,preset.halt_dd_pct,
+  "set_halt_drawdown_pct",{pct:preset.halt_dd_pct});
+ push("Research mode",curMode,preset.research_mode,
+  "set_research_mode",{mode:preset.research_mode});
+ if(!changes.length){alert(`Preset ${name} matches current configuration — nothing to change.`);return;}
+ $("modal").innerHTML=`<h3 style="margin-bottom:4px">Apply preset: ${name}</h3>
+  <p style="color:var(--dim);font-size:12.5px;margin-bottom:10px">${esc(preset.warn)}</p>
+  <table style="margin-bottom:12px"><thead><tr><th>Setting</th><th>Before</th><th>After</th></tr></thead><tbody>
+  ${changes.map(c=>`<tr><td>${c.label}</td><td style="color:var(--dim)">${fmt(c.before)}</td><td class="warnT">${fmt(c.after)}</td></tr>`).join("")}
+  </tbody></table>
+  <p style="color:var(--faint);font-size:11.5px;margin-bottom:12px">All changes are recorded as audited CONTROL_ACTION events (operator: console, RISK_ADMIN).</p>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+   <button class="btn" onclick="closeModal()">Cancel</button>
+   <button class="btn primary" id="confirm-preset">Apply ${changes.length} change${changes.length>1?"s":""}</button></div>`;
+ $("modal-back").style.display="flex";
+ $("confirm-preset").onclick=async()=>{
+  closeModal();
+  for(const c of changes){
+   await j("/api/v1/control/"+c.action,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:c.params})});
+  }
+  loadSettings();
+ };
+}
 
 /* ---------------- approvals (embedded in decisions tab header when present) */
 SECTIONS.approvals=SECTIONS.decisions; // alias route; approvals surface via banner
 
 /* ---------------- search ---------------- */
+/* ---------------- grouped global search (§42) ---------------- */
+const SEARCH_GROUPS={
+ "Workspaces":()=>Object.keys(NAV).flatMap(g=>NAV[g].map(i=>i[1]))
+   .filter(n=>n.toLowerCase().includes($("search").value.toLowerCase()))
+   .map(n=>({label:n,go:()=>{const entry=Object.entries(NAV).find(([,items])=>items.some(i=>i[1]===n));if(entry)showTab(entry[1].find(i=>i[1]===n)[0]);}})),
+};
+$("search").addEventListener("input",async e=>{
+ const q=e.target.value.trim().toLowerCase();
+ const dd=$("search-dd");
+ if(!q){dd.classList.add("hidden");return;}
+ // workspace matches (client-side)
+ const ws=[];
+ Object.values(NAV).flat().forEach(([t,label])=>{if(label.toLowerCase().includes(q))ws.push({label,tab:t});});
+ // settings matches (client-side against last snapshot)
+ const sets=[];
+ Object.entries(SYNC.settings||{}).forEach(([group,rows])=>{
+  if(typeof rows!=="object"||!rows)return;
+  Object.entries(rows).forEach(([k,v])=>{
+   if(k.toLowerCase().includes(q))sets.push({label:`${group}.${k}`,go:()=>showTab("settings")});
+  });});
+ // audit matches (server-side, debounced by Enter or 300ms)
+ let audit=[];
+ try{const d=await j(`/api/v1/audit?limit=6&q=${encodeURIComponent(q)}`);
+  audit=(d.audit||[]).map(a=>({label:`${a.kind} ${a.ref_id||""}`.trim().slice(0,60),go:()=>showTab("audit")}));}catch(err){}
+ const render=(title,items,color)=>items.length?`<div style="padding:4px 0"><div style="font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.1em;padding:4px 12px">${title}</div>${
+  items.slice(0,5).map(x=>`<div style="padding:6px 12px;cursor:pointer" onmouseover="this.style.background='var(--panel2)'" onmouseout="this.style.background=''" onclick="$('search-dd').classList.add('hidden');(${x.go.toString()})()">${esc(x.label)}</div>`).join("")}</div>`:"";
+ dd.innerHTML=render("Workspaces",ws)+render("Settings",sets)+render("Audit Records",audit)
+  +`<div style="padding:8px 12px;border-top:1px solid var(--line-soft)"><button class="btn sm" onclick="$('search-dd').classList.add('hidden');showTab('audit');$('aud-q').value='${esc(q)}';loadAudit()">Full audit search →</button></div>`;
+ dd.classList.remove("hidden");
+});
 $("search").addEventListener("keydown",e=>{
- if(e.key==="Enter"){showTab("audit");$("aud-q").value=e.target.value;loadAudit();}
+ if(e.key==="Enter"){const dd=$("search-dd");dd.classList.add("hidden");showTab("audit");$("aud-q").value=e.target.value;loadAudit();}
+ if(e.key==="Escape"){$("search-dd").classList.add("hidden");e.target.blur();}
 });
 document.addEventListener("keydown",e=>{
  if(e.key==="/"&&document.activeElement!==$("search")){e.preventDefault();$("search").focus();}
- if(e.key==="Escape"){closeDrawer();$("modal-back").style.display="none";}
+ if(e.key==="Escape"){closeDrawer();$("modal-back").style.display="none";$("search-dd").classList.add("hidden");}
 });
 
 /* ---------------- autonomy + kill ---------------- */
@@ -491,7 +689,8 @@ $("killbtn").onclick=()=>{
 function closeModal(){$("modal-back").style.display="none"}
 
 /* ---------------- loader ---------------- */
-const LOADERS={cmd:loadCmd,opps:loadOpps,decisions:loadDecisions,portfolio:loadPortfolio,
+const LOADERS={cmd:loadCmd,opps:loadOpps,decisions:loadDecisions,pnl:loadPnl,strategies:loadStrategies,
+ ca:loadCA,alerts:loadAlerts,portfolio:loadPortfolio,
  positions:loadPositions,execution:loadExec,risk:loadRisk,agents:loadAgents,events:loadEvents,
  memory:loadMemory,accounting:loadAccounting,tax:loadTax,audit:loadAudit,health:loadHealth,settings:loadSettings};
 async function refresh(force){

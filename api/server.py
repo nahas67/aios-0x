@@ -108,6 +108,16 @@ def make_handler(
                     q = (qs.get("q") or [""])[0]
                     lim = int((qs.get("limit") or ["50"])[0])
                     self._json({"audit": builder.audit(query=q, limit=lim)})
+                elif path == "/api/v1/equity":
+                    self._json(builder.equity())
+                elif path == "/api/v1/pnl":
+                    self._json(builder.pnl())
+                elif path == "/api/v1/strategies":
+                    self._json({"strategies": builder.strategies()})
+                elif path == "/api/v1/alerts":
+                    self._json({"alerts": builder.alerts()})
+                elif path == "/api/v1/memory":
+                    self._json(builder.memory_center())
                 elif path == "/metrics":
                     self._text(prometheus_metrics(builder.executive()), ctype="text/plain")
                 else:
