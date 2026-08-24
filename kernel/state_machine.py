@@ -5,6 +5,9 @@ arbitrarily. Every transition requires: current_state, requested_state, actor,
 reason, evidence, and passes through the authority gateway.
 """
 
+import hashlib
+import json
+
 from pydantic import BaseModel
 
 from kernel.receipts import Decision, DecisionReceipt, ReceiptStore
@@ -184,7 +187,3 @@ class StateMachineEngine:
         if definition is None:
             raise ValueError(f"no state machine defined for {object_type!r}")
         return definition
-
-
-import hashlib
-import json

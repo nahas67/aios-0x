@@ -59,6 +59,16 @@ class Settings(BaseSettings):
     llm_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     llm_max_tokens: int = Field(default=1200, gt=0)
 
+    # ---------------------------------------------------------------- data tier
+    database_url: str | None = Field(
+        default=None,
+        repr=False,
+        description=(
+            "PostgreSQL DSN (postgres://...) promotes the memory store to the "
+            "server-grade Data & State Plane tier; None keeps local SQLite."
+        ),
+    )
+
     # Cost table USD per 1M tokens (input, output); extend per provider pricing
     cost_usd_per_mtok_input: float = Field(default=0.15)
     cost_usd_per_mtok_output: float = Field(default=0.60)

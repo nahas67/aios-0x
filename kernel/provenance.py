@@ -79,6 +79,9 @@ class ProvenanceGraph:
             raise KeyError(f"node not found: {node_id!r}")
         return node
 
+    def has_node(self, node_id: str) -> bool:
+        return node_id in self._nodes
+
     def lineage_forward(self, node_id: str, max_depth: int = 20) -> list[ProvenanceNode]:
         """All nodes downstream from this node (what it led to)."""
         visited: set[str] = set()

@@ -15,6 +15,12 @@ from kernel.identity import ActorType, IdentityRegistry, Role
 from kernel.promotion import PromotionController, RollbackController
 from kernel.provenance import NodeType, ProvenanceGraph
 from kernel.receipts import ReceiptStore
+from kernel.registries import (
+    DatasetRegistry,
+    ExperimentRegistry,
+    FeatureRegistry,
+    ModelRegistry,
+)
 from kernel.state_machine import StateMachineDefinition, StateMachineEngine
 
 # ------------------------------------------------------- lifecycle definitions
@@ -84,6 +90,10 @@ class AIOSKernel:
     provenance: ProvenanceGraph
     promotions: PromotionController
     rollbacks: RollbackController
+    datasets: DatasetRegistry | None = None
+    features: FeatureRegistry | None = None
+    models: ModelRegistry | None = None
+    experiments: ExperimentRegistry | None = None
     _plugin_state: dict[str, str] = field(default_factory=dict)
 
     def register_plugin(self, plugin_id: str, plugin_type: str, version: str = "v1") -> None:
@@ -176,6 +186,10 @@ def create_kernel() -> AIOSKernel:
     provenance = ProvenanceGraph()
     promotions = PromotionController(receipts)
     rollbacks = RollbackController()
+    datasets = DatasetRegistry(sm, provenance)
+    features = FeatureRegistry(provenance)
+    models = ModelRegistry(provenance, promotions)
+    experiments = ExperimentRegistry(sm, provenance)
 
     # Register standard lifecycles
     for lifecycle in (STRATEGY_LIFECYCLE, HYPOTHESIS_LIFECYCLE, EXPERIMENT_LIFECYCLE):
@@ -185,7 +199,7 @@ def create_kernel() -> AIOSKernel:
     identity.register("system", ActorType.SERVICE, "AIOS System", roles={Role.ADMIN})
 
     # Declare capabilities that role mappings reference
-    for cap_name in (
+    capability_names = (
         "AIOS.transition.strategy",
         "AIOS.transition.hypothesis",
         "AIOS.transition.experiment",
@@ -194,26 +208,26 @@ def create_kernel() -> AIOSKernel:
         "AIOS.execute",
         "AIOS.evaluate",
         "AIOS.promote.strategy",
-    ):
+        "AIOS.register.dataset",
+        "AIOS.register.feature",
+        "AIOS.experiment",
+    )
+    for cap_name in capability_names:
         capabilities.declare(cap_name, ABC, f"Capability: {cap_name}")
 
-    # Grant system role access to all capabilities (composition root only)
-    for capability_name in (
-        "AIOS.transition.strategy",
-        "AIOS.transition.hypothesis",
-        "AIOS.transition.experiment",
-        "AIOS.research",
-        "AIOS.backtest",
-        "AIOS.execute",
-        "AIOS.promote.strategy",
-        "AIOS.evaluate",
-    ):
+    # Grant system roles access to all capabilities (composition root only)
+    for capability_name in capability_names:
         authority.grant_role_capability(Role.ADMIN, capability_name)
         authority.grant_role_capability(Role.RISK_ADMIN, capability_name)
 
     authority.grant_role_capability(Role.AGENT_RESEARCH, "AIOS.research")
     authority.grant_role_capability(Role.AGENT_STRATEGY, "AIOS.backtest")
+    authority.grant_role_capability(Role.AGENT_STRATEGY, "AIOS.transition.strategy")
+    authority.grant_role_capability(Role.AGENT_CRITIC, "AIOS.evaluate")
+    authority.grant_role_capability(Role.AGENT_CRITIC, "AIOS.transition.hypothesis")
     authority.grant_role_capability(Role.SERVICE_EXECUTION, "AIOS.execute")
+    authority.grant_role_capability(Role.SERVICE_DATA, "AIOS.register.dataset")
+    authority.grant_role_capability(Role.SERVICE_DATA, "AIOS.register.feature")
 
     return AIOSKernel(
         identity=identity,
@@ -224,4 +238,8 @@ def create_kernel() -> AIOSKernel:
         provenance=provenance,
         promotions=promotions,
         rollbacks=rollbacks,
+        datasets=datasets,
+        features=features,
+        models=models,
+        experiments=experiments,
     )

@@ -39,10 +39,11 @@ from core.data_quality import AnomalyDetector, SymbolHealthRegistry
 from core.event_bus import BaseEventBus, EventTopic, InMemoryEventBus
 from core.model_gateway import BaseModelGateway, ModelResponse, build_gateway
 from core.model_router import ModelRouter
-from core.persistence import BaseMemoryStore, SqliteMemoryStore
+from core.persistence import BaseMemoryStore
 from core.prompts import PromptRegistry
 from core.risk_firewall import RiskConfig, RiskFirewall
 from core.risk_governor import RiskGovernor, load_lockout_from_store
+from kernel.receipts import Decision
 from schemas.contracts import (
     CandidateHypothesis,
     Disposal,
@@ -55,6 +56,7 @@ from schemas.contracts import (
     TradeExecutionReceipt,
     VerificationReport,
 )
+from simulation.kernel_bridge import KernelBridge
 from simulation.paper_engine import PaperEngine
 
 if TYPE_CHECKING:
@@ -88,6 +90,7 @@ class RunSummary(BaseModel):
     research_mode_used: str = "deterministic"
     benchmark_return_pct: float = 0.0
     alpha_pct: float = 0.0
+    experiment_reproducibility_hash: str = ""
 
 
 def _payload_ref_id(payload: Any) -> str | None:
@@ -140,13 +143,28 @@ class ReplayRunner:
 
         self.constitution_hash = enforce_at_boot()
 
-        self.bus = bus or InMemoryEventBus()
-        self.store = store or SqliteMemoryStore(store_path)
-
         # Library default = OFFLINE deterministic mode. Environment (.env) is
         # consulted only by explicit entry points (scripts/serve_command_center)
         # that pass settings=get_settings() — keeps tests deterministic & free.
         self.settings = settings or Settings(model_provider="none")
+
+        self.bus = bus or InMemoryEventBus()
+        if store is not None:
+            self.store = store
+        else:
+            # Phase B: DATABASE_URL promotes persistence to PostgreSQL; the
+            # default stays hermetic local SQLite.
+            from core.store_factory import build_memory_store
+
+            self.store = build_memory_store(
+                store_path, database_url=self.settings.database_url
+            )
+
+        # ---- AIOS kernel (Phase A completion): every mutation below flows
+        # through the authority gateway; receipts mirror into the audit log.
+        self.kernel_bridge = KernelBridge(audit_log=self._append_kernel_event)
+        self._experiment_repro_hash = ""
+
         self.gateway = gateway if gateway is not None else build_gateway(self.settings)
         self.router = ModelRouter(self.gateway, self.settings)
 
@@ -390,6 +408,12 @@ class ReplayRunner:
             (EventTopic.TRADE_EXECUTED, self._on_receipt),
             (EventTopic.OBSERVATION_COMPLETED, self.c7.on_observation_completed),
             (EventTopic.MEMORY_STORED, self.c8.on_memory_stored),
+            # ---- Kernel bridge: lifecycle tracking through the authority gateway
+            (EventTopic.HYPOTHESIS_GENERATED, self.kernel_bridge.on_hypothesis),
+            (EventTopic.VERIFICATION_COMPLETED, self.kernel_bridge.on_verification),
+            (EventTopic.STRATEGY_GENERATED, self.kernel_bridge.on_strategy),
+            (EventTopic.PORTFOLIO_ALLOCATED, self._bridge_plan_approved),
+            (EventTopic.PORTFOLIO_REJECTED, self._bridge_plan_rejected),
         ]
 
     async def _log_event(self, payload: Any) -> None:
@@ -397,6 +421,10 @@ class ReplayRunner:
         self.store.append_event(
             type(payload).__name__, _payload_ref_id(payload), payload.model_dump(mode="json")
         )
+
+    def _append_kernel_event(self, kind: str, ref_id: str | None, payload: dict[str, Any]) -> None:
+        """Audit-log mirror for kernel decision receipts (tamper-evident trail)."""
+        self.store.append_event(kind, ref_id, payload)
 
     def _logger_for(self, topic: EventTopic) -> Callable[[Any], Awaitable[None]]:
         """Bind the canonical topic value as the audit-log ``kind``."""
@@ -451,6 +479,16 @@ class ReplayRunner:
             / max(strategy.entry_price, 1e-9)
         )
 
+    async def _bridge_plan_approved(self, plan: PortfolioAllocationPlan) -> None:
+        await self.kernel_bridge.on_plan_approved(plan)
+
+    async def _bridge_plan_rejected(self, plan: PortfolioAllocationPlan) -> None:
+        await self.kernel_bridge.on_plan_denied(
+            plan.strategy.strategy_id,
+            f"portfolio governor rejected plan {plan.plan_id[:8]} "
+            f"({plan.strategy.action} {plan.strategy.symbol})",
+        )
+
     async def _on_plan_execute(self, plan: PortfolioAllocationPlan) -> None:
         """Governor-approved plans enter autonomy routing here."""
         self._strategies[plan.strategy.strategy_id] = plan.strategy
@@ -460,7 +498,23 @@ class ReplayRunner:
 
         disposition = plane.classify_plan(plan)
         if disposition == "EXECUTE":
-            await self.order_manager.on_plan(plan, locked_out=self.risk_governor.locked_out)
+            # Kernel authority gateway: the ONLY path from plan to order dispatch.
+            auth = await self.kernel_bridge.authorize_execution(plan)
+            if auth.decision is Decision.ALLOW:
+                await self.order_manager.on_plan(
+                    plan, locked_out=self.risk_governor.locked_out
+                )
+            else:
+                logger.warning(
+                    "AUTHORITY DENIED: order for %s held (%s)",
+                    plan.strategy.symbol,
+                    auth.detail,
+                )
+                self.store.append_event(
+                    "ORDER_AUTHORITY_DENIED",
+                    plan.plan_id,
+                    {"reason": auth.detail, "symbol": plan.strategy.symbol},
+                )
         elif disposition == "QUEUE":
             await plane.queue_for_approval(plan)
             logger.info(
@@ -645,6 +699,7 @@ class ReplayRunner:
         self._receipts[receipt.execution_id] = receipt
         self._fill_mirror[receipt.execution_id] = receipt.symbol
         self._filled_this_bar.add(receipt.execution_id)
+        await self.kernel_bridge.on_receipt(receipt)
 
         # C11 hooks: double-entry books + tax lot opening + surveillance
         await self.ledger.post_fill_open(
@@ -770,6 +825,7 @@ class ReplayRunner:
         strategy = self._strategies.get(receipt.strategy_id)
         hypothesis = self._hypotheses.get(strategy.hypothesis_id) if strategy else None
         prediction = self._pending_predictions.pop(receipt.strategy_id, None)
+        postmortem = None
 
         await self.c6.observe_trade_outcome(
             receipt,
@@ -831,6 +887,15 @@ class ReplayRunner:
                 prediction_id=prediction.prediction_id if prediction else None,
             )
             self.store.save_postmortem(postmortem)
+
+        # Kernel learning loop: EVALUATED + hypothesis verdict + postmortem lineage
+        await self.kernel_bridge.on_settled(
+            receipt,
+            exit_reason=reason,
+            realized_pnl=pnl_opt,
+            direction_correct=direction_correct,
+            postmortem=postmortem,
+        )
 
         if prediction is not None:
             scored = prediction.score(
@@ -898,11 +963,24 @@ class ReplayRunner:
         for topic in EventTopic:
             await self.bus.subscribe(topic, self._logger_for(topic))
 
+        # Kernel data plane: versioned dataset + feature, then the pinned
+        # ExperimentRun (dataset version + seed + config + reproducibility hash).
+        await self.kernel_bridge.register_replay_dataset(self.csv_path_by_symbol)
+        self._experiment_repro_hash = await self.kernel_bridge.start_experiment(
+            symbols=self.symbols,
+            configuration={
+                "initial_balance": self.initial_balance,
+                "slippage_pct": self.slippage_pct,
+                "research_mode": self.settings.research_mode,
+                "shadow_mode": self.paper.shadow_mode,
+            },
+        )
+
         total_bars = min(self.fetcher.bar_count(s) for s in self.symbols)
         benchmark_initial: dict[str, float] = {}
         self.benchmark_curve: list[float] = []
         try:
-            for bar_idx in range(total_bars):
+            for _bar_idx in range(total_bars):
                 self.cursor.advance()
                 self._filled_this_bar.clear()
                 exhausted = False
@@ -976,7 +1054,19 @@ class ReplayRunner:
         finally:
             await self.bus.stop()
 
-        return self._summarize(total_bars)
+        summary = self._summarize(total_bars)
+        await self.kernel_bridge.complete_experiment(
+            {
+                "trades_closed": summary.trades_closed,
+                "cumulative_pnl": summary.cumulative_pnl,
+                "max_drawdown_pct": summary.max_drawdown_pct,
+                "directional_accuracy_pct": summary.directional_accuracy_pct,
+                "alpha_pct": summary.alpha_pct,
+                "determinism_hash": summary.determinism_hash,
+            }
+        )
+        summary.experiment_reproducibility_hash = self._experiment_repro_hash
+        return summary
 
     def _summarize(self, total_bars: int) -> RunSummary:
         perf = self.c7.get_performance_summary()

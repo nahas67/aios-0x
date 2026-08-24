@@ -1,4 +1,4 @@
-# AIOS-0X Complete Knowledge Base
+﻿# AIOS-0X Complete Knowledge Base
 Last updated: 2026-08-24 | This file contains 100% of project context for session continuity.
 
 ## 1. PROJECT IDENTITY
@@ -10,11 +10,11 @@ Last updated: 2026-08-24 | This file contains 100% of project context for sessio
 - **What it is NOT**: a trading bot, a dashboard, a chatbot
 - **Current status**: Prototype complete (Phases 0-2 of original architecture), kernel built (Phase A), data architecture built (Phase B)
 - **Original architecture**: 6 planes (Experience, Control, Intelligence, Research, Execution, Deterministic Authority) + Data/State + Infrastructure
-- **Key principle**: AI generates → AIOS validates → Policy constrains → Risk authorizes → State controls → Execution acts → Provenance remembers → Post-mortem learns
+- **Key principle**: AI generates â†’ AIOS validates â†’ Policy constrains â†’ Risk authorizes â†’ State controls â†’ Execution acts â†’ Provenance remembers â†’ Post-mortem learns
 
 ## 2. CURRENT STATE (exact)
 
-- **Tests**: 163 passed, 1 skipped
+- **Tests**: 181 passed, 5 skipped (4 = live-PG integration gated on AIOS_TEST_PG_DSN)
 - **Source files**: 85 Python files across core/, kernel/, schemas/, communities/, simulation/, evaluation/, research/, api/
 - **Git commits**: ~25 from baseline `3c303d7` to latest
 - **Python**: 3.14.4 on win32
@@ -45,7 +45,7 @@ a081e52 Architecture gap analysis (prototype ~15% of original vision)
 a3cdb25 Phase B: Data Architecture (dataset/feature/model/experiment registries)
 ```
 
-## 3. ARCHITECTURE — WHAT EXISTS
+## 3. ARCHITECTURE â€” WHAT EXISTS
 
 ### 3.1 AIOS Kernel (kernel/)
 The operating system primitives. Everything registers here.
@@ -53,15 +53,15 @@ The operating system primitives. Everything registers here.
 | File | Component | Key classes |
 |---|---|---|
 | `kernel/identity.py` | Identity Model | `Actor`, `ActorType`, `Role`, `IdentityRegistry` |
-| `kernel/capability.py` | Capability Router | `CapabilitySpec`, `CapabilityRouter` (declare→register→resolve) |
+| `kernel/capability.py` | Capability Router | `CapabilitySpec`, `CapabilityRouter` (declareâ†’registerâ†’resolve) |
 | `kernel/state_machine.py` | State Machine Engine | `StateMachineDefinition`, `StateMachineEngine`, `TransitionError` |
 | `kernel/authority.py` | Authority Gateway | `AuthorityRequest`, `AuthorityResult`, `AuthorityGateway` (ONLY path to mutation) |
 | `kernel/receipts.py` | Decision Receipts | `Decision`, `DecisionReceipt`, `ReceiptStore` |
 | `kernel/provenance.py` | Provenance Graph | `NodeType`, `ProvenanceNode`, `ProvenanceEdge`, `ProvenanceGraph` (forward/backward traversal) |
 | `kernel/promotion.py` | Promotion + Rollback | `PromotionController`, `RollbackController`, `PromotionState` |
-| `kernel/bootstrap.py` | Bootstrap | `create_kernel()` → `AIOSKernel` (wires everything, registers 3 lifecycles) |
+| `kernel/bootstrap.py` | Bootstrap | `create_kernel()` â†’ `AIOSKernel` (wires everything, registers 3 lifecycles) |
 | `kernel/registries.py` | Data Registries | `DatasetRegistry`, `FeatureRegistry`, `ModelRegistry`, `ExperimentRegistry` |
-| `kernel/memory_log.py` | Trading Memory | `TradingMemoryLog` (pending→resolved, two-tier retrieval, from TradingAgents) |
+| `kernel/memory_log.py` | Trading Memory | `TradingMemoryLog` (pendingâ†’resolved, two-tier retrieval, from TradingAgents) |
 | `kernel/config.py` | Settings | `Settings` (pydantic-settings, .env) |
 | `kernel/model_gateway.py` | LLM Gateway | `OpenAICompatibleGateway`, `AnthropicGateway`, `ScriptedModel`, `complete_structured()` |
 | `kernel/model_router.py` | Model Router | `ModelRouter`, `TaskTier` (CHEAP/REASONING) |
@@ -101,7 +101,7 @@ The operating system primitives. Everything registers here.
 | `core/persistence.py` | SqliteMemoryStore (hash-chained event log + typed tables) |
 | `core/config.py` | Settings (pydantic-settings, .env) |
 | `core/llm_*` | (in kernel/) model_gateway, model_router |
-| `core/control_plane.py` | RBAC ControlPlane (roles × actions matrix) |
+| `core/control_plane.py` | RBAC ControlPlane (roles Ã— actions matrix) |
 
 ### 3.4 Simulation (simulation/)
 | File | Purpose |
@@ -157,13 +157,13 @@ Key concepts the prototype LACKS:
 
 | Provider | Key | Purpose | Status |
 |---|---|---|---|
-| xkiro.com (LLM) | sk-xt-c919... | deepseek/deepseek-v4-flash via OpenAI-compatible | ✅ VERIFIED |
-| Finnhub | da3cqppr... | News headlines + sentiment | ✅ VERIFIED |
-| FRED | 4a5d5451... | Macro actuals (CPI, FedFunds, Unemployment) | ✅ VERIFIED |
+| xkiro.com (LLM) | sk-xt-c919... | deepseek/deepseek-v4-flash via OpenAI-compatible | âœ… VERIFIED |
+| Finnhub | da3cqppr... | News headlines + sentiment | âœ… VERIFIED |
+| FRED | 4a5d5451... | Macro actuals (CPI, FedFunds, Unemployment) | âœ… VERIFIED |
 | GNews | c0d887d3... | News (backup provider) | Key stored, not yet integrated |
 | NewsData.io | pub_0fe1d... | News (backup provider) | Key stored, not yet integrated |
 | MarketStack | d8ef4f72... | Stock data | Key stored, not yet integrated |
-| CCXT/Binance | None needed | Live crypto OHLCV (public endpoint) | ✅ VERIFIED ($76,491 BTC) |
+| CCXT/Binance | None needed | Live crypto OHLCV (public endpoint) | âœ… VERIFIED ($76,491 BTC) |
 
 ## 7. COMPETITIVE ANALYSIS SUMMARY
 
@@ -171,22 +171,22 @@ Key concepts the prototype LACKS:
 Hash-chained audit, double-entry accounting, tax/CA pipeline, constitution boot-pinning, RBAC console, prediction calibration, postmortem engine, kill-switch lockout, reconciliation, hallucination detection, challenger governance, compliance surveillance.
 
 **Top competitors:**
-- TradingAgents (99K stars) — debate + memory log + ReAct; NO accounting/tax/audit/verification
-- Samvid Trading Core — IBKR+MT5, DrawdownLadder, RiskInvariants; NO LLM intelligence
-- Swarm Trader — 20 agents (13 personalities), AutoResearch, SEC EDGAR; NO verification/audit
-- Thales — 11-service polyglot, ML ensemble, arbitrage; NO accounting/tax
-- Nexus AI — DL/RL models, RAG, Angular; NO governance/audit
+- TradingAgents (99K stars) â€” debate + memory log + ReAct; NO accounting/tax/audit/verification
+- Samvid Trading Core â€” IBKR+MT5, DrawdownLadder, RiskInvariants; NO LLM intelligence
+- Swarm Trader â€” 20 agents (13 personalities), AutoResearch, SEC EDGAR; NO verification/audit
+- Thales â€” 11-service polyglot, ML ensemble, arbitrage; NO accounting/tax
+- Nexus AI â€” DL/RL models, RAG, Angular; NO governance/audit
 
 **Our gaps (from COMPETITIVE_ANALYSIS.md):**
-1. Real broker execution (testnet) — CRITICAL
-2. Docker — DONE in Sprint 1
-3. Benchmark — DONE in Sprint 1
-4. WebSocket/SSE — pending
-5. ML price prediction — future
-6. RAG news — partially done (vector memory wired)
-7. Personality agents — DONE in Sprint 2
-8. AutoResearch — pending
-9. Telegram — DONE in Sprint 1
+1. Real broker execution (testnet) â€” CRITICAL
+2. Docker â€” DONE in Sprint 1
+3. Benchmark â€” DONE in Sprint 1
+4. WebSocket/SSE â€” pending
+5. ML price prediction â€” future
+6. RAG news â€” partially done (vector memory wired)
+7. Personality agents â€” DONE in Sprint 2
+8. AutoResearch â€” pending
+9. Telegram â€” DONE in Sprint 1
 
 ## 8. OSS INTEGRATION (from 74 ZIPs)
 
@@ -200,7 +200,7 @@ Hash-chained audit, double-entry accounting, tax/CA pipeline, constitution boot-
 
 | Sprint | Focus | Status |
 |---|---|---|
-| 1 (Credibility) | Benchmark, Docker, Telegram, graduation | ✅ COMPLETE |
+| 1 (Credibility) | Benchmark, Docker, Telegram, graduation | âœ… COMPLETE |
 | 2 (Intelligence) | Personalities, RAG, SSE, AutoResearch | 3/4 done (SSE + AutoResearch pending) |
 | 3 (Production) | Testnet, short selling, constitution amendment | Not started (needs keys) |
 | 4 (Scale) | ML models, multi-asset, advanced orders, customization | Not started |
@@ -209,20 +209,20 @@ Hash-chained audit, double-entry accounting, tax/CA pipeline, constitution boot-
 
 | Metric | Value |
 |---|---|
-| Tests | 163 passed, 1 skipped |
+| Tests | 181 passed, 5 skipped (4 PG-gated) |
 | Source files | 85 Python |
 | LOC | ~11,000 |
 | Kernel modules | 20 files |
 | Community modules | 11 directories, ~30 files |
 | LLM cost per debate | ~$0.001-0.005 (deepseek flash) |
 | Debate latency | 0.9-6.2s per call (parallel bull/bear) |
-| Full replay (730 bars × 7 symbols) | ~145s |
+| Full replay (730 bars Ã— 7 symbols) | ~145s |
 | Bus throughput baseline | ~750k msg/s (in-memory) |
 | Group A benchmark | LangGraph 20.3ms vs native 0.2ms per 100 hops |
 
 ## 11. KNOWN ISSUES / TECH DEBT
 
-1. Runner doesn't use kernel yet (kernel exists but runner bypasses it)
+1. ~~Runner doesn't use kernel yet~~ FIXED 2026-08-25: simulation/kernel_bridge.py wires lifecycles through the authority gateway; PostgreSQL data layer added (core/pg_store.py + store_factory, DATABASE_URL)
 2. SSE live updates not implemented (5s polling)
 3. AutoResearch not automated (challenger exists but manual)
 4. Per-agent ACL wiring pending (mechanism exists, not enforced in runner)
@@ -237,25 +237,26 @@ Hash-chained audit, double-entry accounting, tax/CA pipeline, constitution boot-
 
 ```
 AIOS-0X/
-├── CONSTITUTION.md          ← ratified, SHA-256 pinned
-├── CHECKPOINT.md            ← progress tracker (READ THIS FIRST)
-├── pyproject.toml           ← pytest/ruff/mypy config
-├── requirements.txt         ← pinned deps
-├── .env                     ← LIVE KEYS (gitignored)
-├── .env.example             ← template
-├── kernel/                  ← AIOS OS primitives
-├── core/                    ← shared infrastructure
-├── schemas/                 ← Pydantic contracts
-├── communities/             ← C1-C11 domain logic
-├── simulation/              ← runner, paper engine, golden data
-├── api/                     ← views + HTTP server
-├── evaluation/              ← prompt lab
-├── research/                ← integrity, walk-forward, disaster
-├── ui/index.html            ← command center SPA
-├── scripts/                 ← CLI tools
-├── tests/                   ← 163 tests
-├── docs/master/             ← all planning docs
-├── docs/adrs/               ← ADR-000 through ADR-004
-├── docs/adrs/ADR-004        ← UI architecture
-└── research/benchmarks/     ← evidence files
+â”œâ”€â”€ CONSTITUTION.md          â† ratified, SHA-256 pinned
+â”œâ”€â”€ CHECKPOINT.md            â† progress tracker (READ THIS FIRST)
+â”œâ”€â”€ pyproject.toml           â† pytest/ruff/mypy config
+â”œâ”€â”€ requirements.txt         â† pinned deps
+â”œâ”€â”€ .env                     â† LIVE KEYS (gitignored)
+â”œâ”€â”€ .env.example             â† template
+â”œâ”€â”€ kernel/                  â† AIOS OS primitives
+â”œâ”€â”€ core/                    â† shared infrastructure
+â”œâ”€â”€ schemas/                 â† Pydantic contracts
+â”œâ”€â”€ communities/             â† C1-C11 domain logic
+â”œâ”€â”€ simulation/              â† runner, paper engine, golden data
+â”œâ”€â”€ api/                     â† views + HTTP server
+â”œâ”€â”€ evaluation/              â† prompt lab
+â”œâ”€â”€ research/                â† integrity, walk-forward, disaster
+â”œâ”€â”€ ui/index.html            â† command center SPA
+â”œâ”€â”€ scripts/                 â† CLI tools
+â”œâ”€â”€ tests/                   â† 163 tests
+â”œâ”€â”€ docs/master/             â† all planning docs
+â”œâ”€â”€ docs/adrs/               â† ADR-000 through ADR-004
+â”œâ”€â”€ docs/adrs/ADR-004        â† UI architecture
+â””â”€â”€ research/benchmarks/     â† evidence files
 ```
+

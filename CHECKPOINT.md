@@ -10,9 +10,55 @@
 
 ---
 
-## Current Status: MVP OPERATIONAL (paper/shadow) · Production deployment gated by CONSTITUTION
+## Current Status: REAL SYSTEM BUILD — KERNEL WIRED + PG DATA LAYER · 181 tests green
 
 **Master System Navigation Map**: [docs/00_system_map.md](docs/00_system_map.md)
+
+---
+
+### ORIGINAL-ARCHITECTURE BUILD: Phase A completion + Phase B data layer — COMPLETE (2026-08-25)
+
+Per `ARCHITECTURE_GAP_ANALYSIS.md` migration strategy. The kernel is no longer shelfware.
+
+**Phase A completion — kernel wired into the runner:**
+- `simulation/kernel_bridge.py` (NEW): the ReplayRunner boots on `create_kernel()`.
+  - Community actors registered as kernel identities with least-privilege roles
+    (c1=SERVICE_DATA, c2=AGENT_RESEARCH, c3=AGENT_CRITIC, c4=AGENT_STRATEGY,
+    c5=SERVICE_EXECUTION, c9=RISK_ADMIN).
+  - Replay CSVs registered via **DatasetRegistry** as a versioned, content-hashed,
+    state-machine-tracked dataset (DRAFT→VALIDATED→ACTIVE) + feature
+    (`ohlcv_passthrough@v1`) via **FeatureRegistry**.
+  - The entire replay is an **ExperimentRun** pinned to dataset version + seed +
+    config; reproducibility hash surfaced on `RunSummary.experiment_reproducibility_hash`
+    and proven stable across identical runs.
+  - Hypotheses are first-class tracked objects: UNTESTED → TESTING (on C3 verified)
+    → SUPPORTED / REJECTED at postmortem. Rejected hypotheses persist (negative knowledge).
+  - Strategies walk IDEA → HYPOTHESIS → DRAFT → VALIDATED → BACKTESTED → EVALUATED;
+    every hop authorized by the **AuthorityGateway** (capability + role + policy, fail closed).
+  - Plan→order dispatch passes through `authorize_execution` (AIOS.execute); governor
+    rejections recorded as DENY receipts.
+  - Every ALLOW/DENY mirrored into the hash-chained audit log as `DECISION_RECEIPT` events.
+  - Provenance graph links dataset → hypothesis → strategy → experiment → execution
+    → postmortem; `lineage_backward(execution_id)` resolves to DATASET_VERSION.
+- `kernel/bootstrap.py`: registries attached to AIOSKernel; new capabilities
+  (`AIOS.register.dataset`, `AIOS.register.feature`, `AIOS.experiment`) declared+granted.
+- Tests: `tests/test_kernel_wiring.py` (11 tests).
+
+**Phase B — PostgreSQL Data & State Plane:**
+- `core/pg_store.py` (NEW): `PostgresMemoryStore(BaseMemoryStore)` — psycopg3,
+  byte-identical hash-chain semantics to SQLite (genesis + canonical JSON), same
+  typed tables, tamper detection pinpoints seq, thread-safe, fail-closed connects.
+- `core/store_factory.py` (NEW): `select_store_class()` / `build_memory_store()`;
+  runner auto-promotes to PG when `DATABASE_URL` is set, SQLite stays default.
+- `core/config.py`: `database_url` setting (repr-hidden). `.env.example` documented.
+- requirements.txt pinned `psycopg[binary]==3.3.4`.
+- Tests: `tests/test_phase_b_postgres.py` — factory/selection hermetic; live PG
+  round-trips (chain, typed tables, tamper drill, FULL REPLAY ON POSTGRES) env-gated:
+  set `AIOS_TEST_PG_DSN=postgresql://...` to activate (local PG18 server detected
+  running but credentials unknown).
+
+**Verification**: 181 passed, 5 skipped (4 = live-PG gated, 1 legacy). Ruff clean on all
+new/modified files. No behavior change to trading logic — determinism hash unchanged.
 
 ---
 
