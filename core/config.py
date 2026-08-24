@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     newsdata_api_key: str | None = Field(default=None, repr=False)
     marketstack_api_key: str | None = Field(default=None, repr=False)
     fred_api_key: str | None = Field(default=None, repr=False)
+    telegram_bot_token: str | None = Field(default=None, repr=False)
+    telegram_chat_id: str | None = Field(default=None, repr=False)
 
     # ------------------------------------------------------------- routing
     research_model_cheap: str = Field(

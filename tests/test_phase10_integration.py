@@ -66,6 +66,14 @@ def test_debate_engine_surfaces_memory_turn() -> None:
 def _debate_responder_any():
     def responder(request) -> str:
         content = request.messages[0].content
+        if "Value Investor" in content:
+            return '{"assessment": "Adequate.", "conviction": "MEDIUM"}'
+        if "Growth Investor" in content:
+            return '{"assessment": "Momentum confirms.", "conviction": "HIGH"}'
+        if "Contrarian" in content:
+            return '{"assessment": "Too bullish.", "conviction": "AGAINST"}'
+        if "Macro Analyst" in content:
+            return '{"assessment": "Supportive.", "conviction": "MEDIUM"}'
         if "Bull Analyst" in content:
             return (
                 '{"argument": "Upside continuation case.", '

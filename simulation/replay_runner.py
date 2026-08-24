@@ -86,6 +86,8 @@ class RunSummary(BaseModel):
     model_calls: int = 0
     total_model_cost_usd: float = 0.0
     research_mode_used: str = "deterministic"
+    benchmark_return_pct: float = 0.0
+    alpha_pct: float = 0.0
 
 
 def _payload_ref_id(payload: Any) -> str | None:
@@ -249,6 +251,16 @@ class ReplayRunner:
 
             self.risk_governor.state = EmergencyStateValue.EMERGENCY_HALT
             logger.warning("Boot: uncleared lockout found in audit log; trading blocked")
+
+        # ---- Telegram notifications (fire-and-forget)
+        from core.notifications import NotificationHub
+
+        self.notifier = NotificationHub()
+        if self.settings.telegram_bot_token and self.settings.telegram_chat_id:
+            self.notifier.add_telegram(
+                self.settings.telegram_bot_token, self.settings.telegram_chat_id
+            )
+            logger.warning("Telegram notifications enabled")
         self.kill_switch = KillSwitch(
             governor=self.risk_governor,
             positions_view=self._positions_view,
@@ -533,6 +545,7 @@ class ReplayRunner:
             order_manager=self.order_manager,
             regime_engine=self.regime_engine,
             equity_curve=self.equity_curve,
+            benchmark_curve=getattr(self, "benchmark_curve", []),
         )
 
     def serve(self, port: int = 8787) -> Any:
@@ -858,8 +871,10 @@ class ReplayRunner:
             await self.bus.subscribe(topic, self._logger_for(topic))
 
         total_bars = min(self.fetcher.bar_count(s) for s in self.symbols)
+        benchmark_initial: dict[str, float] = {}
+        self.benchmark_curve: list[float] = []
         try:
-            for _ in range(total_bars):
+            for bar_idx in range(total_bars):
                 self.cursor.advance()
                 self._filled_this_bar.clear()
                 exhausted = False
@@ -877,6 +892,20 @@ class ReplayRunner:
                         )
                 await self.bus.wait_until_idle()
 
+                # Benchmark: equal-weight buy-and-hold from bar 0 closes
+                benchmark_value = 0.0
+                for symbol in self.symbols:
+                    close = float(self.fetcher.current_bar(symbol)["close"])
+                    if symbol not in benchmark_initial:
+                        benchmark_initial[symbol] = close
+                    if benchmark_initial[symbol] > 0:
+                        benchmark_value += (
+                            self.initial_balance
+                            / len(self.symbols)
+                            * (close / benchmark_initial[symbol])
+                        )
+                self.benchmark_curve.append(round(benchmark_value, 2))
+
                 await self._process_due_events()
                 await self.bus.wait_until_idle()
 
@@ -890,6 +919,12 @@ class ReplayRunner:
                     await self.kill_switch.trigger(
                         f"drawdown {dd:.2f}% halt", triggered_by="portfolio_governor"
                     )
+                    if self.notifier.has_channels:
+                        await self.notifier.notify(
+                            f"KILL SWITCH: drawdown {dd:.2f}% hit halt threshold. "
+                            f"All positions flattened. Trading locked.",
+                            severity="CRITICAL",
+                        )
                 await self._reconcile()
 
                 open_value = 0.0
@@ -929,6 +964,19 @@ class ReplayRunner:
         digest = hashlib.sha256("|".join(self.trade_lines).encode()).hexdigest()
         chain_ok, _ = self.store.verify_chain()
         counts = self.store.counts()
+
+        bench_return = 0.0
+        if self.benchmark_curve and self.benchmark_curve[0] > 0:
+            bench_return = round(
+                (self.benchmark_curve[-1] - self.benchmark_curve[0])
+                / self.benchmark_curve[0]
+                * 100.0,
+                2,
+            )
+        our_return = 0.0
+        if equity and equity[0] > 0:
+            our_return = round((equity[-1] - equity[0]) / equity[0] * 100.0, 2)
+
         return RunSummary(
             symbols=self.symbols,
             total_bars=total_bars,
@@ -948,4 +996,6 @@ class ReplayRunner:
             model_calls=self.model_calls,
             total_model_cost_usd=self.total_model_cost_usd,
             research_mode_used=self._research_mode_used,
+            benchmark_return_pct=bench_return,
+            alpha_pct=round(our_return - bench_return, 2),
         )

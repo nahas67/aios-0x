@@ -53,6 +53,11 @@ class QuantVerdict(BaseModel):
     verdict: str = Field(pattern="^(PROCEED|REJECT)$")
 
 
+class PersonalityAssessment(BaseModel):
+    assessment: str = Field(min_length=1)
+    conviction: str = Field(pattern="^(HIGH|MEDIUM|LOW|AGAINST)$")
+
+
 class ModeratorSynthesis(BaseModel):
     supporting_arguments: list[str] = Field(min_length=2)
     counter_arguments: list[str] = Field(min_length=2)
@@ -173,17 +178,25 @@ class DebateEngine:
         self,
         transcript: DebateTranscript,
         role: str,
-        response: ModelResponse,
+        content: Any,
+        model: str | None = None,
+        provider: str | None = None,
+        response: ModelResponse | None = None,
     ) -> None:
-        transcript.turns.append(
-            DebateTurn(
-                role=role,
-                content=response.content,
-                model=response.model,
-                provider=response.provider,
+        if response is not None:
+            transcript.turns.append(
+                DebateTurn(
+                    role=role,
+                    content=response.content,
+                    model=response.model,
+                    provider=response.provider,
+                )
             )
-        )
-        transcript.total_cost_usd = round(transcript.total_cost_usd + response.cost_usd, 8)
+            transcript.total_cost_usd = round(transcript.total_cost_usd + response.cost_usd, 8)
+        else:
+            transcript.turns.append(
+                DebateTurn(role=role, content=str(content), model=model, provider=provider)
+            )
 
     async def _emit_sink(self, role: str, response: ModelResponse) -> None:
         if self._sink:
@@ -214,6 +227,35 @@ class DebateEngine:
             await self._emit_sink("BULL", bull_resp)
             self._record(transcript, "BEAR", bear_resp)
             await self._emit_sink("BEAR", bear_resp)
+
+            # Personality agents: 4 independent lenses run in parallel
+            personality_ids = [
+                ("VALUE", "research-value-investor"),
+                ("GROWTH", "research-growth-investor"),
+                ("CONTRARIAN", "research-contrarian"),
+                ("MACRO", "research-macro-analyst"),
+            ]
+            personality_results = await asyncio.gather(
+                *[
+                    self._call_model(
+                        PersonalityAssessment,
+                        self._registry.get(pid).render(**v),
+                        TaskTier.CHEAP,
+                    )
+                    for _, pid in personality_ids
+                ]
+            )
+            for (role, _pid), (raw, resp) in zip(personality_ids, personality_results):
+                assessment: PersonalityAssessment = raw  # type: ignore[assignment]
+                self._record(
+                    transcript,
+                    role,
+                    f"{assessment.assessment} [{assessment.conviction}]",
+                    model=resp.model,
+                    provider=resp.provider,
+                )
+                transcript.total_cost_usd = round(transcript.total_cost_usd + resp.cost_usd, 8)
+                await self._emit_sink(role.lower(), resp)
 
             quant_raw = await self._ask(
                 QuantVerdict,

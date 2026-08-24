@@ -29,6 +29,7 @@ class SystemSnapshotBuilder:
         order_manager: Any = None,
         regime_engine: Any = None,
         equity_curve: Any = None,
+        benchmark_curve: Any = None,
     ) -> None:
         self.store = store
         self.ledger = ledger
@@ -41,6 +42,7 @@ class SystemSnapshotBuilder:
         self.order_manager = order_manager
         self.regime_engine = regime_engine
         self.equity_curve = equity_curve if equity_curve is not None else []
+        self._benchmark_curve = benchmark_curve if benchmark_curve is not None else []
 
     # ------------------------------------------------------------- executive
 
@@ -317,9 +319,7 @@ class SystemSnapshotBuilder:
             )
         nav = round((cash or 0.0) + notional_open, 2)
         total = nav or 1.0
-        allocation = {
-            k: round(v / total * 100.0, 2) for k, v in exposure_by_class.items()
-        }
+        allocation = {k: round(v / total * 100.0, 2) for k, v in exposure_by_class.items()}
         return {
             "nav": nav,
             "cash": cash,
@@ -340,9 +340,7 @@ class SystemSnapshotBuilder:
             r = pos.receipt
             mark = r.fill_price
             try:
-                if self.order_manager is not None and hasattr(
-                    self.order_manager, "adapter"
-                ):
+                if self.order_manager is not None and hasattr(self.order_manager, "adapter"):
                     pass
             except Exception:  # noqa: BLE001
                 pass
@@ -352,9 +350,7 @@ class SystemSnapshotBuilder:
                 if closes:
                     mark = float(list(closes)[-1])
             direction = 1 if pos.action == "BUY" else -1
-            unrealized = round(
-                direction * (mark - r.fill_price) * r.filled_quantity, 2
-            )
+            unrealized = round(direction * (mark - r.fill_price) * r.filled_quantity, 2)
             out.append(
                 {
                     "execution_id": eid,
@@ -382,7 +378,9 @@ class SystemSnapshotBuilder:
                     "client_order_id": order.client_order_id,
                     "symbol": order.symbol,
                     "side": order.side.value if hasattr(order.side, "value") else order.side,
-                    "status": order.status.value if hasattr(order.status, "value") else order.status,
+                    "status": order.status.value
+                    if hasattr(order.status, "value")
+                    else order.status,
                     "quantity": order.quantity,
                     "avg_fill_price": order.avg_fill_price,
                     "reject_reason": order.reject_reason,
@@ -518,19 +516,84 @@ class SystemSnapshotBuilder:
     # ------------------------------------------------- analytics (Phase: charts)
 
     def equity(self) -> dict[str, Any]:
-        """Equity curve + derived drawdown series for the performance chart."""
+        """Equity curve + derived drawdown series + benchmark for the performance chart."""
         curve = list(self.equity_curve or [])
         peak = curve[0] if curve else 0.0
         dd: list[float] = []
         for value in curve:
             peak = max(peak, value)
             dd.append(round((peak - value) / peak * 100.0, 3) if peak else 0.0)
+        bench = list(getattr(self, "_benchmark_curve", []) or [])
         return {
             "equity": curve,
             "drawdown_pct": dd,
+            "benchmark": bench,
             "start": curve[0] if curve else None,
             "end": curve[-1] if curve else None,
             "points": len(curve),
+        }
+
+    def graduation(self) -> dict[str, Any]:
+        """Paper graduation criteria (Thales pattern): is this strategy ready for live?"""
+        curve = list(self.equity_curve or [])
+        pnl_data = self.pnl()
+        totals = pnl_data["totals"]
+        trades = totals["trades"]
+        win_rate = totals["win_rate_pct"]
+
+        peak = curve[0] if curve else 1.0
+        max_dd = 0.0
+        for v in curve:
+            peak = max(peak, v)
+            if peak > 0:
+                max_dd = max(max_dd, (peak - v) / peak * 100.0)
+
+        returns = (
+            [(b - a) / a for a, b in zip(curve, curve[1:], strict=False)] if len(curve) >= 2 else []
+        )
+        n = len(returns)
+        sharpe = 0.0
+        if n > 1 and returns:
+            mean_r = sum(returns) / n
+            std_r = (sum((r - mean_r) ** 2 for r in returns) / (n - 1)) ** 0.5
+            if std_r > 0:
+                sharpe = round(mean_r / std_r * (n**0.5), 2)
+
+        criteria = [
+            {
+                "name": "Sharpe ratio",
+                "current": sharpe,
+                "threshold": 1.5,
+                "op": ">=",
+                "pass": sharpe >= 1.5,
+            },
+            {
+                "name": "Trade count",
+                "current": trades,
+                "threshold": 50,
+                "op": ">=",
+                "pass": trades >= 50,
+            },
+            {
+                "name": "Win rate",
+                "current": win_rate,
+                "threshold": 45.0,
+                "op": ">=",
+                "pass": win_rate >= 45.0,
+            },
+            {
+                "name": "Max drawdown",
+                "current": round(max_dd, 2),
+                "threshold": 20.0,
+                "op": "<=",
+                "pass": max_dd <= 20.0,
+            },
+        ]
+        all_pass = all(c["pass"] for c in criteria)
+        return {
+            "ready_for_live": all_pass,
+            "criteria": criteria,
+            "note": "All criteria must pass before live capital is unlocked (CONSTITUTION gate).",
         }
 
     def _family_join(self) -> dict[str, dict[str, Any]]:
@@ -575,9 +638,7 @@ class SystemSnapshotBuilder:
             total["wins"] += int(win)
             total["pnl"] = round(total["pnl"] + pnl, 2)
 
-        fees_minor = (self.ledger.balances() if self.ledger else {}).get(
-            "EXPENSE:FEES", 0
-        )
+        fees_minor = (self.ledger.balances() if self.ledger else {}).get("EXPENSE:FEES", 0)
         return {
             "totals": {
                 **total,

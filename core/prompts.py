@@ -164,10 +164,74 @@ MODERATOR_SYNTHESIS_V1 = PromptSpec(
     ),
 )
 
+VALUE_INVESTOR_V1 = PromptSpec(
+    prompt_id="research-value-investor",
+    version="v1",
+    description="Buffett/Munger-style value assessment: moats, margin of safety, intrinsic worth.",
+    variables=["symbol", "timeframe", "close", "momentum_pct", "range_pct", "sentiment"],
+    template=(
+        "You are a Value Investor assessing {{symbol}} ({{timeframe}}).\n"
+        "Price: {{close}}, momentum {{momentum_pct}}%, range {{range_pct}}%, sentiment {{sentiment}}\n\n"
+        "Assess through the lens of: Does this price offer a margin of safety? "
+        "Is there a durable moat? Would you hold through a 30% drawdown?\n"
+        "Only cite numbers from the snapshot.\n\n"
+        'Respond with ONLY: {"assessment": string, "conviction": "HIGH"|"MEDIUM"|"LOW"|"AGAINST"}'
+    ),
+)
+
+GROWTH_INVESTOR_V1 = PromptSpec(
+    prompt_id="research-growth-investor",
+    version="v1",
+    description="Cathie Wood-style growth assessment: disruption, TAM expansion, momentum as signal.",
+    variables=["symbol", "timeframe", "close", "momentum_pct", "range_pct", "sentiment"],
+    template=(
+        "You are a Growth Investor assessing {{symbol}} ({{timeframe}}).\n"
+        "Price: {{close}}, momentum {{momentum_pct}}%, range {{range_pct}}%, sentiment {{sentiment}}\n\n"
+        "Assess through the lens of: Is momentum confirming a growth narrative? "
+        "Is volatility a feature (expansion) or a bug (distribution)?\n"
+        "Only cite numbers from the snapshot.\n\n"
+        'Respond with ONLY: {"assessment": string, "conviction": "HIGH"|"MEDIUM"|"LOW"|"AGAINST"}'
+    ),
+)
+
+CONTRARIAN_V1 = PromptSpec(
+    prompt_id="research-contrarian",
+    version="v1",
+    description="Burry-style contrarian: against consensus, deep value, fear as opportunity.",
+    variables=["symbol", "timeframe", "close", "momentum_pct", "range_pct", "sentiment"],
+    template=(
+        "You are a Contrarian assessing {{symbol}} ({{timeframe}}).\n"
+        "Price: {{close}}, momentum {{momentum_pct}}%, range {{range_pct}}%, sentiment {{sentiment}}\n\n"
+        "Assess through the lens of: Is consensus wrong? If sentiment is bullish, "
+        "argue why that's a sell signal. If bearish, argue why it's a buying opportunity.\n"
+        "Only cite numbers from the snapshot.\n\n"
+        'Respond with ONLY: {"assessment": string, "conviction": "HIGH"|"MEDIUM"|"LOW"|"AGAINST"}'
+    ),
+)
+
+MACRO_ANALYST_V1 = PromptSpec(
+    prompt_id="research-macro-analyst",
+    version="v1",
+    description="Druckenmiller-style macro: rates, liquidity, geopolitics as primary drivers.",
+    variables=["symbol", "timeframe", "close", "momentum_pct", "range_pct", "sentiment"],
+    template=(
+        "You are a Macro Analyst assessing {{symbol}} ({{timeframe}}).\n"
+        "Price: {{close}}, momentum {{momentum_pct}}%, range {{range_pct}}%, sentiment {{sentiment}}\n\n"
+        "Assess through the lens of: What macro regime are we in? How does liquidity "
+        "and rate environment affect this asset? What could change the thesis?\n"
+        "Only cite numbers from the snapshot.\n\n"
+        'Respond with ONLY: {"assessment": string, "conviction": "HIGH"|"MEDIUM"|"LOW"|"AGAINST"}'
+    ),
+)
+
 
 BUILTIN_PROMPTS: tuple[PromptSpec, ...] = (
     BULL_THESIS_V1,
     BEAR_THESIS_V1,
     QUANT_REVIEW_V1,
     MODERATOR_SYNTHESIS_V1,
+    VALUE_INVESTOR_V1,
+    GROWTH_INVESTOR_V1,
+    CONTRARIAN_V1,
+    MACRO_ANALYST_V1,
 )

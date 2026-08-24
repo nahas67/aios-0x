@@ -113,6 +113,14 @@ def test_prompt_spec_variable_mismatch_rejected() -> None:
 
 def _debate_responder(request: ModelRequest) -> str:
     content = request.messages[0].content
+    if "Value Investor" in content:
+        return '{"assessment": "Margin of safety adequate at this level.", "conviction": "MEDIUM"}'
+    if "Growth Investor" in content:
+        return '{"assessment": "Momentum confirms growth narrative.", "conviction": "HIGH"}'
+    if "Contrarian" in content:
+        return '{"assessment": "Consensus is too bullish here.", "conviction": "AGAINST"}'
+    if "Macro Analyst" in content:
+        return '{"assessment": "Liquidity environment supportive.", "conviction": "MEDIUM"}'
     if "Bull Analyst" in content:
         return (
             '{"argument": "Momentum and sentiment favor upside continuation.", '
@@ -161,7 +169,7 @@ def test_debate_llm_path_produces_balanced_hypothesis() -> None:
     assert len(h.counter_arguments) >= 2  # Mandatory Balance Rule
     assert h.expected_risk_reward_ratio >= 1.5
     roles = [t.role for t in result.transcript.turns]
-    assert roles == ["BULL", "BEAR", "QUANT", "MODERATOR"]
+    assert roles == ["BULL", "BEAR", "VALUE", "GROWTH", "CONTRARIAN", "MACRO", "QUANT", "MODERATOR"]
 
 
 def test_debate_falls_back_without_gateway() -> None:

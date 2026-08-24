@@ -118,6 +118,8 @@ def make_handler(
                     self._json({"alerts": builder.alerts()})
                 elif path == "/api/v1/memory":
                     self._json(builder.memory_center())
+                elif path == "/api/v1/graduation":
+                    self._json(builder.graduation())
                 elif path == "/metrics":
                     self._text(prometheus_metrics(builder.executive()), ctype="text/plain")
                 else:
