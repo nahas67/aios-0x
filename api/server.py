@@ -87,6 +87,27 @@ def make_handler(
                     self._json(builder.settings_view())
                 elif path == "/api/v1/approvals":
                     self._json({"approvals": builder.approvals_view()})
+                elif path == "/api/v1/positions":
+                    self._json({"positions": builder.positions()})
+                elif path == "/api/v1/portfolio":
+                    self._json(builder.portfolio())
+                elif path == "/api/v1/orders":
+                    self._json({"orders": builder.orders()})
+                elif path == "/api/v1/agents":
+                    self._json({"agents": builder.agents()})
+                elif path == "/api/v1/opportunities":
+                    self._json({"opportunities": builder.opportunities()})
+                elif path == "/api/v1/events":
+                    self._json({"events": builder.events()})
+                elif path == "/api/v1/regimes":
+                    self._json({"regimes": builder.regimes()})
+                elif path == "/api/v1/audit":
+                    from urllib.parse import parse_qs, urlparse
+
+                    qs = parse_qs(urlparse(self.path).query)
+                    q = (qs.get("q") or [""])[0]
+                    lim = int((qs.get("limit") or ["50"])[0])
+                    self._json({"audit": builder.audit(query=q, limit=lim)})
                 elif path == "/metrics":
                     self._text(prometheus_metrics(builder.executive()), ctype="text/plain")
                 else:

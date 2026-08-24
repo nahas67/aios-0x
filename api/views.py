@@ -4,6 +4,7 @@ Pure functions returning JSON-able dicts - the contract any UI (web, TUI,
 export) consumes. No framework, no I/O; the HTTP server is a thin shell.
 """
 
+import json
 from typing import Any
 
 from communities.c11_finance.audit_graph import decision_provenance
@@ -24,6 +25,8 @@ class SystemSnapshotBuilder:
         lot_book: Any = None,
         settings: Any = None,
         control_plane: Any = None,
+        order_manager: Any = None,
+        regime_engine: Any = None,
     ) -> None:
         self.store = store
         self.ledger = ledger
@@ -33,6 +36,8 @@ class SystemSnapshotBuilder:
         self.lot_book = lot_book
         self.settings = settings
         self.control_plane = control_plane
+        self.order_manager = order_manager
+        self.regime_engine = regime_engine
 
     # ------------------------------------------------------------- executive
 
@@ -293,6 +298,219 @@ class SystemSnapshotBuilder:
                 }
             )
         return out
+
+    # ------------------------------------------------- workspace: portfolio
+
+    def portfolio(self) -> dict[str, Any]:
+        cash = getattr(self.paper, "cash_balance", None) if self.paper else None
+        positions = self.positions()
+        exposure_by_class: dict[str, float] = {}
+        notional_open = 0.0
+        for p in positions:
+            notional_open += float(p.get("mark_value") or 0.0)
+            cls = p.get("asset_class") or "OTHER"
+            exposure_by_class[cls] = exposure_by_class.get(cls, 0.0) + float(
+                p.get("mark_value") or 0.0
+            )
+        nav = round((cash or 0.0) + notional_open, 2)
+        total = nav or 1.0
+        allocation = {
+            k: round(v / total * 100.0, 2) for k, v in exposure_by_class.items()
+        }
+        return {
+            "nav": nav,
+            "cash": cash,
+            "open_notional": round(notional_open, 2),
+            "exposure_pct": round(notional_open / total * 100.0, 2),
+            "allocation_pct": allocation,
+            "closed_trades": len(self.store.pnl_series()),
+            "realized_pnl": round(sum(p for _, p in self.store.pnl_series()), 2),
+        }
+
+    def positions(self) -> list[dict[str, Any]]:
+        engine = self.paper
+        if engine is None:
+            return []
+        out: list[dict[str, Any]] = []
+        class_map = getattr(getattr(self.control_plane, "governor", None), "_classes", {})
+        for eid, pos in engine.open_positions.items():
+            r = pos.receipt
+            mark = r.fill_price
+            try:
+                if self.order_manager is not None and hasattr(
+                    self.order_manager, "adapter"
+                ):
+                    pass
+            except Exception:  # noqa: BLE001
+                pass
+            # mark via last close when a regime/price source is reachable
+            if self.regime_engine is not None:
+                closes = getattr(self.regime_engine, "_closes", {}).get(r.symbol)
+                if closes:
+                    mark = float(list(closes)[-1])
+            direction = 1 if pos.action == "BUY" else -1
+            unrealized = round(
+                direction * (mark - r.fill_price) * r.filled_quantity, 2
+            )
+            out.append(
+                {
+                    "execution_id": eid,
+                    "symbol": r.symbol,
+                    "action": pos.action,
+                    "qty": r.filled_quantity,
+                    "entry": r.fill_price,
+                    "mark": mark,
+                    "unrealized": unrealized,
+                    "stop": pos.stop_loss_price,
+                    "target": pos.take_profit_price,
+                    "mark_value": round(mark * r.filled_quantity, 2),
+                    "asset_class": class_map.get(r.symbol, "OTHER"),
+                }
+            )
+        return out
+
+    def orders(self, limit: int = 50) -> list[dict[str, Any]]:
+        if self.order_manager is None:
+            return []
+        out = []
+        for order in list(self.order_manager.orders.values())[-limit:]:
+            out.append(
+                {
+                    "client_order_id": order.client_order_id,
+                    "symbol": order.symbol,
+                    "side": order.side.value if hasattr(order.side, "value") else order.side,
+                    "status": order.status.value if hasattr(order.status, "value") else order.status,
+                    "quantity": order.quantity,
+                    "avg_fill_price": order.avg_fill_price,
+                    "reject_reason": order.reject_reason,
+                    "created_at": order.created_at.isoformat(),
+                }
+            )
+        return list(reversed(out))
+
+    # ------------------------------------------------ workspace: intelligence
+
+    def agents(self) -> list[dict[str, Any]]:
+        from core.agents import registered_agents
+        from core.reputation import compute_reputations
+
+        roster = registered_agents(self.store)
+        reps = compute_reputations(self.store).get("families", {})
+        out = []
+        for agent_id, info in sorted(roster.items()):
+            out.append(
+                {
+                    "agent_id": agent_id,
+                    "community": info.get("community"),
+                    "role": info.get("role"),
+                    "version": info.get("version"),
+                    "publishes": info.get("publishes", []),
+                    "reputation": reps.get(agent_id),
+                }
+            )
+        return out
+
+    def opportunities(self, limit: int = 10) -> list[dict[str, Any]]:
+        rows = self.store.iter_event_payloads("aios.c4.opportunity_ranked")[-limit:]
+        out = []
+        for p in reversed(rows):
+            out.append(
+                {
+                    "strategy_id": p.get("strategy_id"),
+                    "symbol": p.get("symbol"),
+                    "family": p.get("family"),
+                    "edge_proxy": p.get("edge_proxy"),
+                    "expected_rr": p.get("expected_rr"),
+                    "alpha_decay": p.get("alpha_decay_multiplier"),
+                    "composite_rank": p.get("composite_rank"),
+                }
+            )
+        return out
+
+    def events(self, limit: int = 30) -> list[dict[str, Any]]:
+        merged: list[dict[str, Any]] = []
+        sources = {
+            "aios.c10.expectation_updated": "MACRO",
+            "aios.c10.scenarios_published": "SCENARIO",
+            "aios.c10.regime_changed": "REGIME",
+            "aios.c11.compliance_alert": "COMPLIANCE",
+            "aios.risk.emergency": "EMERGENCY",
+            "aios.c1.data_anomaly": "DATA",
+        }
+        for kind, label in sources.items():
+            for p in self.store.iter_event_payloads(kind)[-limit:]:
+                merged.append(
+                    {
+                        "kind": kind,
+                        "label": label,
+                        "ts": p.get("created_at") or p.get("assessed_at"),
+                        "title": p.get("title")
+                        or p.get("detail")
+                        or p.get("reason")
+                        or p.get("anomaly_type")
+                        or kind,
+                        "symbol": p.get("symbol"),
+                        "severity": p.get("severity")
+                        or ("CRITICAL" if p.get("lockout_engaged") else "INFO"),
+                        "payload": p,
+                    }
+                )
+        merged.sort(key=lambda x: x.get("ts") or "", reverse=True)
+        return merged[:limit]
+
+    def regimes(self) -> list[dict[str, Any]]:
+        engine = self.regime_engine
+        if engine is None:
+            return []
+        out = []
+        current = getattr(engine, "_current", {})
+        for symbol, state in sorted(current.items()):
+            out.append(
+                {
+                    "symbol": symbol,
+                    "trend": state.trend.value if hasattr(state.trend, "value") else state.trend,
+                    "vol_regime": (
+                        state.vol_regime.value
+                        if hasattr(state.vol_regime, "value")
+                        else state.vol_regime
+                    ),
+                    "realized_vol_pct": state.realized_vol_pct,
+                    "window_bars": state.window_bars,
+                }
+            )
+        return out
+
+    def audit(self, query: str = "", limit: int = 50) -> list[dict[str, Any]]:
+        q = (query or "").lower()
+        out: list[dict[str, Any]] = []
+        for row in reversed(self._audit_rows()):
+            kind = row["kind"]
+            payload_text = row["payload_json"].lower()
+            if q and q not in kind.lower() and q not in payload_text:
+                continue
+            out.append(
+                {
+                    "seq": row["seq"],
+                    "ts": row["ts"],
+                    "kind": kind,
+                    "ref_id": row["ref_id"],
+                    "payload": json.loads(row["payload_json"]),
+                }
+            )
+            if len(out) >= limit:
+                break
+        return out
+
+    def _audit_rows(self) -> list[Any]:
+        from core.persistence import SqliteMemoryStore
+
+        assert isinstance(self.store, SqliteMemoryStore)
+        with self.store._lock:  # noqa: SLF001 - same-package read
+            rows = self.store._conn.execute(
+                "SELECT seq, ts, kind, ref_id, payload_json FROM event_log "
+                "ORDER BY seq DESC LIMIT 500"
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     # ---------------------------------------------------------------- health
 

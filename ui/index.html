@@ -4,90 +4,115 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AIOS-0X · Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
+/* ============ DESIGN TOKENS (ADR-004 · Dark OLED institutional) ============ */
 :root{
-  --bg:#0a0e13;--panel:#10161f;--panel2:#151d29;--line:#1d2836;--line2:#26344a;
-  --text:#dae3ee;--dim:#7f92a8;--faint:#4a5b70;
-  --ok:#34c07c;--warn:#e0a63c;--bad:#e05555;--accent:#5b9dff;
-  --mono:"Cascadia Code",Consolas,monospace;
+  --bg:#020617;--panel:#0e1223;--panel2:#151b2e;--muted:#1a1e2f;
+  --line:#334155;--line-soft:#1e2740;
+  --text:#f8fafc;--dim:#94a3b8;--faint:#5b6b82;
+  --ok:#22c55e;--warn:#eab308;--bad:#ef4444;--accent:#38bdf8;
+  --mono:"Fira Code",Consolas,monospace;--sans:"Fira Sans","Segoe UI",system-ui,sans-serif;
+  --r:8px;--sp:8px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+html{font-size:15px}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+button{font-family:inherit}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#243147;border-radius:5px}
 
-/* ---------- shell ---------- */
-header{display:flex;align-items:center;gap:14px;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:20}
-.logo{font-weight:700;letter-spacing:.12em;font-size:13px;color:var(--dim)}
-.pill{padding:3px 11px;border-radius:11px;font-size:12px;background:#141d2a;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
-.pill.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
-.pill.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
-.pill.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
+/* ============ shell ============ */
+header{display:flex;align-items:center;gap:10px;height:52px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line-soft);position:sticky;top:0;z-index:30}
+.logo{font-family:var(--mono);font-weight:600;font-size:14px;letter-spacing:.1em;color:var(--accent);margin-right:6px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:11.5px;background:var(--muted);border:1px solid var(--line-soft);color:var(--dim);white-space:nowrap}
+.pill.ok{color:#4ade80;border-color:rgba(74,222,128,.35)}
+.pill.warn{color:var(--warn);border-color:rgba(234,179,8,.35)}
+.pill.bad{color:#f87171;border-color:rgba(239,68,68,.4)}
 .spacer{flex:1}
-select#autonomy{background:var(--panel2);color:var(--text);border:1px solid var(--line2);border-radius:8px;padding:5px 9px;font-size:12.5px;cursor:pointer}
-nav{display:flex;flex-direction:column;gap:2px;width:170px;position:fixed;top:53px;bottom:0;left:0;padding:12px 8px;border-right:1px solid var(--line);background:var(--panel)}
-nav button{display:block;width:100%;text-align:left;background:none;border:none;color:var(--dim);padding:9px 12px;font-size:13.5px;cursor:pointer;border-radius:8px;letter-spacing:.03em}
+#search{width:230px;background:var(--panel2);border:1px solid var(--line-soft);color:var(--text);border-radius:8px;padding:6px 11px;font-size:12.5px}
+#search::placeholder{color:var(--faint)}
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12.5px;transition:border-color .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.danger:hover{border-color:var(--bad);color:#f87171}
+.btn.primary{background:rgba(56,189,248,.12);border-color:rgba(56,189,248,.4);color:var(--accent)}
+.btn.sm{padding:4px 9px;font-size:11.5px}
+select.btn{appearance:none;padding-right:22px}
+label.chk{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--dim);cursor:pointer;white-space:nowrap}
+
+nav{position:fixed;top:52px;bottom:0;left:0;width:186px;padding:10px 8px 20px;border-right:1px solid var(--line-soft);background:var(--panel);overflow-y:auto}
+.navgroup{font-size:10px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase;padding:14px 12px 5px;font-weight:600}
+.navgroup:first-child{padding-top:4px}
+nav button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:none;color:var(--dim);padding:7px 12px;font-size:13px;cursor:pointer;border-radius:7px}
 nav button:hover{background:var(--panel2);color:var(--text)}
 nav button.active{background:var(--panel2);color:var(--accent);font-weight:600}
-main{margin-left:170px;padding:22px 26px;max-width:1280px}
-h2{font-size:12px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase;margin:0 0 14px;font-weight:600}
-section{display:none}section.active{display:block}
-.grid{display:grid;gap:12px}
-.cards{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:20px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
-.card b{display:block;font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.09em;margin-bottom:7px;font-weight:600}
-.card .v{font-size:21px;font-weight:650}
-.card .s{font-size:11.5px;color:var(--faint);margin-top:3px}
-.pos{color:var(--ok)}.neg{color:var(--bad)}.warnT{color:var(--warn)}
+nav button .nbadge{margin-left:auto;font-size:10px;background:rgba(234,179,8,.15);color:var(--warn);padding:1px 6px;border-radius:8px}
+main{margin-left:186px;padding:18px 22px 60px;max-width:1360px}
+h2.sec{font-size:11px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;margin:22px 0 10px;font-weight:600}
+h2.sec:first-child{margin-top:0}
+section{display:none}section.active{display:block;animation:fade .18s ease-out}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-th,td{padding:9px 14px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}
-th{color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;font-weight:600;background:var(--panel2)}
-tbody tr:hover td{background:#141d2a}
+/* ============ components ============ */
+.grid{display:grid;gap:10px}
+.cards{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:8px}
+.card{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);padding:11px 13px}
+.card b{display:block;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;font-weight:600}
+.card .v{font-size:19px;font-weight:650;font-family:var(--mono)}
+.card .s{font-size:11px;color:var(--faint);margin-top:2px}
+.pos{color:#4ade80}.neg{color:#f87171}.warnT{color:var(--warn)}
+
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);overflow:hidden}
+th,td{padding:8px 13px;border-bottom:1px solid var(--line-soft);text-align:left;font-size:12.5px}
+th{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.1em;font-weight:600;background:var(--panel2)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#121a2b}
 tr.rowlink{cursor:pointer}
+.empty{padding:18px;text-align:center;color:var(--faint);font-size:12.5px;background:var(--panel);border:1px dashed var(--line);border-radius:var(--r)}
 
-.badge{display:inline-block;padding:2px 9px;border-radius:9px;font-size:11px;font-weight:600;letter-spacing:.04em}
-.b-buy{background:rgba(52,192,124,.14);color:var(--ok)}
-.b-sell{background:rgba(224,85,85,.14);color:var(--bad)}
-.b-ok{background:rgba(52,192,124,.14);color:var(--ok)}
-.b-warn{background:rgba(224,166,60,.14);color:var(--warn)}
-.b-bad{background:rgba(224,85,85,.16);color:var(--bad)}
-.b-dim{background:#182231;color:var(--dim)}
-.b-acc{background:rgba(91,157,255,.15);color:var(--accent)}
+.badge{display:inline-block;padding:2px 8px;border-radius:9px;font-size:10.5px;font-weight:600;letter-spacing:.03em}
+.b-buy{background:rgba(34,197,94,.13);color:#4ade80}
+.b-sell{background:rgba(239,68,68,.14);color:#f87171}
+.b-ok{background:rgba(34,197,94,.13);color:#4ade80}
+.b-warn{background:rgba(234,179,8,.13);color:var(--warn)}
+.b-bad{background:rgba(239,68,68,.15);color:#f87171}
+.b-dim{background:var(--muted);color:var(--dim)}
+.b-acc{background:rgba(56,189,248,.13);color:var(--accent)}
 
-.bar{height:5px;background:#1a2432;border-radius:3px;overflow:hidden;margin-top:5px}
+.bar{height:4px;background:#1a2432;border-radius:3px;overflow:hidden;margin-top:4px;min-width:70px}
 .bar i{display:block;height:100%;background:var(--ok)}
-
-pre.raw{background:#0d1219;border:1px solid var(--line);border-radius:8px;padding:13px;font-family:var(--mono);font-size:12px;color:#93a7bd;white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto}
-.btn{background:var(--panel2);border:1px solid var(--line2);color:var(--text);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px}
-.btn:hover{border-color:var(--accent);color:var(--accent)}
-.btn.danger:hover{border-color:var(--bad);color:var(--bad)}
-.btn.primary{background:rgba(91,157,255,.14);border-color:color-mix(in srgb,var(--accent) 45%,transparent);color:var(--accent)}
-.hidden{display:none!important}
-
-/* modal */
-#modal-back{position:fixed;inset:0;background:rgba(4,7,11,.72);z-index:50;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:36px 18px}
-#modal{background:var(--panel);border:1px solid var(--line2);border-radius:14px;width:min(880px,96vw);padding:24px 26px}
-.mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-.mhead h3{font-size:17px}.mhead .x{cursor:pointer;color:var(--dim);font-size:20px;background:none;border:none}
-.vrow{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}
-.vrow:last-child{border-bottom:none}
-.vrow .k{color:var(--dim)}
-.sect{margin-top:18px}
-.sect>h4{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.09em;margin-bottom:8px}
-ul.clean{list-style:none}ul.clean li{padding:4px 0;font-size:13.5px}
-ul.clean li:before{content:"— ";color:var(--faint)}
-ul.cOUNTER li:before{content:"✗ ";color:var(--bad)}
-
-/* settings */
-.acc{border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:10px;overflow:hidden}
-.acc>.head{padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:13.5px}
-.acc>.head small{color:var(--dim);font-weight:400;margin-left:10px}
-.acc>.body{padding:4px 16px 14px;border-top:1px solid var(--line)}
-.kv{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px dashed #17202d;font-size:13px}
+.kv{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:6px 0;border-bottom:1px dashed #17202d;font-size:12.5px}
 .kv:last-child{border-bottom:none}
 .kv .k{color:var(--dim)}
-.kv input,.kv select{background:var(--panel2);border:1px solid var(--line2);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12.5px;width:150px}
-.expert-only{display:none}.expert .expert-only{display:flex}
-label.chk{display:flex;gap:7px;align-items:center;font-size:12.5px;color:var(--dim);cursor:pointer}
+pre.raw{background:#070b14;border:1px solid var(--line-soft);border-radius:8px;padding:12px;font-family:var(--mono);font-size:11.5px;color:#8fa3ba;white-space:pre-wrap;word-break:break-word;max-height:400px;overflow:auto}
+.hidden{display:none!important}
+.chip{display:inline-flex;align-items:center;gap:5px;background:var(--panel);border:1px solid var(--line-soft);border-radius:999px;padding:4px 11px;font-size:11.5px;color:var(--dim);margin-right:6px}
+.chip b{color:var(--text);font-weight:600}
+
+/* drawer (decision workspace) */
+#drawer-back{position:fixed;inset:0;background:rgba(1,4,10,.7);z-index:40;display:none}
+#drawer{position:fixed;top:0;right:-640px;bottom:0;width:min(660px,94vw);background:var(--panel);border-left:1px solid var(--line);z-index:41;transition:right .22s ease-out;display:flex;flex-direction:column}
+#drawer.open{right:0}
+#drawer .dhead{padding:16px 20px;border-bottom:1px solid var(--line-soft);display:flex;justify-content:space-between;align-items:center}
+#drawer .dbody{padding:16px 20px 30px;overflow-y:auto;flex:1}
+.x{cursor:pointer;color:var(--dim);font-size:19px;background:none;border:none;line-height:1}
+.x:hover{color:var(--text)}
+
+/* modal (confirm / raw) */
+#modal-back{position:fixed;inset:0;background:rgba(1,4,10,.72);z-index:60;display:none;align-items:center;justify-content:center;padding:20px}
+#modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:min(560px,94vw);padding:20px 22px;max-height:86vh;overflow:auto}
+
+/* settings */
+.acc{border:1px solid var(--line-soft);border-radius:var(--r);background:var(--panel);margin-bottom:9px;overflow:hidden}
+.acc>.head{padding:11px 15px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:13px}
+.acc>.head small{color:var(--faint);font-weight:400;margin-left:9px}
+.acc>.body{padding:4px 15px 13px;border-top:1px solid var(--line-soft)}
+.expert-only{display:none}.expert .expert-only{display:block}.expert tr.expert-only{display:table-row}
+label.chk input{accent-color:var(--accent)}
+
+@media(max-width:960px){nav{display:none}main{margin-left:0}}
 </style>
 </head>
 <body>
@@ -97,289 +122,391 @@ label.chk{display:flex;gap:7px;align-items:center;font-size:12.5px;color:var(--d
   <span id="p-state" class="pill">STATE —</span>
   <span id="p-dd" class="pill">DD —</span>
   <span id="p-chain" class="pill">CHAIN —</span>
-  <span id="p-cash" class="pill">CASH —</span>
+  <span id="p-nav" class="pill">NAV —</span>
   <div class="spacer"></div>
-  <label class="chk" title="Show advanced parameters"><input type="checkbox" id="expert"> Expert</label>
-  <select id="autonomy" title="Autonomy mode">
-    <option value="MANUAL">MANUAL</option>
-    <option value="ASSISTED">ASSISTED</option>
-    <option value="SUPERVISED">SUPERVISED</option>
-    <option value="AUTONOMOUS" selected>AUTONOMOUS</option>
+  <input id="search" placeholder="Search  ( / )" aria-label="Global search">
+  <label class="chk" title="Expert mode: show advanced + raw"><input type="checkbox" id="expert"> Expert</label>
+  <select id="autonomy" class="btn" aria-label="Autonomy mode">
+    <option>MANUAL</option><option>ASSISTED</option><option>SUPERVISED</option>
+    <option selected>AUTONOMOUS</option><option>EMERGENCY</option>
   </select>
+  <button class="btn danger" id="killbtn" aria-label="Emergency kill switch">⏹ KILL</button>
 </header>
 
-<nav id="nav"></nav>
-<main>
-  <section data-t="executive" class="active">
-    <h2>Executive Summary</h2>
-    <div class="grid cards" id="cards"></div>
-    <h2 style="margin-top:6px">Market Regimes</h2>
-    <div class="grid cards" id="regime-cards"></div>
-    <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:4px">
-      <div><h2>Research Quality</h2><div id="rq-box" class="card" style="font-size:13px">loading…</div></div>
-      <div><h2>Pending Approvals</h2><div id="appr-box" class="card" style="font-size:13px">loading…</div></div>
-    </div>
-  </section>
+<nav id="nav" aria-label="Main navigation"></nav>
+<main id="main"></main>
 
-  <section data-t="decisions">
-    <h2>Recent Decisions</h2>
-    <table><thead><tr><th>Symbol</th><th>Action</th><th>Verification</th><th>Confidence</th><th>Outcome</th></tr></thead>
-    <tbody id="dec-rows"></tbody></table>
-  </section>
+<div id="drawer-back" onclick="closeDrawer()"></div>
+<div id="drawer" role="dialog" aria-modal="true">
+  <div class="dhead"><h3 id="d-title" style="font-size:15px">Workspace</h3><button class="x" onclick="closeDrawer()" aria-label="Close">✕</button></div>
+  <div class="dbody" id="d-body"></div>
+</div>
 
-  <section data-t="approvals">
-    <h2>Awaiting Your Approval <small style="color:var(--dim);font-weight:400">(SUPERVISED mode)</small></h2>
-    <table><thead><tr><th>Plan</th><th>Symbol</th><th>Action</th><th>Entry</th><th>Size %</th><th></th></tr></thead>
-    <tbody id="apr-rows"></tbody></table>
-  </section>
-
-  <section data-t="risk">
-    <h2>Risk & Compliance</h2>
-    <div id="risk-banner" style="margin-bottom:16px"></div>
-    <div class="grid" style="grid-template-columns:1fr 1fr">
-      <div><h2>Active Limits</h2><div id="limits-box" class="card"></div></div>
-      <div><h2>Recent Events</h2><div id="events-box" class="card" style="max-height:340px;overflow:auto"></div></div>
-    </div>
-  </section>
-
-  <section data-t="accounting">
-    <h2>Ledger Accounts <span id="tb-badge"></span></h2>
-    <table><thead><tr><th>Account</th><th>Balance (minor)</th><th>Direction</th></tr></thead><tbody id="acct-rows"></tbody></table>
-    <h2 style="margin-top:20px">Tax Position <span class="badge b-warn">ADVISORY — CA SIGN-OFF REQUIRED</span></h2>
-    <div id="tax-box" class="card" style="margin-top:-6px">loading…</div>
-  </section>
-
-  <section data-t="settings">
-    <h2>Settings Center</h2>
-    <div id="settings-root"></div>
-  </section>
-</main>
-
-<div id="modal-back"><div id="modal">
-  <div class="mhead">
-    <h3 id="m-title">Decision</h3>
-    <button class="x" onclick="closeModal()">✕</button>
-  </div>
-  <div id="m-body"></div>
-</div></div>
+<div id="modal-back"><div id="modal"></div></div>
 
 <script>
+/* ================================================================ utils */
 const $=i=>document.getElementById(i);
-const fmt=v=>v==null||v===undefined?"—":v;
+const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const fmt=v=>v==null?"—":v;
 const money=v=>v==null?"—":(v<0?`−$${Math.abs(Number(v)).toFixed(2)}`:`$${Number(v).toFixed(2)}`);
 const cls=v=>v>0?"pos":v<0?"neg":"";
-async function j(u,o){const r=await fetch(u,o);if(!r.ok)throw new Error((await r.json()).error||r.status);return r.json()}
-function badge(t,c){return `<span class="badge ${c}">${t}</span>`}
+const badge=(t,c="b-dim")=>`<span class="badge ${c}">${esc(t)}</span>`;
+async function j(u,o){const r=await fetch(u,o);const b=await r.json();if(!r.ok)throw new Error(b.error||r.status);return b}
+function pill(id,text,c){$(id).textContent=text;$(id).className="pill "+(c||"")}
+function toggle(id){$(id).classList.toggle("hidden")}
 
-/* ---------------- nav ---------------- */
-const TABS=["executive","decisions","approvals","risk","accounting","settings"];
-const nav=$("nav");let current="executive";
-TABS.forEach(t=>{const b=document.createElement("button");b.textContent=t.toUpperCase();b.dataset.t=t;
- if(t==="executive")b.classList.add("active");
- b.onclick=()=>showTab(t);nav.appendChild(b);});
+/* ================================================================ nav */
+const NAV={
+ "COMMAND":[["cmd","Command Center"],["opps","Opportunities"],["decisions","Decisions"],["portfolio","Portfolio"],["positions","Positions"],["execution","Execution"],["risk","Risk"]],
+ "INTELLIGENCE":[["agents","Agent Network"],["events","Global Events"],["memory","Memory & Research"],["strategies","Strategies"]],
+ "OPERATIONS":[["accounting","Accounting"],["tax","Tax & CA"],["audit","Audit"]],
+ "SYSTEM":[["health","System Health"],["settings","Settings"]],
+};
+let current="cmd";
+const nav=$("nav");
+for(const [group,items] of Object.entries(NAV)){
+  const g=document.createElement("div");g.className="navgroup";g.textContent=group;nav.appendChild(g);
+  for(const [t,label] of items){
+    const b=document.createElement("button");b.textContent=label;b.dataset.t=t;b.id="nav-"+t;
+    b.onclick=()=>showTab(t);nav.appendChild(b);
+  }
+}
 function showTab(t){current=t;
- document.querySelectorAll("section").forEach(s=>s.classList.toggle("active",s.dataset.tab===t));
+ document.querySelectorAll("main>section").forEach(s=>s.classList.toggle("active",s.dataset.t===t));
  nav.querySelectorAll("button").forEach(b=>b.classList.toggle("active",b.dataset.t===t));
  refresh(true);}
+const MAIN=$("main");
+for(const t of Object.keys(NAV).flatMap(g=>NAV[g].map(i=>i[0]))){
+  const s=document.createElement("section");s.dataset.t=t;MAIN.appendChild(s);
+}
 
-/* ---------------- executive ---------------- */
-async function loadExec(){
- const d=await j("/api/v1/executive");
- pill("p-state","STATE "+(d.emergency_state||"—"),d.emergency_state==="NORMAL"?"ok":d.emergency_state?"bad":"");
- const dd=d.drawdown_pct??0;
+/* ================================================================ command center */
+SECTIONS={};
+SECTIONS.cmd=`
+ <h2 class="sec">Portfolio</h2>
+ <div class="grid cards" id="c-cards"></div>
+ <h2 class="sec">Market Regime</h2>
+ <div id="c-regimes" style="margin-bottom:4px"></div>
+ <h2 class="sec">AI Market View</h2>
+ <div id="c-ai"></div>
+ <h2 class="sec">Top Opportunities</h2>
+ <div id="c-opps"></div>
+ <h2 class="sec">Recent Decisions</h2>
+ <div id="c-decisions"></div>
+ <h2 class="sec">Event Feed</h2>
+ <div id="c-events"></div>`;
+
+async function loadCmd(){
+ const [ex,pf,reg,opps,evts,decs]=await Promise.all([
+  j("/api/v1/executive"),j("/api/v1/portfolio"),j("/api/v1/regimes"),
+  j("/api/v1/opportunities"),j("/api/v1/events"),j("/api/v1/executions")]);
+ pill("p-state","STATE "+(ex.emergency_state||"—"),ex.emergency_state==="NORMAL"?"ok":"bad");
+ const dd=ex.drawdown_pct??0;
  pill("p-dd",`DD ${dd}%`,dd>=2.5?"bad":dd>=1.5?"warn":"ok");
- pill("p-chain","CHAIN "+(d.chain_valid?"OK":"BROKEN"),d.chain_valid?"ok":"bad");
- pill("p-cash","CASH "+money(d.cash_balance));
- $("cards").innerHTML=[
-  ["Portfolio Value",money(d.cash_balance),""],
-  ["Realized P&L",money(d.cumulative_realized_pnl),cls(d.cumulative_realized_pnl)],
-  ["Closed Trades",fmt(d.closed_trades),""],
+ pill("p-chain","CHAIN "+(ex.chain_valid?"OK":"BROKEN"),ex.chain_valid?"ok":"bad");
+ pill("p-nav","NAV "+money(pf.nav));
+ $("c-cards").innerHTML=[
+  ["Portfolio NAV",money(pf.nav),""],["Cash",money(pf.cash),""],
+  ["Realized P&L",money(pf.realized_pnl),cls(pf.realized_pnl)],
+  ["Exposure",fmt(pf.exposure_pct)+"%",pf.exposure_pct>60?"warnT":""],
+  ["Open Positions",fmt(pf.open_notional!=null?(await j("/api/v1/positions")).positions.length:"—"),""],
   ["Drawdown",`${fmt(dd)}%`,dd>=1.5?"warnT":""],
-  ["Open Positions",fmt(d.open_positions),""],
-  ["Events Audited",fmt(d.events_logged),""],
+  ["Closed Trades",fmt(pf.closed_trades),""],
+  ["Events Audited",fmt(ex.events_logged),""],
  ].map(([k,v,c])=>`<div class="card"><b>${k}</b><span class="v ${c}">${fmt(v)}</span></div>`).join("");
 
- try{const rq=await j("/api/v1/research");
-  const rel=rq.reliable;
-  $("rq-box").innerHTML=`<div class="kv"><span class="k">Scored predictions</span><span>${rq.total_scored}</span></div>
-   <div class="kv"><span class="k">Brier score (lower=better)</span><span>${rq.brier_score}</span></div>
-   <div class="kv"><span class="k">Directional accuracy</span><span>${rq.directional_accuracy_pct}%</span></div>
-   <div class="kv"><span class="k">Reliable sample?</span><span>${rel?badge("YES","b-ok"):badge("NOT YET","b-dim")}</span></div>`;
- }catch(e){$("rq-box").textContent=e.message}
- try{const a=(await j("/api/v1/approvals")).approvals;
-  $("appr-box").innerHTML=a.length?a.map(x=>`<div class="kv"><span>${badge(x.action,x.action==="BUY"?"b-buy":"b-sell")} ${x.symbol}</span><button class="btn primary" onclick="gotoApprovals()">Review →</button></div>`).join(""):`<span style="color:var(--faint)">No plans awaiting approval.</span>`;
- }catch(e){$("appr-box").textContent=e.message}
+ $("c-regimes").innerHTML=(reg.regimes||[]).map(r=>{
+   const tone=r.trend==="UP"?"b-ok":r.trend==="DOWN"?"b-bad":"b-dim";
+   const vol=r.vol_regime==="HIGH"?badge("HIGH VOL","b-warn"):r.vol_regime==="LOW"?badge("LOW VOL","b-dim"):badge("NORMAL VOL","b-dim");
+   return `<span class="chip"><b>${esc(r.symbol)}</b> ${badge(r.trend,tone)} ${vol} <span style="color:var(--faint)">σ ${r.realized_vol_pct}%</span></span>`;
+ }).join("")||`<span class="empty" style="display:block">No regime data yet — needs ≥5 bars.</span>`;
+
+ const last=(decs.executions||[])[0];
+ $("c-ai").innerHTML=last?`<div class="card">
+   <div class="kv"><span class="k">Latest AI decision</span><span>${badge(last.symbol,"b-acc")} ${badge(last.action,last.action==="SELL"?"b-sell":"b-buy")} ${last.confidence_pct!=null?badge("conf "+last.confidence_pct+"%",last.confidence_pct>=70?"b-ok":"b-warn"):""}</span></div>
+   <div class="kv"><span class="k">Outcome so far</span><span class="${cls(last.realized_pnl)}">${money(last.realized_pnl)} <small style="color:var(--faint)">${fmt(last.exit_reason)}</small></span></div>
+   <div style="margin-top:9px"><button class="btn sm" onclick="openDecision('${last.execution_id}')">Why? — open decision workspace →</button></div></div>`
+  :`<div class="empty">No AI decisions yet.</div>`;
+
+ const o=(opps.opportunities||[]).slice(0,5);
+ $("c-opps").innerHTML=o.length?`<table><thead><tr><th>Symbol</th><th>Family</th><th>Edge</th><th>R:R</th><th>Decay</th><th>Rank</th></tr></thead><tbody>${
+  o.map(x=>`<tr><td><b>${esc(x.symbol)}</b></td><td>${badge(x.family,"b-acc")}</td>
+   <td class="${cls(x.edge_proxy)}">${fmt(x.edge_proxy)}</td><td>${fmt(x.expected_rr)}</td>
+   <td>${fmt(x.alpha_decay)}</td><td><b>${fmt(x.composite_rank)}</b></td></tr>`).join("")}</tbody></table>`
+  :`<div class="empty">No ranked opportunities in the current window.</div>`;
+
+ $("c-decisions").innerHTML=decTable((decs.executions||[]).slice(0,8));
+ const ev=(evts.events||[]).slice(0,6);
+ $("c-events").innerHTML=ev.length?ev.map(e=>`<div class="kv"><span>${badge(e.label,"b-acc")} ${esc(String(e.title)).slice(0,90)}</span><span style="color:var(--faint);font-size:11px">${esc(String(e.ts)).slice(11,19)}</span></div>`).join("")
+  :`<div class="empty">Quiet — no world/risk events.</div>`;
 }
-function gotoApprovals(){showTab("approvals")}
+function decTable(rows){
+ return rows.length?`<table><thead><tr><th>Symbol</th><th>Action</th><th>Verification</th><th>Confidence</th><th>Outcome</th></tr></thead><tbody>${
+  rows.map(e=>`<tr class="rowlink" onclick="openDecision('${e.execution_id}')">
+   <td><b>${esc(e.symbol)}</b></td>
+   <td>${badge(e.action||"?",e.action==="SELL"?"b-sell":"b-buy")}</td>
+   <td>${badge("VERIFIED ✓","b-ok")}</td>
+   <td><div style="min-width:84px">${e.confidence_pct!=null?e.confidence_pct+"%":"100%"}<div class="bar"><i style="width:${e.confidence_pct||100}%"></i></div></div></td>
+   <td class="${cls(e.realized_pnl)}">${money(e.realized_pnl)}<br><small style="color:var(--faint)">${fmt(e.exit_reason)}</small></td></tr>`).join("")}</tbody></table>`
+  :`<div class="empty">No closed decisions yet.</div>`;
+}
+
+/* ---------------- opportunities ---------------- */
+SECTIONS.opps=`<h2 class="sec">Opportunity Ranking <small style="color:var(--faint);text-transform:none;letter-spacing:0">edge × R:R × alpha-decay — confidence is NOT a profit guarantee</small></h2><div id="o-body"></div>`;
+async function loadOpps(){const d=await j("/api/v1/opportunities");
+ $("o-body").innerHTML=(d.opportunities||[]).length?`<table><thead><tr><th>Symbol</th><th>Family</th><th>Edge proxy</th><th>Expected R:R</th><th>α-decay</th><th>Composite</th></tr></thead><tbody>${
+  d.opportunities.map(x=>`<tr><td><b>${esc(x.symbol)}</b></td><td>${badge(x.family,"b-acc")}</td><td class="${cls(x.edge_proxy)}">${fmt(x.edge_proxy)}</td><td>${fmt(x.expected_rr)}</td><td>${fmt(x.alpha_decay)}</td><td><b>${fmt(x.composite_rank)}</b></td></tr>`).join("")}</tbody></table>`
+ :`<div class="empty">No opportunities ranked yet.</div>`;}
 
 /* ---------------- decisions ---------------- */
-async function loadDecisions(){
- const d=await j("/api/v1/executions");
- $("dec-rows").innerHTML=(d.executions||[]).map(e=>{
-  const okPnl=e.realized_pnl>0;
-  return `<tr class="rowlink" onclick="drill('${e.execution_id}')">
-   <td><b>${fmt(e.symbol)}</b></td>
-   <td>${badge(fmt(e.action||"?"),e.action==="SELL"?"b-sell":"b-buy")}</td>
-   <td>${badge("VERIFIED ✓","b-ok")}</td>
-   <td><div style="min-width:90px">${fmt(e.confidence_pct!=null?e.confidence_pct+"%":"100%")}
-       <div class="bar"><i style="width:${e.confidence_pct||100}%"></i></div></div></td>
-   <td class="${cls(e.realized_pnl)}">${money(e.realized_pnl)}<br><small style="color:var(--faint)">${fmt(e.exit_reason)}</small></td>
-  </tr>`;}).join("")||`<tr><td colspan=5 style="color:var(--faint)">No closed trades yet.</td></tr>`;
-}
+SECTIONS.decisions=`<h2 class="sec">Decision History</h2><div id="d-body"></div>`;
+async function loadDecisions(){const d=await j("/api/v1/executions");
+ $("d-body").innerHTML=decTable(d.executions||[]);}
 
-async function drill(id){
+async function openDecision(id){
  const d=await j("/api/v1/decisions/"+id);
  const v=d.verification,o=d.outcome,s=d.decision,r=d.reason,ev=d.evidence,rk=d.risk;
- $("m-title").innerHTML=`${s.symbol} · DECISION VERIFICATION ${o.actual_pnl!=null?(o.actual_pnl>=0?badge("CLOSED +","b-ok"):badge("CLOSED −","b-bad")):badge("OPEN","b-dim")}`;
  const conf=v.confidence_score??0;
- const evOK=(ev.supporting_arguments||[]).length;
- $("m-body").innerHTML=`
-  <div class="cards grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
-    <div class="card"><b>Verified</b><span class="v">${conf>=70?"✓ YES":"✗ NO"}</span></div>
-    <div class="card"><b>Confidence</b><span class="v">${conf}%</span><div class="bar"><i style="width:${conf}%"></i></div></div>
-    <div class="card"><b>Evidence</b><span class="v">${evOK}/${evOK+(ev.counter_arguments||[]).length}</span></div>
-    <div class="card"><b>Risk Checks</b><span class="v ${chainOK(d)?"pos":"neg"}">${chainOK(d)?"PASS":"FAIL"}</span></div>
+ $("d-title").innerHTML=`${esc(s.symbol)} · ${badge(s.action,s.action==="SELL"?"b-sell":"b-buy")} ${badge("MOMENTUM","b-acc")} ${o.actual_pnl!=null?(o.actual_pnl>=0?badge("CLOSED +","b-ok"):badge("CLOSED −","b-bad")):badge("OPEN","b-dim")}`;
+ $("d-body").innerHTML=`
+  <div class="grid cards" style="grid-template-columns:repeat(4,1fr)">
+   <div class="card"><b>Confidence</b><span class="v">${conf}%</span><div class="bar"><i style="width:${conf}%"></i></div></div>
+   <div class="card"><b>Evidence</b><span class="v">${(ev.supporting_arguments||[]).length}<small style="font-size:12px;color:var(--faint)"> / +${(ev.counter_arguments||[]).length} contra</small></span></div>
+   <div class="card"><b>Risk checks</b><span class="v ${d.chain_complete?"pos":"neg"}">${d.chain_complete?"PASS":"FAIL"}</span></div>
+   <div class="card"><b>P&L</b><span class="v ${cls(o.actual_pnl)}">${money(o.actual_pnl)}</span></div>
   </div>
-  <div class="sect"><h4>Thesis</h4><div style="font-size:13.5px">${r.thesis||"—"}</div></div>
-  <div class="sect grid" style="grid-template-columns:1fr 1fr">
-    <div><h4>Supporting Evidence</h4><ul class="clean">${(ev.supporting_arguments||[]).map(x=>`<li>${x}</li>`).join("")||"<li style='color:var(--faint)'>none recorded</li>"}</ul></div>
-    <div><h4>Counter-Arguments</h4><ul class="clean cOUNTER">${(ev.counter_arguments||[]).map(x=>`<li>${x}</li>`).join("")||"<li style='color:var(--faint)'>none recorded</li>"}</ul></div>
+  <h2 class="sec">Thesis</h2><div style="font-size:13.5px">${esc(r.thesis)}</div>
+  <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:14px">
+   <div><h2 class="sec">Evidence ✓</h2><ul class="clean" style="list-style:none">${(ev.supporting_arguments||[]).map(x=>`<li style="padding:3px 0">✓ ${esc(x)}</li>`).join("")||'<li style="color:var(--faint)">none</li>'}</ul></div>
+   <div><h2 class="sec">Counterarguments !</h2><ul style="list-style:none">${(ev.counter_arguments||[]).map(x=>`<li style="padding:3px 0;color:#fca5a5">! ${esc(x)}</li>`).join("")||'<li style="color:var(--faint)">none</li>'}</ul></div>
   </div>
-  <div class="sect"><h4>Execution & Outcome</h4>
-   <div class="kv"><span class="k">Action / Entry</span><span>${s.action} @ ${fmt(s.entry_price??rk.stop_loss_price&&"—")}</span></div>
-   <div class="kv"><span class="k">Stop / Target</span><span>${fmt(rk.stop_loss_price)} / ${fmt(rk.take_profit_price)}</span></div>
-   <div class="kv"><span class="k">Position size</span><span>${fmt(s.position_size_pct)}%</span></div>
-   <div class="kv"><span class="k">Exit reason</span><span>${fmt(o.exit_reason)}</span></div>
-   <div class="kv"><span class="k">Realized P&L</span><span class="${cls(o.actual_pnl)}">${money(o.actual_pnl)}</span></div>
-   <ul class="clean" style="margin-top:6px">${(o.lessons_learned||[]).map(l=>`<li>${l}</li>`).join("")}</ul>
+  <h2 class="sec">Verification Rubric</h2>
+  ${[["Facts",v.fact_score,40],["Balance",v.balance_score,30],["Math / R:R",v.math_score,30]].map(([k,val,max])=>`
+   <div class="kv"><span class="k">${k}</span><span style="min-width:180px">${fmt(val)} / ${max}<div class="bar"><i style="width:${(val??0)/max*100}%"></i></div></span></div>`).join("")}
+  ${(v.flagged_hallucinations||[]).length?`<div class="sect"><h2 class="sec">Flagged</h2>${v.flagged_hallucinations.map(h=>badge(h.slice(0,60),"b-bad")).join("<br>")}</div>`:""}
+  <h2 class="sec">Risk Geometry</h2>
+  <div class="kv"><span class="k">Stop / Target</span><span>${fmt(rk.stop_loss_price)} / ${fmt(rk.take_profit_price)}</span></div>
+  <div class="kv"><span class="k">Size</span><span>${fmt(s.position_size_pct)}%</span></div>
+  <h2 class="sec">Lessons</h2>
+  <ul class="clean">${(o.lessons_learned||[]).map(l=>`<li>${esc(l)}</li>`).join("")||"<li style='color:var(--faint)'>—</li>"}</ul>
+  <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+   <button class="btn" onclick="dToggle('raw-a')">Agent Trace</button>
+   <button class="btn" onclick="dToggle('raw-j')">Raw JSON</button>
+   <button class="btn" onclick="dToggle('raw-aud')">Audit Trail</button>
   </div>
-  <div class="sect" style="display:flex;gap:8px;flex-wrap:wrap">
-    <button class="btn" onclick="toggle('raw-evidence')">Inspect Evidence</button>
-    <button class="btn" onclick="toggle('raw-trace')">Agent Trace</button>
-    <button class="btn" onclick="toggle('raw-audit')">Audit Trail</button>
-    <button class="btn danger" onclick="toggle('raw-json')">Raw Data</button>
-  </div>
-  <pre class="raw hidden" id="raw-evidence">${esc(JSON.stringify({supporting:ev.supporting_arguments,counters:ev.counter_arguments,flagged:v.flagged_hallucinations},null,2))}</pre>
-  <pre class="raw hidden" id="raw-trace">${esc(JSON.stringify({verification_scores:{fact:v.fact_score,balance:v.balance_score,math:v.math_score}},null,2))}</pre>
-  <pre class="raw hidden" id="raw-audit">${esc(JSON.stringify({chain_complete:d.chain_complete,execution_id:d.execution_id,strategy_id:s.strategy_id??d.execution_id},null,2))}</pre>
-  <pre class="raw hidden" id="raw-json">${esc(JSON.stringify(d,null,2))}</pre>`;
- $("modal-back").style.display="flex";
+  <pre class="raw hidden" id="raw-a">${esc(JSON.stringify({turns_scores:{fact:v.fact_score,balance:v.balance_score,math:v.math_score}},null,2))}</pre>
+  <pre class="raw hidden" id="raw-j">${esc(JSON.stringify(d,null,2))}</pre>
+  <pre class="raw hidden" id="raw-aud">${esc(JSON.stringify({chain_complete:d.chain_complete,execution_id:d.execution_id},null,2))}</pre>`;
+ openDrawer(s.symbol+" decision");
 }
-function chainOK(d){return !!d.chain_complete}
-function toggle(id){$(id).classList.toggle("hidden")}
-function esc(s){return s.replace(/</g,"&lt;")}
-function closeModal(){$("modal-back").style.display="none"}
-$("modal-back").onclick=e=>{if(e.target.id==="modal-back")closeModal()};
+function dToggle(id){$(id).classList.toggle("hidden")}
+function openDrawer(title){$("d-title").textContent=title;$("drawer").classList.add("open");$("drawer-back").style.display="block"}
+function closeDrawer(){$("drawer").classList.remove("open");$("drawer-back").style.display="none"}
+$("drawer-back").onclick=closeDrawer;
 
-/* ---------------- approvals ---------------- */
-async function loadApprovals(){
- const d=await j("/api/v1/approvals");
- $("apr-rows").innerHTML=(d.approvals||[]).map(a=>`
-  <tr><td>${String(a.plan_id).slice(0,8)}</td><td><b>${fmt(a.symbol)}</b></td>
-  <td>${badge(a.action,a.action==="BUY"?"b-buy":"b-sell")}</td><td>${fmt(a.entry_price)}</td><td>${fmt(a.position_size_pct)}%</td>
-  <td style="white-space:nowrap">
-   <button class="btn primary" onclick="decide('${a.plan_id}','approve')">Approve</button>
-   <button class="btn danger" onclick="decide('${a.plan_id}','reject')">Reject</button></td></tr>`
- ).join("")||`<tr><td colspan=6 style="color:var(--faint)">Nothing pending — switch to SUPERVISED mode to route orders here.</td></tr>`;
+/* ---------------- portfolio / positions ---------------- */
+SECTIONS.portfolio=`<h2 class="sec">Portfolio</h2><div class="grid cards" id="pf-cards"></div>
+ <h2 class="sec">Allocation by Asset Class</h2><div id="pf-alloc" class="card"></div>`;
+async function loadPortfolio(){
+ const [pf,pos]=await Promise.all([j("/api/v1/portfolio"),j("/api/v1/positions")]);
+ $("pf-cards").innerHTML=[["NAV",money(pf.nav),""],["Cash",money(pf.cash),""],
+  ["Open notional",money(pf.open_notional),""],["Exposure",fmt(pf.exposure_pct)+"%",pf.exposure_pct>60?"warnT":""],
+  ["Realized P&L",money(pf.realized_pnl),cls(pf.realized_pnl)],["Closed trades",fmt(pf.closed_trades),""]]
+  .map(([k,v,c])=>`<div class="card"><b>${k}</b><span class="v ${c}">${fmt(v)}</span></div>`).join("");
+ $("pf-alloc").innerHTML=Object.entries(pf.allocation_pct||{}).length
+  ?Object.entries(pf.allocation_pct).map(([k,v])=>`<div class="kv"><span class="k">${esc(k)}</span><span style="min-width:200px">${v}%<div class="bar"><i style="width:${Math.min(100,v)}%"></i></div></span></div>`).join("")
+  :`<span style="color:var(--faint)">No open exposure.</span>`;
 }
-async function decide(pid,kind){
- await j("/api/v1/control/"+(kind==="approve"?"approve_plan":"reject_plan"),{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{plan_id:pid}})});
- loadApprovals();
-}
+SECTIONS.positions=`<h2 class="sec">Open Positions</h2><div id="pos-body"></div>`;
+async function loadPositions(){const d=await j("/api/v1/positions");
+ $("pos-body").innerHTML=(d.positions||[]).length?`<table><thead><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Entry</th><th>Mark</th><th>Unrealized</th><th>Stop / Target</th></tr></thead><tbody>${
+  d.positions.map(p=>`<tr><td><b>${esc(p.symbol)}</b></td><td>${badge(p.action,p.action==="SELL"?"b-sell":"b-buy")}</td>
+  <td>${fmt(p.qty)}</td><td>${fmt(p.entry)}</td><td>${fmt(p.mark)}</td>
+  <td class="${cls(p.unrealized)}">${money(p.unrealized)}</td><td>${fmt(p.stop)} / ${fmt(p.target)}</td></tr>`).join("")}</tbody></table>`
+ :`<div class="empty">Flat — no open positions.</div>`;}
 
-/* ---------------- risk / accounting / settings ---------------- */
-async function loadRisk(){
- const d=await j("/api/v1/risk");
- const st=d.current_state||"UNKNOWN";
- const bad=st!=="NORMAL";
- $("risk-banner").innerHTML=`<div class="card" style="border-color:${bad?"var(--bad)":"var(--ok)"}">
-  <b>Emergency State</b><span class="v ${bad?"neg":"pos"}">${st}</span>
-  <div class="s">Locked out: ${d.locked_out?"YES — human reset required":"no"} · Drawdown ${fmt(d.drawdown_pct)}%</div></div>`;
- $("limits-box").innerHTML=[["Max class exposure",fmt(d.max_class_exposure_pct)+"%"],["Halt drawdown",fmt(d.halt_dd_pct)+"%"],
-  ["Warning drawdown",fmt(d.warning_dd_pct)+"%"],["Caution drawdown",fmt(d.caution_dd_pct)+"%"]]
+/* ---------------- execution ---------------- */
+SECTIONS.execution=`<h2 class="sec">Order Lifecycle</h2><div id="x-body"></div>`;
+async function loadExec(){const d=await j("/api/v1/orders");
+ const stColor=s=>s==="FILLED"?"b-ok":s==="REJECTED"?"b-bad":s==="CANCELLED"?"b-dim":"b-warn";
+ $("x-body").innerHTML=(d.orders||[]).length?`<table><thead><tr><th>Client ID</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Status</th><th>Fill</th></tr></thead><tbody>${
+  d.orders.map(o=>`<tr><td style="font-family:var(--mono);font-size:11px">${esc(o.client_order_id).slice(0,26)}</td><td>${esc(o.symbol)}</td>
+  <td>${badge(o.side,o.side==="SELL"?"b-sell":"b-buy")}</td><td>${fmt(o.quantity)}</td>
+  <td>${badge(o.status,stColor(o.status))}</td><td>${fmt(o.avg_fill_price)}${o.reject_reason?`<br><small style="color:var(--faint)">${esc(o.reject_reason)}</small>`:""}</td></tr>`).join("")}</tbody></table>`
+ :`<div class="empty">No orders yet.</div>`;}
+
+/* ---------------- risk ---------------- */
+SECTIONS.risk=`<h2 class="sec">Risk Status</h2><div id="r-banner" style="margin-bottom:14px"></div>
+ <div class="grid" style="grid-template-columns:1fr 1fr"><div><h2 class="sec">Active Limits</h2><div id="r-limits" class="card"></div></div>
+ <div><h2 class="sec">Event Log</h2><div id="r-events" class="card" style="max-height:380px;overflow:auto"></div></div></div>`;
+async function loadRisk(){const d=await j("/api/v1/risk");
+ const st=d.current_state||"UNKNOWN",bad=st!=="NORMAL";
+ $("r-banner").innerHTML=`<div class="card" style="border-color:${bad?"var(--bad)":"var(--ok)"}">
+  <b>Risk Governor — ${st}</b><span class="v ${bad?"neg":"pos"}" style="font-size:15px"> ${d.locked_out?"· LOCKED OUT":""}</span>
+  <div class="s">Drawdown ${fmt(d.drawdown_pct)}% · halt at ${fmt(d.halt_dd_pct)}%</div></div>`;
+ $("r-limits").innerHTML=[["Max class exposure",fmt(d.max_class_exposure_pct)+"%"],["Halt drawdown",fmt(d.halt_dd_pct)+"%"],
+  ["Caution drawdown",fmt(d.caution_dd_pct)+"%"],["Warning drawdown",fmt(d.warning_dd_pct)+"%"]]
   .map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span>${v}</span></div>`).join("");
- const events=[...(d.compliance_alerts||[]).map(a=>({t:"COMPLIANCE",d:a.detail,s:a.severity})),
-               ...(d.emergency_events||[]).map(e=>({t:"EMERGENCY",d:e.reason,s:e.lockout_engaged?"CRITICAL":"WARN"}))];
- $("events-box").innerHTML=events.length?events.map(e=>`<div style="padding:6px 0;border-bottom:1px dashed #17202d;font-size:12.5px">
-   ${badge(e.t,e.s==="CRITICAL"?"b-bad":"b-warn")} <span style="color:var(--dim)">${e.d}</span></div>`).join("")
-   :`<span style="color:var(--faint)">No recent risk or compliance events.</span>`;
-}
-async function loadAcct(){
- const d=await j("/api/v1/accounting");
- $("tb-badge").innerHTML=d.balanced?badge("TRIAL BALANCE OK","b-ok"):badge("OUT OF BALANCE","b-bad");
- $("acct-rows").innerHTML=Object.entries(d.accounts_minor||{}).map(([acc,v])=>`
-  <tr><td>${acc}</td><td class="${cls(v)}">${Number(v).toLocaleString()}</td>
-  <td>${v>0?badge("DEBIT","b-dim"):badge("CREDIT","b-dim")}</td></tr>`).join("");
- try{const t=await j("/api/v1/accounting");const tax=t.tax||{};
- const state=tax.ca_state||"UNKNOWN";
- $("tax-box").innerHTML=`<div class="kv"><span class="k">Rule</span><span style="text-align:right">${fmt(tax.rule_citation)}</span></div>
-  <div class="kv"><span class="k">Jurisdiction</span><span>${fmt(tax.jurisdiction)}</span></div>
-  <div class="kv"><span class="k">Taxable gain</span><span>${Number(tax.taxable_gain_minor??0).toLocaleString()} minor</span></div>
-  <div class="kv"><span class="k">Tax due (advisory)</span><span>${Number(tax.tax_due_minor??0).toLocaleString()} minor</span></div>
-  <div class="kv"><span class="k">CA review state</span><span>${badge(state,state==="APPROVED_BY_CA"?"b-ok":state==="UNDER_REVIEW"?"b-warn":"b-dim")}</span></div>`;
- }catch(e){$("tax-box").textContent=e.message}
-}
-async function loadSettings(){
- const d=await j("/api/v1/settings");
- const groups=[
-  ["SYSTEM","system",[["Model provider","model_provider"],["Research mode","research_mode","select_research"],["LLM configured","llm_configured_bool"],["Shadow mode","shadow_bool"]]],
-  ["AI & AGENTS","ai",[["Cheap model","research_model_cheap"],["Reasoning model","research_model_reasoning"],["Verifier model","verification_model"],["Temperature","llm_temperature"]]],
-  ["DATA PROVIDERS","data",[["Finnhub","finnhub_bool"],["GNews","gnews_bool"],["NewsData","newsdata_bool"],["MarketStack","marketstack_bool"],["FRED","fred_bool"]]],
-  ["RISK LIMITS","risk",[["Max class exposure %","max_class_exposure_pct"],["Halt drawdown %","halt_dd_pct"],["Warning drawdown %","warning_dd_pct"],["Caution drawdown %","caution_dd_pct"]]],
-  ["EXECUTION RAILS","execution_rails",[["Live execution (env)","live_execution_allowed_env"],["Micro-live cap $","micro_live_cap_usd"],["Constitution pinned","constitution_pinned_bool"]]],
- ];
- const boolKeys=new Set(["llm_configured","shadow_mode","finnhub","gnews","newsdata","marketstack","fred","live_execution_allowed_env","constitution_pinned"]);
- $("settings-root").innerHTML=groups.map(([title,key,rows])=>`
-  <div class="acc"><div class="head" onclick="this.parentElement.querySelector('.body').classList.toggle('hidden')">
-   ${title}<small>effective values</small></div><div class="body">
-   ${rows.map(([label,k,edit])=>{
-     let v=d[key]?.[k];
-     if(k.endsWith("_bool")){v=v===true||v==="1"?badge("CONFIGURED","b-ok"):badge("OFF","b-dim");}
-     else if(typeof v==="boolean"){v=v?badge("ON","b-ok"):badge("OFF","b-dim");}
-     let control="";
-     if(edit==="select_research"&&!k.endsWith("_bool")){
-       control=`<select onchange="setResearch(this.value)"><option value="auto"${v==="auto"?" selected":""}>auto</option><option value="deterministic"${v==="deterministic"?" selected":""}>deterministic</option></select>`;
-     }else if(!k.endsWith("_bool")&&(key==="risk")){control=`<input value="${fmt(v)}" data-k="${k}" onchange="setLimit(this.dataset.k,this.value)">`;}
-     return `<div class="kv ${String(k).includes("bool")?"":"expert-only"} ${boolKeys.has(k)?"":"expert-only"}"><span class="k">${label}</span><span>${control||(typeof v==="boolean"?badge(String(v),"b-dim"):fmt(v))}</span></div>`;
-   }).join("")}
-  </div></div>`).join("")
-  +`<div class="acc expert-only"><div class="head">RAW CONFIGURATION<small>/api/v1/settings</small></div><div class="body"><pre class="raw">${esc(JSON.stringify(d,null,2))}</pre></div></div>`;
- document.body.classList.toggle("expert",$("expert").checked);
-}
-async function setResearch(m){
- await j("/api/v1/control/set_research_mode",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{mode:m}})});
- loadSettings();
-}
-async function setLimit(k,v){
- const action=k==="max_class_exposure_pct"?"set_max_position_pct":k==="halt_dd_pct"?"set_halt_drawdown_pct":null;
- if(!action)return;
- await j("/api/v1/control/"+action,{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{pct:Number(v)}})});
- loadSettings();
-}
+ const ev=[...(d.compliance_alerts||[]).map(a=>({t:"COMPLIANCE",m:a.detail,s:a.severity})),
+           ...(d.emergency_events||[]).map(x=>({t:"EMERGENCY",m:x.reason,s:x.lockout_engaged?"CRITICAL":"WARN"}))];
+ $("r-events").innerHTML=ev.length?ev.map(x=>`<div style="padding:5px 0;border-bottom:1px dashed #17202d;font-size:12px">${badge(x.t,x.s==="CRITICAL"?"b-bad":"b-warn")} <span style="color:var(--dim)">${esc(x.m).slice(0,110)}</span></div>`).join("")
+  :`<span style="color:var(--faint)">No risk events.</span>`;}
 
-/* ---------------- autonomy ---------------- */
+/* ---------------- agents ---------------- */
+SECTIONS.agents=`<h2 class="sec">Agent Network</h2><div id="a-body"></div>`;
+async function loadAgents(){const d=await j("/api/v1/agents");
+ $("a-body").innerHTML=(d.agents||[]).length?`<table><thead><tr><th>Agent</th><th>Community</th><th>Role</th><th>Version</th><th>Publishes</th></tr></thead><tbody>${
+  d.agents.map(a=>`<tr><td><b>${esc(a.agent_id)}</b></td><td>${badge(a.community,"b-acc")}</td><td>${esc(a.role)}</td>
+  <td>${esc(a.version)}</td><td style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">${(a.publishes||[]).map(esc).join(", ")||"—"}</td></tr>`).join("")}</tbody></table>`
+ :`<div class="empty">No agents registered.</div>`;}
+
+/* ---------------- events ---------------- */
+SECTIONS.events=`<h2 class="sec">Global Event Timeline</h2><div id="e-body"></div>`;
+async function loadEvents(){const d=await j("/api/v1/events");
+ $("e-body").innerHTML=(d.events||[]).length?d.events.map(e=>`<div class="card" style="margin-bottom:8px">
+  <div class="kv"><span>${badge(e.label,"b-acc")} ${esc(String(e.title)).slice(0,120)}</span>
+  <span style="color:var(--faint);font-size:11px">${esc(String(e.ts)).slice(0,19)} ${e.symbol?badge(e.symbol,"b-dim"):""}</span></div></div>`).join("")
+ :`<div class="empty">No world events — connect a macro calendar or wait for regime shifts.</div>`;}
+
+/* ---------------- memory ---------------- */
+SECTIONS.memory=`<h2 class="sec">Memory & Research Quality</h2><div id="m-body" class="grid" style="grid-template-columns:1fr 1fr"></div>`;
+async function loadMemory(){
+ const [rq,h]=await Promise.all([j("/api/v1/research"),j("/api/v1/health")]);
+ $("m-body").innerHTML=`<div class="card"><b>Prediction Calibration</b>
+  <div class="kv"><span class="k">Scored predictions</span><span>${rq.total_scored}</span></div>
+  <div class="kv"><span class="k">Brier score</span><span>${rq.brier_score}</span></div>
+  <div class="kv"><span class="k">Directional accuracy</span><span>${rq.directional_accuracy_pct}%</span></div>
+  <div class="kv"><span class="k">Reliable sample</span><span>${rq.reliable?badge("YES","b-ok"):badge("NOT YET","b-dim")}</span></div></div>
+  <div class="card"><b>Store Health</b>
+  <div class="kv"><span class="k">Audit chain</span><span>${h.audit_chain_valid?badge("OK","b-ok"):badge("BROKEN","b-bad")}</span></div>
+  ${Object.entries(h.counts||{}).map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span>${v}</span></div>`).join("")}</div>`;}
+
+/* ---------------- strategies (empty state per §33) ---------------- */
+SECTIONS.strategies=`<h2 class="sec">Strategy Library</h2><div class="empty">Strategy library UI is not wired to a backend registry yet. Active families today: <b>momentum</b>, <b>mean_reversion</b> (see Settings → AI). This workspace will light up when the strategy registry ships.</div>`;
+
+/* ---------------- accounting / tax ---------------- */
+SECTIONS.accounting=`<h2 class="sec">Ledger Accounts <span id="a-badge"></span></h2><table><thead><tr><th>Account</th><th>Balance (minor)</th><th>Side</th></tr></thead><tbody id="ac-rows"></tbody></table>
+ <h2 class="sec">Tax Position <span class="badge b-warn">ADVISORY — SIGN-OFF REQUIRED</span></h2><div id="tax-card" class="card"></div>`;
+async function loadAccounting(){const d=await j("/api/v1/accounting");
+ $("a-badge").innerHTML=d.balanced?badge("TRIAL BALANCE OK","b-ok"):badge("OUT OF BALANCE","b-bad");
+ $("ac-rows").innerHTML=Object.entries(d.accounts_minor||{}).map(([a,v])=>`<tr><td style="font-family:var(--mono);font-size:11.5px">${esc(a)}</td><td class="${cls(v)}">${Number(v).toLocaleString()}</td><td>${v>0?"DEBIT":"CREDIT"}</td></tr>`).join("");
+ const t=d.tax||{};
+ $("tax-card").innerHTML=`<div class="kv"><span class="k">Rule</span><span style="text-align:right">${esc(t.rule_citation||"—")}</span></div>
+  <div class="kv"><span class="k">Jurisdiction</span><span>${fmt(t.jurisdiction)}</span></div>
+  <div class="kv"><span class="k">Taxable gain</span><span>${Number(t.taxable_gain_minor??0).toLocaleString()} minor</span></div>
+  <div class="kv"><span class="k">Tax due (advisory)</span><span>${Number(t.tax_due_minor??0).toLocaleString()} minor</span></div>
+  <div class="kv"><span class="k">CA review state</span><span>${badge(t.ca_state||"UNKNOWN",t.ca_state==="APPROVED_BY_CA"?"b-ok":"b-warn")}</span></div>`;}
+
+SECTIONS.tax=`<h2 class="sec">Tax & CA Review Queue</h2><div id="t-body"></div>`;
+async function loadTax(){const d=await j("/api/v1/accounting");
+ const q=d.ca_review_queue||[];
+ $("t-body").innerHTML=(q.length?`<table><thead><tr><th>Subject</th><th>State</th></tr></thead><tbody>${
+  q.map(x=>`<tr><td style="font-family:var(--mono);font-size:11.5px">${esc(x.subject_ref)}</td><td>${badge(x.state,x.state==="APPROVED_BY_CA"?"b-ok":"b-warn")}</td></tr>`).join("")}</tbody></table>`
+  :`<div class="empty">Review queue empty.</div>`)
+  +`<p style="color:var(--faint);font-size:12px;margin-top:10px">Filing is code-blocked until a licensed professional sets APPROVED_BY_CA (Directive 42).</p>`;}
+
+/* ---------------- audit ---------------- */
+SECTIONS.audit=`<h2 class="sec">Audit Trail</h2>
+ <input id="aud-q" class="btn" style="width:320px;margin-bottom:10px" placeholder="Filter events (kind / symbol / text)…" oninput="loadAudit()">
+ <div id="aud-body"></div>`;
+async function loadAudit(){const q=encodeURIComponent($("aud-q").value||"");
+ const d=await j("/api/v1/audit?limit=60"+(q?`&q=${q}`:""));
+ $("aud-body").innerHTML=(d.audit||[]).length?`<table><thead><tr><th>Seq</th><th>Time</th><th>Kind</th><th>Ref</th></tr></thead><tbody>${
+  d.audit.map(a=>`<tr class="rowlink" onclick="toggle('audp-${a.seq}')"><td>${a.seq}</td><td style="color:var(--faint)">${esc(a.ts).slice(11,19)}</td>
+  <td style="font-family:var(--mono);font-size:10.5px">${esc(a.kind)}</td><td style="color:var(--dim)">${esc(a.ref_id||"").slice(0,18)}</td></tr>
+  <tr class="hidden" id="audp-${a.seq}"><td colspan=4><pre class="raw">${esc(JSON.stringify(a.payload,null,1))}</pre></td></tr>`).join("")}</tbody></table>`
+ :`<div class="empty">No matching audit records.</div>`;}
+
+/* ---------------- health ---------------- */
+SECTIONS.health=`<h2 class="sec">System Health</h2><div id="h-body" class="grid" style="grid-template-columns:1fr 1fr"></div>`;
+async function loadHealth(){const h=await j("/api/v1/health");
+ $("h-body").innerHTML=`<div class="card"><b>Integrity</b>
+  <div class="kv"><span class="k">Audit chain</span><span>${h.audit_chain_valid?badge("VERIFIED","b-ok"):badge("BROKEN seq "+h.first_bad_seq,"b-bad")}</span></div></div>
+  <div class="card"><b>Components</b>${Object.entries(h.components||{}).map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span>${v?badge("WIRED","b-ok"):badge("OFF","b-dim")}</span></div>`).join("")}</div>
+  <div class="card" style="grid-column:1/-1"><b>Record Counts</b>${Object.entries(h.counts||{}).map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span>${v}</span></div>`).join("")}</div>`;}
+
+/* ---------------- settings (deep, grouped) ---------------- */
+SECTIONS.settings=`<h2 class="sec">Settings Center</h2>
+ <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="expert2"> Expert mode (show advanced)</label>
+ <div id="s-root"></div>`;
+async function loadSettings(){const d=await j("/api/v1/settings");
+ const groups=[
+  ["SYSTEM","system",[["Model provider","model_provider"],["Research mode","research_mode","research"],["LLM configured","llm_configured_bool"],["Shadow mode","shadow_bool"]]],
+  ["AI & AGENTS","ai",[["Cheap model","research_model_cheap"],["Reasoning model","research_model_reasoning"],["Verifier","verification_model"],["Temperature","llm_temperature"]]],
+  ["DATA PROVIDERS","data",[["Finnhub","finnhub_bool"],["GNews","gnews_bool"],["NewsData","newsdata_bool"],["MarketStack","marketstack_bool"],["FRED","fred_bool"]]],
+  ["RISK LIMITS","risk",[["Max class exposure %","max_class_exposure_pct","limit"],["Halt drawdown %","halt_dd_pct","limit"],["Caution drawdown %","caution_dd_pct","limit"],["Warning drawdown %","warning_dd_pct","limit"]]],
+  ["EXECUTION RAILS","execution_rails",[["Live execution (env)","live_execution_allowed_env_bool"],["Micro-live cap $","micro_live_cap_usd"],["Constitution pinned","constitution_pinned_bool"]]],
+ ];
+ const bools=new Set(["llm_configured_bool","shadow_bool","finnhub_bool","gnews_bool","newsdata_bool","marketstack_bool","fred_bool","live_execution_allowed_env_bool","constitution_pinned_bool"]);
+ $("s-root").innerHTML=groups.map(([title,key,rows])=>`
+  <div class="acc"><div class="head" onclick="this.nextElementSibling.classList.toggle('hidden')">${title}<small>effective values</small></div><div class="body">
+  ${rows.map(([label,k,edit])=>{
+    let v=d[key]?.[k];
+    let control="";
+    if(edit==="research")control=`<select class="btn" onchange="setResearch(this.value)"><option value="auto"${v==="auto"?" selected":""}>auto</option><option value="deterministic"${v==="deterministic"?" selected":""}>deterministic</option></select>`;
+    else if(edit==="limit")control=`<input class="btn" style="width:110px" value="${fmt(v)}" data-k="${k}" onchange="setLimit(this.dataset.k,this.value)">`;
+    if(bools.has(k))v=typeof v==="boolean"&&v||v==="1"?badge("CONFIGURED","b-ok"):badge("OFF","b-dim");
+    return `<div class="kv"><span class="k">${label}</span><span>${control||fmt(v)}</span></div>`;
+  }).join("")}
+  </div></div>`).join("")
+  +`<div class="acc"><div class="head" onclick="this.nextElementSibling.classList.toggle('hidden')">RAW CONFIGURATION<small>/api/v1/settings</small></div><div class="body hidden"><pre class="raw">${esc(JSON.stringify(d,null,2))}</pre></div></div>`;
+}
+async function setResearch(m){await j("/api/v1/control/set_research_mode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{mode:m}})});loadSettings();}
+async function setLimit(k,v){const map={max_class_exposure_pct:"set_max_position_pct",halt_dd_pct:"set_halt_drawdown_pct",caution_dd_pct:null,warning_dd_pct:null};
+ const action=map[k];if(!action)return;
+ await j("/api/v1/control/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{pct:Number(v)}})});loadSettings();}
+
+/* ---------------- approvals (embedded in decisions tab header when present) */
+SECTIONS.approvals=SECTIONS.decisions; // alias route; approvals surface via banner
+
+/* ---------------- search ---------------- */
+$("search").addEventListener("keydown",e=>{
+ if(e.key==="Enter"){showTab("audit");$("aud-q").value=e.target.value;loadAudit();}
+});
+document.addEventListener("keydown",e=>{
+ if(e.key==="/"&&document.activeElement!==$("search")){e.preventDefault();$("search").focus();}
+ if(e.key==="Escape"){closeDrawer();$("modal-back").style.display="none";}
+});
+
+/* ---------------- autonomy + kill ---------------- */
 $("autonomy").onchange=async e=>{
  try{await j("/api/v1/control/set_autonomy",{method:"POST",headers:{"Content-Type":"application/json"},
   body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN",params:{mode:e.target.value}})});
-  refresh(true);}
- catch(err){alert(err.message);e.target.value="AUTONOMOUS";}
+  refresh(true);}catch(err){alert(err.message);}
 };
-async function syncAutonomy(){try{const s=await j("/api/v1/settings");if(s.autonomy)$("autonomy").value=s.autonomy;}catch(e){}}
+$("killbtn").onclick=()=>{
+ $("modal").innerHTML=`<h3 style="margin-bottom:10px">⚠ Emergency kill switch</h3>
+  <p style="color:var(--dim);font-size:13px;margin-bottom:14px">Cancels open orders, flattens all positions at adverse prices, and engages EMERGENCY_HALT lockout. Only a human reset can clear it.</p>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+   <button class="btn" onclick="closeModal()">Cancel</button>
+   <button class="btn danger" id="confirm-kill">Confirm flatten + halt</button></div>`;
+ $("modal-back").style.display="flex";
+ $("confirm-kill").onclick=async()=>{
+  await j("/api/v1/control/trigger_kill_switch",{method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({operator_id:"console",role:"RISK_ADMIN"})});
+  closeModal();refresh(true);
+ };
+};
+function closeModal(){$("modal-back").style.display="none"}
 
-function pill(id,text,c){const e=$(id);e.textContent=text;e.className="pill "+(c||"")}
+/* ---------------- loader ---------------- */
+const LOADERS={cmd:loadCmd,opps:loadOpps,decisions:loadDecisions,portfolio:loadPortfolio,
+ positions:loadPositions,execution:loadExec,risk:loadRisk,agents:loadAgents,events:loadEvents,
+ memory:loadMemory,accounting:loadAccounting,tax:loadTax,audit:loadAudit,health:loadHealth,settings:loadSettings};
 async function refresh(force){
  try{await loadExec()}catch(e){}
- if(current==="decisions"||force)loadDecisions().catch(()=>{});
- if(current==="approvals"||force)loadApprovals().catch(()=>{});
- if(current==="risk")loadRisk().catch(()=>{});
- if(current==="accounting")loadAcct().catch(()=>{});
- if(current==="settings")loadSettings().catch(()=>{});
+ if(LOADERS[current])LOADERS[current]().catch(err=>{const el=document.querySelector("section.active");if(el)el.insertAdjacentHTML("beforeend",`<div class="empty">API error: ${esc(err.message)}</div>`)});
 }
-$("expert").onchange=()=>{document.body.classList.toggle("expert",$("expert").checked);if(current==="settings")loadSettings();};
-syncAutonomy();refresh(true);setInterval(refresh,5000);
+function showTab(t){current=t;
+ document.querySelectorAll("main>section").forEach(s=>s.classList.toggle("active",s.dataset.t===t));
+ nav.querySelectorAll("button").forEach(b=>b.classList.toggle("active",b.dataset.t===t));
+ refresh(true);}
+async function syncAutonomy(){try{const s=await j("/api/v1/settings");if(s.autonomy)$("autonomy").value=s.autonomy;}catch(e){}}
+
+/* boot */
+for(const [t,html] of Object.entries(SECTIONS)){const s=document.querySelector(`section[data-t="${t}"]`);if(s)s.innerHTML=html;}
+syncAutonomy();refresh(true);setInterval(()=>refresh(false),5000);
 </script>
 </body>
 </html>

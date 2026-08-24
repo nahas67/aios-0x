@@ -530,6 +530,8 @@ class ReplayRunner:
             lot_book=self.lot_book,
             settings=self.settings,
             control_plane=self.build_control_plane(),
+            order_manager=self.order_manager,
+            regime_engine=self.regime_engine,
         )
 
     def serve(self, port: int = 8787) -> Any:
