@@ -78,6 +78,16 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ---------------------------------------------------------------- models
+    ml_training: bool = Field(
+        default=True,
+        description=(
+            "After each replay, train the stdlib logistic direction model on "
+            "the replay closes and register it walk-forward-evaluated in the "
+            "model registry (original architecture §12 lifecycle)."
+        ),
+    )
+
     # Cost table USD per 1M tokens (input, output); extend per provider pricing
     cost_usd_per_mtok_input: float = Field(default=0.15)
     cost_usd_per_mtok_output: float = Field(default=0.60)

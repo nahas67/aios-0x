@@ -286,6 +286,10 @@ class ModelRegistry:
             raise KeyError(f"model version not found: {key!r}")
         return mv
 
+    def list_versions(self) -> list[dict[str, Any]]:
+        """All registered model versions (JSON-safe), registration order."""
+        return [mv.model_dump(mode="json") for mv in self._versions.values()]
+
 
 # ================================================================ experiment
 

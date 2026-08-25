@@ -7,6 +7,7 @@ timestamp-free determinism hash identical across identical runs.
 """
 
 import hashlib
+import json
 import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -622,6 +623,7 @@ class ReplayRunner:
             equity_curve=self.equity_curve,
             benchmark_curve=getattr(self, "benchmark_curve", []),
             research_engine=self.research_engine,
+            kernel_bridge=self.kernel_bridge,
         )
 
     def serve(self, port: int = 8787) -> Any:
@@ -1083,6 +1085,8 @@ class ReplayRunner:
             )
             if self.settings.auto_research:
                 await self._auto_research_cycle()
+            if self.settings.ml_training:
+                self._finalize_models()
             await self.bus.wait_until_idle()
         finally:
             await self.bus.stop()
@@ -1116,6 +1120,52 @@ class ReplayRunner:
         if proposals:
             logger.info("auto-research proposed %d new hypotheses", len(proposals))
         return len(proposals)
+
+    def _finalize_models(self) -> None:
+        """§12 model lifecycle: train pooled direction model on replay closes.
+
+        Walk-forward evaluation only (fit-on-past, predict-next); the artifact
+        hash pins the exact weights; metrics come from the honest loop.
+        """
+        import csv
+
+        from research.model_lab import train_pooled
+
+        closes_by_symbol: dict[str, list[float]] = {}
+        for symbol, path in self.csv_path_by_symbol.items():
+            with open(path, newline="", encoding="utf-8") as handle:
+                closes_by_symbol[symbol] = [
+                    float(row["close"]) for row in csv.DictReader(handle) if row.get("close")
+                ]
+
+        result = train_pooled(closes_by_symbol)
+        if not result.get("trained"):
+            return
+        models = self.kernel_bridge.kernel.models
+        try:
+            models.register(
+                model_id="direction_logreg",
+                version="v1",
+                model_type="logistic_regression",
+                feature_ref={"feature_id": "ohlcv_passthrough", "version": "v1"},
+                metadata={"features": "returns(1,2,3,5)+vol(5,10)+sma ratios; stdlib only"},
+            )
+        except ValueError:
+            return  # already registered this kernel (defensive; one run per kernel)
+        models.mark_trained("direction_logreg", "v1", str(result["artifact_hash"]))
+        models.mark_evaluated("direction_logreg", "v1", dict(result["metrics"]))  # type: ignore[arg-type]
+        self.store.append_event(
+            "MODEL_TRAINED",
+            "direction_logreg:v1",
+            {
+                "artifact_hash": result["artifact_hash"],
+                "metrics": result["metrics"],
+                "per_symbol_walk_forward": result.get("per_symbol", {}),
+            },
+        )
+        logger.info(
+            "model direction_logreg@v1 trained: %s", json.dumps(result["metrics"], default=str)
+        )
 
     def _summarize(self, total_bars: int) -> RunSummary:
         perf = self.c7.get_performance_summary()

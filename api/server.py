@@ -162,6 +162,8 @@ def make_handler(
                     self._json({"events": builder.platform_feed(limit=lim)})
                 elif path == "/api/v1/stream":
                     self._stream(builder)
+                elif path == "/api/v1/models":
+                    self._json(builder.models_view())
                 elif path == "/metrics":
                     self._text(prometheus_metrics(builder.executive()), ctype="text/plain")
                 else:

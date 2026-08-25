@@ -165,7 +165,7 @@ function toggle(id){$(id).classList.toggle("hidden")}
 const NAV={
  "COMMAND":[["cmd","Command Center"],["opps","Opportunities"],["decisions","Decisions"],["pnl","P&L Analysis"],["portfolio","Portfolio"],["positions","Positions"],["execution","Execution"],["risk","Risk"]],
   "INTELLIGENCE":[["agents","Agent Network"],["events","Global Events"],["memory","Memory & Research"],["strategies","Strategy Center"]],
-  "RESEARCH":[["knowledge","Hypothesis Graph"],["platform","Platform Events"]],
+  "RESEARCH":[["knowledge","Hypothesis Graph"],["platform","Platform Events"],["models","Model Registry"]],
  "OPERATIONS":[["accounting","Accounting"],["tax","Tax & CA"],["ca","CA Review"],["audit","Audit"]],
  "SYSTEM":[["alerts","Alerts"],["health","System Health"],["settings","Settings"]],
 };
@@ -468,6 +468,22 @@ async function loadPlatform(){
  $("pf-body").innerHTML=rows?`<table><thead><tr><th>Time</th><th>Event</th><th>Actor</th><th>Object</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table>`
   :`<div class="empty">No platform events yet.</div>`;}
 
+/* ---------------- model registry (section 12 lifecycle) ---------------- */
+SECTIONS.models=`<h2 class="sec">Model Registry <small style="color:var(--faint);text-transform:none">definition → training → artifact hash → walk-forward evaluation → version</small></h2><div id="md-body"></div>`;
+async function loadModels(){
+ const d=await j("/api/v1/models");
+ if(!d.available){$("md-body").innerHTML=`<div class="empty">Kernel not wired.</div>`;return;}
+ $("md-body").innerHTML=(d.models||[]).length?`<table><thead><tr><th>Model</th><th>Type</th><th>Status</th><th>Artifact</th><th>Walk-forward metrics</th></tr></thead><tbody>${
+  d.models.map(m=>{
+   const wf=m.walk_forward||{};
+   const wfTxt=Object.keys(wf).length?`acc ${wf.wf_accuracy_pct}% · brier ${wf.wf_brier} · n ${wf.wf_n_predictions} · fit ${wf.samples_fit}`:"—";
+   const stBadge={EVALUATED:"b-ok",TRAINED:"b-warn",DEFINED:"b-dim",PROMOTED:"b-ok",DEPRECATED:"b-bad"}[m.status]||"b-dim";
+   return `<tr><td>${badge(m.model_id+"@"+m.version,"b-acc")}</td><td>${m.model_type}</td>
+    <td>${badge(m.status,stBadge)}</td>
+    <td title="${m.artifact_hash||""}" style="font-size:11px">${m.artifact_hash?String(m.artifact_hash).slice(0,12)+"…":"—"}</td>
+    <td>${wfTxt}</td></tr>`;}).join("")}</tbody></table>`
+ :`<div class="empty">No models registered yet.</div>`;}
+
 /* ---------------- strategy center (live family performance) ---------------- */
 SECTIONS.strategies=`<h2 class="sec">Strategy Center <small style="color:var(--faint);text-transform:none">live family performance — confidence is not a profit guarantee</small></h2><div id="st-body"></div>`;
 async function loadStrategies(){const d=await j("/api/v1/strategies");
@@ -734,7 +750,7 @@ function closeModal(){$("modal-back").style.display="none"}
 const LOADERS={cmd:loadCmd,opps:loadOpps,decisions:loadDecisions,pnl:loadPnl,strategies:loadStrategies,
  ca:loadCA,alerts:loadAlerts,portfolio:loadPortfolio,
  positions:loadPositions,execution:loadExec,risk:loadRisk,agents:loadAgents,events:loadEvents,
- memory:loadMemory,accounting:loadAccounting,tax:loadTax,audit:loadAudit,health:loadHealth,settings:loadSettings,knowledge:loadKnowledge,platform:loadPlatform};
+ memory:loadMemory,accounting:loadAccounting,tax:loadTax,audit:loadAudit,health:loadHealth,settings:loadSettings,knowledge:loadKnowledge,platform:loadPlatform,models:loadModels};
 
 /* ---------------- SSE live stream (Sprint 2 finisher) ---------------- */
 if(window.EventSource){

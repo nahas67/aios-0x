@@ -16,6 +16,24 @@
 
 ---
 
+### MODEL LIFECYCLE (§12) — first real model trained + evaluated (2026-08-25)
+
+- `research/model_lab.py` (NEW): stdlib-only logistic regression predicting
+  next-bar direction from OHLCV features (returns 1/2/3/5, vol 5/10, SMA
+  ratios). Strictly causal alignment (window ends BEFORE its label bar);
+  expanding-window walk-forward evaluation only; artifact = sha256(weights).
+- Runner post-run cycle (`Settings.ml_training`, default on): trains pooled
+  across replay symbols → registers `direction_logreg@v1` (feature-pinned) →
+  mark_trained(artifact_hash) → mark_evaluated(walk-forward metrics) →
+  MODEL_TRAINED audit event.
+- API/UI: `GET /api/v1/models` + RESEARCH→"Model Registry" workspace showing
+  lifecycle states, artifact hashes, walk-forward metrics per symbol.
+
+Tests: 220 hermetic / **225 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+Registry now holds TWO evaluated models: deterministic_baseline + direction_logreg.
+
+---
+
 ### SPRINT 2 CLOSED — SSE live stream + model registry populated (2026-08-25)
 
 - `api/server.py`: **`GET /api/v1/stream`** — Server-Sent Events (stdlib only):

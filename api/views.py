@@ -31,6 +31,7 @@ class SystemSnapshotBuilder:
         equity_curve: Any = None,
         benchmark_curve: Any = None,
         research_engine: Any = None,
+        kernel_bridge: Any = None,
     ) -> None:
         self.store = store
         self.ledger = ledger
@@ -45,6 +46,7 @@ class SystemSnapshotBuilder:
         self.equity_curve = equity_curve if equity_curve is not None else []
         self._benchmark_curve = benchmark_curve if benchmark_curve is not None else []
         self.research_engine = research_engine
+        self.kernel_bridge = kernel_bridge
 
     # ------------------------------------------------------------- executive
 
@@ -597,6 +599,22 @@ class SystemSnapshotBuilder:
                 rows.append(payload)
         rows.sort(key=lambda p: str(p.get("occurred_at", "")), reverse=True)
         return rows[:limit]
+
+    def models_view(self) -> dict[str, Any]:
+        """Model registry contents (§12 lifecycle states + evaluation metrics)."""
+        bridge = self.kernel_bridge
+        if bridge is None or getattr(bridge, "kernel", None) is None:
+            return {"available": False, "models": []}
+        registry = bridge.kernel.models
+        versions = registry.list_versions() if hasattr(registry, "list_versions") else []
+        trained_events = self.store.iter_event_payloads("MODEL_TRAINED")
+        by_ref = {e.get("artifact_hash"): e for e in trained_events}
+        for mv in versions:
+            extra = by_ref.get(mv.get("artifact_hash"))
+            if extra:
+                mv["walk_forward"] = extra.get("metrics", {})
+                mv["per_symbol"] = extra.get("per_symbol_walk_forward", {})
+        return {"available": True, "models": versions}
 
     # ------------------------------------------------- analytics (Phase: charts)
 
