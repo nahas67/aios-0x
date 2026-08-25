@@ -153,6 +153,143 @@ class FinnhubNewsProvider(NewsProvider):
         return out
 
 
+class GNewsNewsProvider(NewsProvider):
+    """GNews article search (gnews.io) — key stored in settings.gnews_api_key."""
+
+    BASE = "https://gnews.io/api/v4"
+
+    def __init__(self, api_key: str, http_get: Any = None) -> None:
+        if not api_key:
+            raise ValueError("GNewsNewsProvider requires an API key")
+        self._api_key = api_key
+        self._http_get = http_get or FinnhubNewsProvider._default_get
+
+    async def fetch_headlines(self, symbol: str, limit: int = 5) -> list[dict[str, Any]]:
+        query = symbol.replace("/", " ")
+        url = (
+            f"{self.BASE}/search?q={query}&token={self._api_key}"
+            f"&max={limit}&sortby=publishedat"
+        )
+        data = await self._http_get(url)
+        out: list[dict[str, Any]] = []
+        for item in (data or {}).get("articles", [])[:limit]:
+            title = str(item.get("title") or "").strip()
+            if title:
+                out.append(
+                    {
+                        "title": title,
+                        "source": str((item.get("source") or {}).get("name") or "gnews"),
+                    }
+                )
+        return out
+
+
+class NewsDataNewsProvider(NewsProvider):
+    """NewsData.io latest-news search — key stored in settings.newsdata_api_key."""
+
+    BASE = "https://newsdata.io/api/1"
+
+    def __init__(self, api_key: str, http_get: Any = None) -> None:
+        if not api_key:
+            raise ValueError("NewsDataNewsProvider requires an API key")
+        self._api_key = api_key
+        self._http_get = http_get or FinnhubNewsProvider._default_get
+
+    async def fetch_headlines(self, symbol: str, limit: int = 5) -> list[dict[str, Any]]:
+        query = symbol.replace("/", " ")
+        url = f"{self.BASE}/news?apikey={self._api_key}&q={query}&size={limit}"
+        data = await self._http_get(url)
+        out: list[dict[str, Any]] = []
+        for item in (data or {}).get("results", [])[:limit]:
+            title = str(item.get("title") or "").strip()
+            if title:
+                out.append(
+                    {
+                        "title": title,
+                        "source": str(item.get("source_id") or "newsdata"),
+                    }
+                )
+        return out
+
+
+class FailoverNewsChain(NewsProvider):
+    """Tries providers in order; first non-empty result wins.
+
+    Every provider is an independent paid/free feed with its own outage
+    profile — failover keeps sentiment flowing when one is down. The chain
+    records which provider served, so the audit trail stays honest.
+    """
+
+    def __init__(self, providers: list[NewsProvider]) -> None:
+        self.providers = [p for p in providers if p is not None]
+        if not self.providers:
+            raise ValueError("FailoverNewsChain requires at least one provider")
+        self.last_served: str | None = None
+
+    async def fetch_headlines(self, symbol: str, limit: int = 5) -> list[dict[str, Any]]:
+        errors: list[str] = []
+        for provider in self.providers:
+            try:
+                headlines = await provider.fetch_headlines(symbol, limit=limit)
+            except Exception as exc:  # noqa: BLE001 - failover IS the point
+                errors.append(f"{type(provider).__name__}: {exc}")
+                continue
+            if headlines:
+                self.last_served = type(provider).__name__
+                return headlines
+            errors.append(f"{type(provider).__name__}: empty")
+        raise RuntimeError("all news providers failed: " + "; ".join(errors))
+
+
+def build_news_chain(settings: Any) -> NewsProvider | None:
+    """Assemble the failover chain from whichever keys the operator set."""
+    from core.config import Settings  # noqa: F401 - documentation of source
+
+    providers: list[NewsProvider] = []
+    if getattr(settings, "finnhub_api_key", None):
+        providers.append(FinnhubNewsProvider(settings.finnhub_api_key))
+    if getattr(settings, "gnews_api_key", None):
+        providers.append(GNewsNewsProvider(settings.gnews_api_key))
+    if getattr(settings, "newsdata_api_key", None):
+        providers.append(NewsDataNewsProvider(settings.newsdata_api_key))
+    if not providers:
+        return None
+    return providers[0] if len(providers) == 1 else FailoverNewsChain(providers)
+
+
+class MarketStackEODFetcher:
+    """MarketStack end-of-day OHLCV — available utility pending the licensed-
+    data gate. NOT wired into replay goldens (synthetic remains default)."""
+
+    BASE = "https://api.marketstack.com/v1"
+
+    def __init__(self, api_key: str, http_get: Any = None) -> None:
+        if not api_key:
+            raise ValueError("MarketStackEODFetcher requires an API key")
+        self._api_key = api_key
+        self._http_get = http_get or FinnhubNewsProvider._default_get
+
+    async def fetch_eod(self, symbol: str, limit: int = 30) -> list[dict[str, float]]:
+        ticker = symbol.split("/")[0]
+        url = f"{self.BASE}/eod?access_key={self._api_key}&symbols={ticker}&limit={limit}"
+        data = await self._http_get(url)
+        bars: list[dict[str, float]] = []
+        for item in reversed((data or {}).get("data", [])):  # oldest first
+            try:
+                bars.append(
+                    {
+                        "open": float(item["open"]),
+                        "high": float(item["high"]),
+                        "low": float(item["low"]),
+                        "close": float(item["close"]),
+                        "volume": float(item.get("volume") or 0.0),
+                    }
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+        return bars
+
+
 def headlines_to_sentiment(
     headlines: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:

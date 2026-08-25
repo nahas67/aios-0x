@@ -16,6 +16,22 @@
 
 ---
 
+### LIVE INPUTS COMPLETED — news failover chain + MarketStack utility (2026-08-25)
+
+All seven stored provider keys are now usable:
+
+- `news_providers.py`: **GNews** + **NewsData** providers (same contract as
+  Finnhub, injectable transport), **FailoverNewsChain** (first non-empty wins,
+  `last_served` recorded, raises only when ALL fail), and
+  `build_news_chain(settings)` — finnhub→gnews→newsdata by key presence.
+- Runner: `use_live_news` now wires the whole chain instead of Finnhub-only.
+- `MarketStackEODFetcher`: EOD OHLCV utility (oldest-first parse) available
+  for when the licensed-data gate opens; NOT wired into goldens by design.
+
+Tests: 260 hermetic / **274 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+
+---
+
 ### OPERATOR CHAT + GATES DASHBOARD — user-controlled, bot holds no authority (2026-08-25)
 
 Answering two operator asks:

@@ -232,14 +232,17 @@ class ReplayRunner:
             treat_as_real=treat_as_real,
         )
 
-        # ---- Optional live news sentiment (Finnhub) wrapped around replay prices
+        # ---- Optional live news sentiment wrapped around replay prices
         if use_live_news and self.settings.finnhub_api_key:
             from communities.c1_data.data_agent import CompositeDataFetcher
-            from communities.c1_data.news_providers import FinnhubNewsProvider
+            from communities.c1_data.news_providers import build_news_chain
 
-            provider = FinnhubNewsProvider(self.settings.finnhub_api_key)
-            self.fetcher_any: BaseDataFetcher = CompositeDataFetcher(self.fetcher, provider)
-            logger.warning("LIVE NEWS ENABLED (finnhub): headlines will hit the network")
+            chain = build_news_chain(self.settings)
+            assert chain is not None  # finnhub key present per condition
+            self.fetcher_any: BaseDataFetcher = CompositeDataFetcher(self.fetcher, chain)
+            logger.warning(
+                "LIVE NEWS ENABLED via %s", type(chain).__name__
+            )
         else:
             self.fetcher_any = self.fetcher
 
@@ -701,6 +704,7 @@ class ReplayRunner:
             benchmark_curve=getattr(self, "benchmark_curve", []),
             research_engine=self.research_engine,
             kernel_bridge=self.kernel_bridge,
+            ca_workflow=self.ca_workflow,
         )
 
     def serve(self, port: int = 8787) -> Any:
