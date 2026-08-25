@@ -162,12 +162,14 @@ class ReplayRunner:
 
         # ---- Research Plane persistence (Phase C): durable hypotheses + evidence
         from core.research_store import build_research_store
+        from research.auto_research import AutoResearchEngine
         from research.engine import HypothesisEngine
 
         self.research_store = build_research_store(
             store_path, database_url=self.settings.database_url
         )
         self.research_engine = HypothesisEngine(self.research_store)
+        self.auto_research = AutoResearchEngine(self.research_store)
 
         # ---- AIOS kernel (Phase A completion): every mutation below flows
         # through the authority gateway; receipts mirror into the audit log.
@@ -1079,12 +1081,41 @@ class ReplayRunner:
                     "determinism_hash": summary.determinism_hash,
                 }
             )
+            if self.settings.auto_research:
+                await self._auto_research_cycle()
             await self.bus.wait_until_idle()
         finally:
             await self.bus.stop()
 
         summary.experiment_reproducibility_hash = self._experiment_repro_hash
         return summary
+
+    async def _auto_research_cycle(self) -> int:
+        """UPDATE-HYPOTHESIS-SPACE: synthesize, track, and stage challengers.
+
+        Proposals are UNTESTED knowledge for FUTURE runs; nothing here touches
+        the current run's trades, and promotion remains human-gated.
+        """
+        from research.auto_research import as_candidate
+
+        proposals = self.auto_research.synthesize()
+        for proposal in proposals:
+            self.auto_research.register(proposal)
+            await self.kernel_bridge.on_hypothesis(as_candidate(proposal))
+            trial_name = f"auto:{proposal.hypothesis_id[:8]}"
+            try:
+                registry = self.build_challenge_registry()
+                if trial_name not in registry.trials:
+                    registry.propose(
+                        trial_name,
+                        description=f"{proposal.statement[:140]}",
+                        metric="pnl",
+                    )
+            except Exception as exc:  # noqa: BLE001 - staging must not break the loop
+                logger.warning("challenger staging skipped for %s: %s", trial_name, exc)
+        if proposals:
+            logger.info("auto-research proposed %d new hypotheses", len(proposals))
+        return len(proposals)
 
     def _summarize(self, total_bars: int) -> RunSummary:
         perf = self.c7.get_performance_summary()

@@ -63,6 +63,7 @@ _COMMUNITY_ACTORS: tuple[tuple[str, ActorType, str, set[Role]], ...] = (
     ("c3-verification", ActorType.AGENT, "C3 Verification Agent", {Role.AGENT_CRITIC}),
     ("c4-strategy", ActorType.AGENT, "C4 Strategy Agent", {Role.AGENT_STRATEGY}),
     ("c5-execution", ActorType.SERVICE, "C5 Execution Service", {Role.SERVICE_EXECUTION}),
+    ("c8-autoresearch", ActorType.AGENT, "C8 AutoResearch Engine", {Role.AGENT_RESEARCH}),
     ("c9-governor", ActorType.SERVICE, "C9 Portfolio Governor", {Role.RISK_ADMIN}),
 )
 

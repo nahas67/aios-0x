@@ -69,6 +69,15 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ------------------------------------------------------------- autoresearch
+    auto_research: bool = Field(
+        default=True,
+        description=(
+            "After each replay, deterministically propose new hypotheses from "
+            "settled outcomes (UPDATE-HYPOTHESIS-SPACE step of the core loop)."
+        ),
+    )
+
     # Cost table USD per 1M tokens (input, output); extend per provider pricing
     cost_usd_per_mtok_input: float = Field(default=0.15)
     cost_usd_per_mtok_output: float = Field(default=0.60)

@@ -14,7 +14,7 @@ Last updated: 2026-08-24 | This file contains 100% of project context for sessio
 
 ## 2. CURRENT STATE (exact)
 
-- **Tests**: 206 passed, 1 skipped (PG active) / 201+6 hermetic
+- **Tests**: 214 passed, 1 skipped (PG active) / 209+6 hermetic
 - **Source files**: 85 Python files across core/, kernel/, schemas/, communities/, simulation/, evaluation/, research/, api/
 - **Git commits**: ~25 from baseline `3c303d7` to latest
 - **Python**: 3.14.4 on win32
@@ -224,7 +224,7 @@ Hash-chained audit, double-entry accounting, tax/CA pipeline, constitution boot-
 
 1. ~~Runner doesn't use kernel yet~~ FIXED 2026-08-25: simulation/kernel_bridge.py wires lifecycles through the authority gateway; PostgreSQL data layer added (core/pg_store.py + store_factory, DATABASE_URL)
 2. SSE live updates not implemented (5s polling)
-3. AutoResearch not automated (challenger exists but manual)
+3. ~~AutoResearch not automated~~ DONE: research/auto_research.py proposes inversion/continuation theses post-run; challenger trials staged, human-gated
 4. Per-agent ACL wiring pending (mechanism exists, not enforced in runner)
 5. Parquet deferred to Phase 3 (CSV keeps stdlib-only)
 6. OTel/LangFuse not integrated (Prometheus shipped)
@@ -259,6 +259,8 @@ AIOS-0X/
 ├── docs/adrs/ADR-004        ← UI architecture
 └── research/benchmarks/     ← evidence files
 ```
+
+
 
 
 

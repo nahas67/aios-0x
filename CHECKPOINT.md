@@ -16,6 +16,25 @@
 
 ---
 
+### AUTORESEARCH — core learning loop CLOSED (2026-08-25)
+
+The core cycle's final step — UPDATE HYPOTHESIS SPACE — is now automatic:
+
+- `research/auto_research.py` (NEW): `AutoResearchEngine` reads settled outcomes
+  from the durable research store and deterministically proposes new hypotheses:
+  **INVERSION** (≥2 REJECTED, 0 SUPPORTED on a symbol → mean-reversion counter-thesis,
+  parents = rejected set) and **CONTINUATION** (≥2 SUPPORTED → trend-persistence
+  thesis). Signature-deduped across sessions; UNTESTED; nothing auto-promotes.
+- Runner: post-run cycle synthesizes → persists via research engine → kernel-tracks
+  via bridge (`c8-autoresearch` AGENT_RESEARCH actor) → stages a challenger trial
+  per proposal for human-gated evaluation. `Settings.auto_research` flag (default on).
+- Platform events + audit trail follow every proposal.
+
+Tests: 209 hermetic / **214 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+Sprint 2 item "AutoResearch" ✅ (evaluation of staged trials remains operator-triggered).
+
+---
+
 ### ORIGINAL-ARCHITECTURE BUILD: D/E bridge — durable receipts + research surface — COMPLETE (2026-08-25)
 
 - `kernel/receipts.py`: `ReceiptStore(sink)` — EVERY receipt (gateway + state-machine
