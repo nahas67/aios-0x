@@ -25,6 +25,23 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from core.event_bus import BaseEventBus, EventTopic
+from core.platform_events import (
+    PlatformEvent,
+    PlatformEventType,
+    dataset_version_created,
+    evaluation_completed,
+    execution_completed,
+    experiment_completed,
+    experiment_started,
+    hypothesis_created,
+    hypothesis_rejected,
+    order_authorized,
+    order_denied,
+    order_requested,
+    post_mortem_created,
+    risk_decision_made,
+)
 from kernel.authority import AuthorityRequest, AuthorityResult
 from kernel.bootstrap import AIOSKernel, create_kernel
 from kernel.identity import ActorType, Role
@@ -50,6 +67,21 @@ _COMMUNITY_ACTORS: tuple[tuple[str, ActorType, str, set[Role]], ...] = (
 )
 
 _TIME_COLUMNS = ("timestamp", "datetime", "date", "ts")
+
+_PLATFORM_TOPICS: dict[PlatformEventType, EventTopic] = {
+    PlatformEventType.DATASET_VERSION_CREATED: EventTopic.PLATFORM_DATASET_VERSION_CREATED,
+    PlatformEventType.EXPERIMENT_STARTED: EventTopic.PLATFORM_EXPERIMENT_STARTED,
+    PlatformEventType.EXPERIMENT_COMPLETED: EventTopic.PLATFORM_EXPERIMENT_COMPLETED,
+    PlatformEventType.HYPOTHESIS_CREATED: EventTopic.PLATFORM_HYPOTHESIS_CREATED,
+    PlatformEventType.HYPOTHESIS_REJECTED: EventTopic.PLATFORM_HYPOTHESIS_REJECTED,
+    PlatformEventType.EVALUATION_COMPLETED: EventTopic.PLATFORM_EVALUATION_COMPLETED,
+    PlatformEventType.ORDER_REQUESTED: EventTopic.PLATFORM_ORDER_REQUESTED,
+    PlatformEventType.ORDER_AUTHORIZED: EventTopic.PLATFORM_ORDER_AUTHORIZED,
+    PlatformEventType.ORDER_DENIED: EventTopic.PLATFORM_ORDER_DENIED,
+    PlatformEventType.RISK_DECISION_MADE: EventTopic.PLATFORM_RISK_DECISION_MADE,
+    PlatformEventType.EXECUTION_COMPLETED: EventTopic.PLATFORM_EXECUTION_COMPLETED,
+    PlatformEventType.POST_MORTEM_CREATED: EventTopic.PLATFORM_POST_MORTEM_CREATED,
+}
 
 
 def _sha256_file(path: Path) -> str:
@@ -103,10 +135,12 @@ class KernelBridge:
         kernel: AIOSKernel | None = None,
         audit_log: Any = None,
         research_engine: Any = None,
+        event_bus: BaseEventBus | None = None,
     ) -> None:
         self.kernel = kernel or create_kernel()
         self._audit_log = audit_log  # store.append_event mirror, optional
         self.research_engine = research_engine  # HypothesisEngine, optional
+        self.event_bus = event_bus  # typed platform events, optional
         for actor_id, actor_type, display_name, roles in _COMMUNITY_ACTORS:
             self.kernel.identity.register(actor_id, actor_type, display_name, roles=roles)
         self._hypotheses: set[str] = set()
@@ -125,6 +159,20 @@ class KernelBridge:
             result.receipt.receipt_id,
             result.receipt.model_dump(mode="json"),
         )
+
+    async def _emit(self, event: PlatformEvent) -> None:
+        """Publish a typed platform event onto the bus.
+
+        The runner subscribes its hash-chained audit logger to EVERY topic,
+        so publishing here makes the event durable automatically — no
+        separate persistence path, no double logging.
+        """
+        if self.event_bus is None:
+            return
+        topic = _PLATFORM_TOPICS.get(event.event_type)
+        if topic is None:
+            return
+        await self.event_bus.publish(topic, event)
 
     async def _authorize(
         self,
@@ -253,6 +301,7 @@ class KernelBridge:
             computation_code="identity(ohlcv)",
         )
         self.kernel.features.validate("ohlcv_passthrough", "v1")  # type: ignore[union-attr]
+        await self._emit(dataset_version_created("replay", version, content_hash))
         return {"dataset_id": "replay", **dv.reference()}
 
     # -------------------------------------------------------- experiment plane
@@ -278,12 +327,16 @@ class KernelBridge:
             environment="replay",
         )
         self.kernel.experiments.start(self.experiment_id, "system")  # type: ignore[union-attr]
+        await self._emit(
+            experiment_started(self.experiment_id, self.dataset_version, random_seed)
+        )
         return run.reproducibility_hash
 
     async def complete_experiment(self, result_summary: dict[str, Any]) -> None:
         if self.experiment_id is None:
             return
         self.kernel.experiments.complete(self.experiment_id, "system", result_summary)  # type: ignore[union-attr]
+        await self._emit(experiment_completed(self.experiment_id, result_summary))
 
     # ------------------------------------------------------- research pipeline
 
@@ -308,6 +361,7 @@ class KernelBridge:
                 hypothesis,
                 dataset_ref={"dataset_id": "replay", "version": self.dataset_version},
             )
+        await self._emit(hypothesis_created(hid, hypothesis.symbol, hypothesis.thesis))
 
     async def on_verification(self, report: VerificationReport) -> None:
         """C3 verdict moves a VERIFIED hypothesis UNTESTED -> TESTING.
@@ -334,7 +388,7 @@ class KernelBridge:
     ) -> None:
         """Post-mortem outcome: SUPPORTED or REJECTED (negative knowledge preserved)."""
         target = "SUPPORTED" if direction_correct else "REJECTED"
-        await self._transition(
+        result = await self._transition(
             "hypothesis",
             hypothesis_id,
             target,
@@ -342,6 +396,8 @@ class KernelBridge:
             capability="AIOS.transition.hypothesis",
             reason=f"outcome pnl={pnl:+.2f} direction_correct={direction_correct}",
         )
+        if target == "REJECTED" and (result is None or result.decision is Decision.ALLOW):
+            await self._emit(hypothesis_rejected(hypothesis_id, pnl))
 
     # -------------------------------------------------------- strategy pipeline
 
@@ -379,7 +435,15 @@ class KernelBridge:
 
     async def authorize_execution(self, plan: PortfolioAllocationPlan) -> AuthorityResult:
         """The ONLY path from an approved plan to order dispatch."""
-        return await self._authorize(
+        await self._emit(
+            order_requested(
+                plan.plan_id,
+                plan.strategy.strategy_id,
+                plan.strategy.action,
+                plan.strategy.symbol,
+            )
+        )
+        result = await self._authorize(
             "c5-execution",
             "AIOS.execute",
             "strategy",
@@ -388,6 +452,20 @@ class KernelBridge:
             f"plan {plan.plan_id[:8]} {plan.strategy.action} {plan.strategy.symbol}",
             evidence_refs=[plan.plan_id],
         )
+        if result.decision is Decision.ALLOW:
+            await self._emit(
+                order_authorized(plan.plan_id, plan.strategy.strategy_id, result.receipt.receipt_id)
+            )
+        else:
+            await self._emit(
+                risk_decision_made("DENY", plan.strategy.strategy_id, result.detail, result.receipt.receipt_id)
+            )
+            await self._emit(
+                order_denied(
+                    plan.strategy.strategy_id, result.detail, [result.receipt.receipt_id]
+                )
+            )
+        return result
 
     async def on_plan_denied(self, strategy_id: str, reason: str) -> None:
         """Governor rejection: recorded as a DENY receipt; no lifecycle change.
@@ -411,6 +489,12 @@ class KernelBridge:
         self._mirror_receipt(
             AuthorityResult(decision=Decision.DENY, receipt=receipt)
         )
+        await self._emit(
+            order_denied(strategy_id, reason, [receipt.receipt_id], source="c9-governor")
+        )
+        await self._emit(
+            risk_decision_made("DENY", strategy_id, reason, receipt.receipt_id)
+        )
 
     async def on_receipt(self, receipt: TradeExecutionReceipt) -> None:
         """A fill in the replay backtest: strategy -> BACKTESTED + EXECUTION node."""
@@ -433,6 +517,15 @@ class KernelBridge:
         self._link(receipt.strategy_id, receipt.execution_id, "produces_execution")
         if self.experiment_id is not None:
             self._link(self.experiment_id, receipt.execution_id, "executed_in")
+        await self._emit(
+            execution_completed(
+                receipt.execution_id,
+                receipt.symbol,
+                receipt.fill_price,
+                receipt.filled_quantity,
+                receipt.venue,
+            )
+        )
 
     # ---------------------------------------------------------- learning loop
 
@@ -453,6 +546,9 @@ class KernelBridge:
         hypothesis_id = ""
         node = self.kernel.provenance.get_node(receipt.strategy_id)
         hypothesis_id = str(node.data.get("hypothesis_id", "")) if node else ""
+        await self._emit(
+            evaluation_completed(receipt.strategy_id, exit_reason, realized_pnl)
+        )
         if hypothesis_id:
             await self.on_hypothesis_outcome(hypothesis_id, direction_correct, realized_pnl)
             if self.research_engine is not None:
@@ -476,6 +572,9 @@ class KernelBridge:
             self._link(receipt.execution_id, postmortem.postmortem_id, "postmortem_of")
             if hypothesis_id:
                 self._link(postmortem.postmortem_id, hypothesis_id, "evaluates")
+            await self._emit(
+                post_mortem_created(postmortem.postmortem_id, hypothesis_id, postmortem.symbol)
+            )
 
     # ------------------------------------------------------------------ stats
 

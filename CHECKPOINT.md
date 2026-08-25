@@ -16,6 +16,28 @@
 
 ---
 
+### ORIGINAL-ARCHITECTURE BUILD: Phase D typed platform events — COMPLETE (2026-08-25)
+
+Per `ARCHITECTURE_GAP_ANALYSIS.md` §3.10 / original architecture §18:
+
+- `core/platform_events.py` (NEW): `PlatformEventType` (15 canonical
+  ``aios.platform.*`` events: dataset_version_created, experiment_started/completed,
+  hypothesis_created/rejected, evaluation_completed, order_requested/authorized/denied,
+  risk_decision_made, execution_completed, post_mortem_created, promotion_approved/denied,
+  rollback_triggered) + validated `PlatformEvent` payload (actor, object ref, reason,
+  receipt_ids, metadata) with per-type factory constructors.
+- `core/event_bus.py`: PLATFORM_* topics added to canonical EventTopic.
+- KernelBridge emits at every mutation point; runner's catch-all audit logger persists
+  them into the hash-chained log automatically (single persistence path, no double log).
+  ExperimentCompleted now fires BEFORE bus shutdown (was silently dropped).
+- Control-plane consumers can subscribe to any platform topic directly (tested).
+- Counts reconcile with trading reality: post_mortem_created == executions ==
+  trades_closed; every fill preceded by order_authorized.
+
+Tests: 197 passed hermetic; **202 passed / 1 skipped with AIOS_TEST_PG_DSN**.
+
+---
+
 ### ORIGINAL-ARCHITECTURE BUILD: Phase C Research Plane — COMPLETE (2026-08-25)
 
 Per `ARCHITECTURE_GAP_ANALYSIS.md` Phase C: durable knowledge that survives sessions.

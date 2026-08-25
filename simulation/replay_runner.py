@@ -172,7 +172,9 @@ class ReplayRunner:
         # ---- AIOS kernel (Phase A completion): every mutation below flows
         # through the authority gateway; receipts mirror into the audit log.
         self.kernel_bridge = KernelBridge(
-            audit_log=self._append_kernel_event, research_engine=self.research_engine
+            audit_log=self._append_kernel_event,
+            research_engine=self.research_engine,
+            event_bus=self.bus,
         )
         self._experiment_repro_hash = ""
 
@@ -1062,20 +1064,24 @@ class ReplayRunner:
             self.equity_curve.append(round(self.paper.cash_balance, 2))
 
             self._finalize_finance()
+
+            # Complete the kernel experiment BEFORE the bus stops so the
+            # ExperimentCompleted platform event reaches the audit logger.
+            summary = self._summarize(total_bars)
+            await self.kernel_bridge.complete_experiment(
+                {
+                    "trades_closed": summary.trades_closed,
+                    "cumulative_pnl": summary.cumulative_pnl,
+                    "max_drawdown_pct": summary.max_drawdown_pct,
+                    "directional_accuracy_pct": summary.directional_accuracy_pct,
+                    "alpha_pct": summary.alpha_pct,
+                    "determinism_hash": summary.determinism_hash,
+                }
+            )
+            await self.bus.wait_until_idle()
         finally:
             await self.bus.stop()
 
-        summary = self._summarize(total_bars)
-        await self.kernel_bridge.complete_experiment(
-            {
-                "trades_closed": summary.trades_closed,
-                "cumulative_pnl": summary.cumulative_pnl,
-                "max_drawdown_pct": summary.max_drawdown_pct,
-                "directional_accuracy_pct": summary.directional_accuracy_pct,
-                "alpha_pct": summary.alpha_pct,
-                "determinism_hash": summary.determinism_hash,
-            }
-        )
         summary.experiment_reproducibility_hash = self._experiment_repro_hash
         return summary
 

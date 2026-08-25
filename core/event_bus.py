@@ -42,6 +42,21 @@ class EventTopic(StrEnum):
     MEMORY_STORED = "aios.c7.memory_stored"
     EVOLUTION_TRIGGERED = "aios.c8.evolution_triggered"
 
+    # ---- Platform lifecycle events (Phase D, original architecture §18).
+    # Emitted by the kernel bridge; consumed by control/audit/memory planes.
+    PLATFORM_DATASET_VERSION_CREATED = "aios.platform.dataset_version_created"
+    PLATFORM_EXPERIMENT_STARTED = "aios.platform.experiment_started"
+    PLATFORM_EXPERIMENT_COMPLETED = "aios.platform.experiment_completed"
+    PLATFORM_HYPOTHESIS_CREATED = "aios.platform.hypothesis_created"
+    PLATFORM_HYPOTHESIS_REJECTED = "aios.platform.hypothesis_rejected"
+    PLATFORM_EVALUATION_COMPLETED = "aios.platform.evaluation_completed"
+    PLATFORM_ORDER_REQUESTED = "aios.platform.order_requested"
+    PLATFORM_ORDER_AUTHORIZED = "aios.platform.order_authorized"
+    PLATFORM_ORDER_DENIED = "aios.platform.order_denied"
+    PLATFORM_RISK_DECISION_MADE = "aios.platform.risk_decision_made"
+    PLATFORM_EXECUTION_COMPLETED = "aios.platform.execution_completed"
+    PLATFORM_POST_MORTEM_CREATED = "aios.platform.post_mortem_created"
+
 
 # Type alias for event handler callbacks
 EventHandler = Callable[[BaseModel], Awaitable[None]]

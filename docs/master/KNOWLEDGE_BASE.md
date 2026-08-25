@@ -14,7 +14,7 @@ Last updated: 2026-08-24 | This file contains 100% of project context for sessio
 
 ## 2. CURRENT STATE (exact)
 
-- **Tests**: 194 passed, 1 skipped (PG active) / 181+5 hermetic
+- **Tests**: 202 passed, 1 skipped (PG active) / 197+6 hermetic
 - **Source files**: 85 Python files across core/, kernel/, schemas/, communities/, simulation/, evaluation/, research/, api/
 - **Git commits**: ~25 from baseline `3c303d7` to latest
 - **Python**: 3.14.4 on win32
@@ -259,5 +259,6 @@ AIOS-0X/
 ├── docs/adrs/ADR-004        ← UI architecture
 └── research/benchmarks/     ← evidence files
 ```
+
 
 
