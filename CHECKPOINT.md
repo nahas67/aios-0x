@@ -16,6 +16,27 @@
 
 ---
 
+### EVALUATION PLANE (§14) + PROMOTION/ROLLBACK (§21/§22) — fail-closed gates live (2026-08-25)
+
+- `research/evaluation.py` (NEW): `EvaluationRecord` with PASS/FAIL/INCONCLUSIVE
+  verdicts and structural honesty gates — trials under 5 trades per side are
+  INCONCLUSIVE regardless of margin; models need ≥30 walk-forward predictions,
+  ≥55% accuracy, brier ≤0.5.
+- `ChallengeRegistry`: every evaluation now attaches a formal record (audited as
+  `EVALUATION_RECORD`); **promotion requires PASS evidence — a human cannot
+  overrule FAIL/INCONCLUSIVE**. Promotions flow through kernel PromotionController
+  with RollbackController targets ("trial → baseline").
+- `ControlPlane.promote_model` (RISK_ADMIN): fail-closed chain EVALUATED status →
+  walk-forward EvaluationRecord → kernel promotion + rollback target
+  (deterministic_baseline:v1); MODEL_PROMOTED audit event; registry status updated.
+- API: `GET /api/v1/evaluations`.
+- Legacy Phase-8 test updated to the stricter contract (FAIL now raises instead of
+  soft-rejecting) — intent preserved, gate strengthened.
+
+Tests: 233 hermetic / **238 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+
+---
+
 ### ML CHALLENGER — §13 loop closed: model trades, operator evaluates (2026-08-25)
 
 - `communities/c4_strategy/ml_family.py` (NEW): `MLDirectionFamily` — the trained

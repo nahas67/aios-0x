@@ -573,7 +573,11 @@ class ReplayRunner:
         from core.control_plane import ControlPlane
 
         if not hasattr(self, "_challenge_registry"):
-            self._challenge_registry = ChallengeRegistry(self.store)
+            self._challenge_registry = ChallengeRegistry(
+                self.store,
+                promotions=self.kernel_bridge.kernel.promotions,
+                rollbacks=self.kernel_bridge.kernel.rollbacks,
+            )
         if not hasattr(self, "_control_plane"):
             plane = ControlPlane(
             store=self.store,
@@ -589,6 +593,7 @@ class ReplayRunner:
             flatten_callback=self._flatten_position,
             positions_view=self._positions_view,
             trial_evaluator=self.evaluate_challenger,
+            kernel_bridge=self.kernel_bridge,
         )
             # SUPERVISED approvals must reach the real execution path:
             plane._execute_bridge(  # noqa: SLF001 - composition-root wiring

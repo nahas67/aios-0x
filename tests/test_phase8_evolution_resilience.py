@@ -88,11 +88,17 @@ def test_challenger_rejects_on_negative_evidence(tmp_path: Path) -> None:
             run_configured_runner=run_side,
             families_factory=lambda s: [],
         )
-        return registry.promote("worse-challenger", "human-2")
+        # §21 fail-closed: a FAIL verdict makes promotion impossible even for
+        # a human operator — the evidence cannot be overruled.
+        with pytest.raises(PermissionError, match="cannot overrule"):
+            registry.promote("worse-challenger", "human-2")
+        return {"promoted": False}
 
     result = asyncio.run(_run())
     assert result["promoted"] is False
-    assert registry.trials["worse-challenger"].state == TrialState.REJECTED
+    assert registry.trials["worse-challenger"].state == TrialState.EVALUATED
+    records = store.iter_event_payloads("EVALUATION_RECORD")
+    assert any(r["verdict"] == "FAIL" for r in records)
 
 
 # ------------------------------------------------------------------ reputation

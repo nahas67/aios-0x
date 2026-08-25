@@ -616,6 +616,11 @@ class SystemSnapshotBuilder:
                 mv["per_symbol"] = extra.get("per_symbol_walk_forward", {})
         return {"available": True, "models": versions}
 
+    def evaluations_view(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Recent formal EvaluationRecords (§14): PASS/FAIL/INCONCLUSIVE."""
+        rows = self.store.iter_event_payloads("EVALUATION_RECORD")
+        return list(reversed(rows))[:limit]
+
     # ------------------------------------------------- analytics (Phase: charts)
 
     def equity(self) -> dict[str, Any]:

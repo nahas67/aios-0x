@@ -164,6 +164,12 @@ def make_handler(
                     self._stream(builder)
                 elif path == "/api/v1/models":
                     self._json(builder.models_view())
+                elif path == "/api/v1/evaluations":
+                    from urllib.parse import parse_qs, urlparse
+
+                    qs = parse_qs(urlparse(self.path).query)
+                    lim = int((qs.get("limit") or ["50"])[0])
+                    self._json({"evaluations": builder.evaluations_view(limit=lim)})
                 elif path == "/metrics":
                     self._text(prometheus_metrics(builder.executive()), ctype="text/plain")
                 else:

@@ -61,6 +61,7 @@ class ControlAction(StrEnum):
     APPROVE_LIVE_CAPITAL = "approve_live_capital"
     PROMOTE_CHALLENGER = "promote_challenger"
     EVALUATE_TRIAL = "evaluate_trial"
+    PROMOTE_MODEL = "promote_model"
     SET_AUTONOMY = "set_autonomy"
     APPROVE_PLAN = "approve_plan"
     REJECT_PLAN = "reject_plan"
@@ -84,6 +85,7 @@ def _build_matrix() -> dict[OperatorRole, frozenset[ControlAction]]:
         ControlAction.RESET_LOCKOUT,
         ControlAction.PROMOTE_CHALLENGER,
         ControlAction.EVALUATE_TRIAL,
+        ControlAction.PROMOTE_MODEL,
         ControlAction.SET_AUTONOMY,
         ControlAction.APPROVE_PLAN,
         ControlAction.REJECT_PLAN,
@@ -121,6 +123,7 @@ class ControlPlane:
         flatten_callback: Callable[[str, float], Awaitable[None]] | None = None,
         positions_view: Callable[[], dict[str, dict[str, str]]] | None = None,
         trial_evaluator: Callable[[str], Awaitable[dict[str, Any]]] | None = None,
+        kernel_bridge: Any = None,
     ) -> None:
         self.store = store
         self.event_bus = event_bus
@@ -135,6 +138,7 @@ class ControlPlane:
         self._flatten = flatten_callback
         self._positions_view = positions_view or (lambda: {})
         self._trial_evaluator = trial_evaluator
+        self.kernel_bridge = kernel_bridge
         self.paused = False
         self.live_capital_approved_by: str | None = None
         self.autonomy: AutonomyMode = AutonomyMode.AUTONOMOUS
@@ -324,6 +328,64 @@ class ControlPlane:
             raise NotImplementedError("trial evaluator not wired into this console")
         recommendation = await self._trial_evaluator(name)
         return {"trial": name, **recommendation}
+
+    async def _do_promote_model(
+        self, operator_id: str, model_id: str = "", version: str = "v1"
+    ) -> dict[str, Any]:
+        """§21/§22: promote a model ONLY on PASS walk-forward evidence.
+
+        Fail-closed chain: registry status must be EVALUATED, the walk-forward
+        EvaluationRecord must be PASS, and promotion flows through the kernel
+        PromotionController with a registered rollback target. A human cannot
+        overrule FAIL/INCONCLUSIVE evidence.
+        """
+        from research.evaluation import EvaluationVerdict, evaluate_model_walk_forward
+
+        if self.kernel_bridge is None:
+            raise RuntimeError("kernel not wired into this console")
+        models = self.kernel_bridge.kernel.models
+        try:
+            mv = models.get(model_id, version)
+        except KeyError as exc:
+            raise ValueError(f"unknown model {model_id}@{version}") from exc
+        if mv.status.value != "EVALUATED":
+            raise PermissionError(
+                f"model {model_id}@{version} is {mv.status.value}; requires EVALUATED"
+            )
+        record = evaluate_model_walk_forward(f"{model_id}:{version}", mv.evaluation_metrics)
+        self.store.append_event(
+            "EVALUATION_RECORD", record.evaluation_id, record.model_dump(mode="json")
+        )
+        if record.verdict is not EvaluationVerdict.PASS:
+            raise PermissionError(record.summary)
+
+        promotions = self.kernel_bridge.kernel.promotions
+        rollbacks = self.kernel_bridge.kernel.rollbacks
+        promotions.propose("model", model_id, version, evaluation_ref=record.evaluation_id)
+        promotions.mark_evaluated("model", model_id, version)
+        rollback_target = "deterministic_baseline:v1"
+        rollbacks.register_target("model", model_id, version, rollback_target)
+        promotions.promote("model", model_id, version, operator_id, rollback_target_version=rollback_target)
+
+        # reflect in model registry
+        from kernel.registries import ModelStatus
+
+        mv.status = ModelStatus.PROMOTED
+        self.store.append_event(
+            "MODEL_PROMOTED",
+            f"{model_id}:{version}",
+            {
+                "by": operator_id,
+                "evaluation_id": record.evaluation_id,
+                "rollback_target": rollback_target,
+            },
+        )
+        return {
+            "promoted": True,
+            "model": f"{model_id}@{version}",
+            "evaluation": record.summary,
+            "rollback_target": rollback_target,
+        }
 
     # ------------------------------------------------- autonomy & approvals
 
