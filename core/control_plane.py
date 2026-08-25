@@ -60,6 +60,7 @@ class ControlAction(StrEnum):
     RESET_LOCKOUT = "reset_lockout"
     APPROVE_LIVE_CAPITAL = "approve_live_capital"
     PROMOTE_CHALLENGER = "promote_challenger"
+    EVALUATE_TRIAL = "evaluate_trial"
     SET_AUTONOMY = "set_autonomy"
     APPROVE_PLAN = "approve_plan"
     REJECT_PLAN = "reject_plan"
@@ -82,6 +83,7 @@ def _build_matrix() -> dict[OperatorRole, frozenset[ControlAction]]:
         ControlAction.TRIGGER_KILL_SWITCH,
         ControlAction.RESET_LOCKOUT,
         ControlAction.PROMOTE_CHALLENGER,
+        ControlAction.EVALUATE_TRIAL,
         ControlAction.SET_AUTONOMY,
         ControlAction.APPROVE_PLAN,
         ControlAction.REJECT_PLAN,
@@ -118,6 +120,7 @@ class ControlPlane:
         price_lookup: Callable[[str], float] | None = None,
         flatten_callback: Callable[[str, float], Awaitable[None]] | None = None,
         positions_view: Callable[[], dict[str, dict[str, str]]] | None = None,
+        trial_evaluator: Callable[[str], Awaitable[dict[str, Any]]] | None = None,
     ) -> None:
         self.store = store
         self.event_bus = event_bus
@@ -131,6 +134,7 @@ class ControlPlane:
         self._price_lookup = price_lookup or (lambda symbol: 0.0)
         self._flatten = flatten_callback
         self._positions_view = positions_view or (lambda: {})
+        self._trial_evaluator = trial_evaluator
         self.paused = False
         self.live_capital_approved_by: str | None = None
         self.autonomy: AutonomyMode = AutonomyMode.AUTONOMOUS
@@ -305,6 +309,21 @@ class ControlPlane:
             return promoted
         rejected: dict[str, Any] = self.challenge_registry.reject(trial_name, operator_id)
         return rejected
+
+    async def _do_evaluate_trial(self, operator_id: str, name: str = "") -> dict[str, Any]:
+        """Run champion vs challenger over identical data (operator-triggered).
+
+        Promotion is NOT part of this action: evaluation only produces the
+        evidence; PROMOTE_CHALLENGER remains the separate human decision.
+        """
+        if self.challenge_registry is None:
+            raise RuntimeError("challenge registry not wired")
+        if not name:
+            raise ValueError("name required")
+        if self._trial_evaluator is None:
+            raise NotImplementedError("trial evaluator not wired into this console")
+        recommendation = await self._trial_evaluator(name)
+        return {"trial": name, **recommendation}
 
     # ------------------------------------------------- autonomy & approvals
 

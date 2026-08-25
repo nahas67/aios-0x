@@ -16,6 +16,24 @@
 
 ---
 
+### ML CHALLENGER — §13 loop closed: model trades, operator evaluates (2026-08-25)
+
+- `communities/c4_strategy/ml_family.py` (NEW): `MLDirectionFamily` — the trained
+  direction model as a candidate generator. Expanding-window refits on visible
+  closes only; inference shares the exact training feature formulas
+  (`features_for_latest`); NO TRADE default; geometry from realized vol.
+- **Critical fix found by tests**: LogReg outputs were constant 0.5 (unscaled
+  micro-features → vanishing gradients). Model now standardizes internally;
+  mean/std are part of the artifact hash. Walk-forward metrics are real.
+- `ControlPlane`: new `evaluate_trial` action (RISK_ADMIN) running champion-vs-
+  challenger via injected evaluator; `ReplayRunner.evaluate_challenger(name)`
+  builds isolated sandbox runners per side over identical data. Evidence lands
+  in CHALLENGER_EVALUATION; PROMOTE_CHALLENGER remains the separate human gate.
+
+Tests: 225 hermetic / **230 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+
+---
+
 ### MODEL LIFECYCLE (§12) — first real model trained + evaluated (2026-08-25)
 
 - `research/model_lab.py` (NEW): stdlib-only logistic regression predicting

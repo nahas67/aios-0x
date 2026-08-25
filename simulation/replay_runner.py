@@ -576,19 +576,20 @@ class ReplayRunner:
             self._challenge_registry = ChallengeRegistry(self.store)
         if not hasattr(self, "_control_plane"):
             plane = ControlPlane(
-                store=self.store,
-                event_bus=self.bus,
-                risk_governor=self.risk_governor,
-                strategy_agent=self.c4,
-                order_manager=self.order_manager,
-                governor=self.governor,
-                paper_engine=self.paper,
-                challenge_registry=self._challenge_registry,
-                settings_ref=self.settings,
-                price_lookup=self._last_price_of,
-                flatten_callback=self._flatten_position,
-                positions_view=self._positions_view,
-            )
+            store=self.store,
+            event_bus=self.bus,
+            risk_governor=self.risk_governor,
+            strategy_agent=self.c4,
+            order_manager=self.order_manager,
+            governor=self.governor,
+            paper_engine=self.paper,
+            challenge_registry=self._challenge_registry,
+            settings_ref=self.settings,
+            price_lookup=self._last_price_of,
+            flatten_callback=self._flatten_position,
+            positions_view=self._positions_view,
+            trial_evaluator=self.evaluate_challenger,
+        )
             # SUPERVISED approvals must reach the real execution path:
             plane._execute_bridge(  # noqa: SLF001 - composition-root wiring
                 lambda plan: self.order_manager.on_plan(
@@ -1120,6 +1121,47 @@ class ReplayRunner:
         if proposals:
             logger.info("auto-research proposed %d new hypotheses", len(proposals))
         return len(proposals)
+
+    async def evaluate_challenger(self, name: str) -> dict[str, Any]:
+        """Run champion vs challenger over IDENTICAL data in isolated sandboxes.
+
+        Champion = the deterministic families that traded this run; challenger
+        adds MLDirectionFamily (the trained direction model as candidate
+        generator). Each side gets a fresh runner + separate audit store so
+        neither pollutes this run's books. Evidence lands in
+        CHALLENGER_EVALUATION; promotion stays a separate human action.
+        """
+        from communities.c4_strategy.families import DEFAULT_FAMILIES
+        from communities.c4_strategy.ml_family import MLDirectionFamily
+
+        registry = self.build_challenge_registry()
+        trial = registry._get(name)  # noqa: SLF001 - composition-root access
+
+        def families_factory(side: str) -> list[Any]:
+            if side == "challenger":
+                return [*DEFAULT_FAMILIES, MLDirectionFamily()]
+            return list(DEFAULT_FAMILIES)
+
+        async def run_side(side: str) -> Any:
+            base = getattr(self.store, "db_path", Path("data/aios"))
+            store_path = Path(f"{base}.trial-{name}-{side}.db")
+            sandbox = ReplayRunner(
+                csv_path_by_symbol=self.csv_path_by_symbol,
+                store_path=store_path,
+                initial_balance=self.initial_balance,
+                slippage_pct=self.slippage_pct,
+                settings=Settings(model_provider="none", auto_research=False),
+                shadow_mode=False,
+            )
+            sandbox.c4.families = families_factory(side)
+            return await sandbox.run()
+
+        recommendation = await registry.evaluate(name, run_side, families_factory)
+        logger.info(
+            "challenger %s evaluated: %s", name, recommendation.get("recommendation")
+        )
+        _ = trial  # registry owns mutation; kept for clarity
+        return recommendation
 
     def _finalize_models(self) -> None:
         """§12 model lifecycle: train pooled direction model on replay closes.

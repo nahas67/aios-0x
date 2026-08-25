@@ -27,11 +27,19 @@ _MIN_TRAIN_BARS = 60
 
 @dataclass
 class LogRegModel:
-    """Batch-GD logistic regression with L2. Weights ARE the artifact."""
+    """Batch-GD logistic regression with L2 + internal feature standardization.
+
+    Features are raw returns/vol ratios (~1e-3 scale); without standardization
+    gradients vanish and the model outputs a constant 0.5. fit() stores
+    per-feature mean/std; predict_proba applies THE SAME stats — both are part
+    of the hash-addressable artifact.
+    """
 
     weights: list[float] = field(default_factory=list)
     bias: float = 0.0
-    lr: float = 0.05
+    mean: list[float] = field(default_factory=list)
+    std: list[float] = field(default_factory=list)
+    lr: float = 0.1
     epochs: int = 300
     l2: float = 1e-3
 
@@ -42,15 +50,27 @@ class LogRegModel:
         ez = math.exp(z)
         return ez / (1.0 + ez)
 
+    def _standardize(self, row: list[float]) -> list[float]:
+        return [
+            (x - m) / s if s > 1e-12 else 0.0
+            for x, m, s in zip(row, self.mean, self.std, strict=True)
+        ]
+
     def fit(self, X: list[list[float]], y: list[int]) -> None:
         n_features = len(X[0])
+        n = len(X)
+        self.mean = [sum(col) / n for col in zip(*X, strict=True)]
+        self.std = [
+            math.sqrt(sum((row[j] - self.mean[j]) ** 2 for row in X) / n)
+            for j in range(n_features)
+        ]
+        Z = [self._standardize(row) for row in X]
         self.weights = [0.0] * n_features
         self.bias = 0.0
-        n = len(X)
         for _ in range(self.epochs):
             grad_w = [0.0] * n_features
             grad_b = 0.0
-            for row, label in zip(X, y, strict=True):
+            for row, label in zip(Z, y, strict=True):
                 pred = self._sigmoid(
                     self.bias + sum(w * x for w, x in zip(self.weights, row, strict=True))
                 )
@@ -63,13 +83,45 @@ class LogRegModel:
                 self.weights[j] -= self.lr * (grad_w[j] / n + self.l2 * self.weights[j])
 
     def predict_proba(self, row: list[float]) -> float:
+        z_row = self._standardize(row)
         return self._sigmoid(
-            self.bias + sum(w * x for w, x in zip(self.weights, row, strict=True))
+            self.bias + sum(w * x for w, x in zip(self.weights, z_row, strict=True))
         )
 
     def artifact_hash(self) -> str:
-        canonical = json.dumps({"w": self.weights, "b": self.bias}, sort_keys=True)
+        canonical = json.dumps(
+            {"w": self.weights, "b": self.bias, "m": self.mean, "s": self.std},
+            sort_keys=True,
+        )
         return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def _feature_row(window: list[float]) -> list[float]:
+    """Feature vector for the MOST RECENT bar of `window` (causal formulas)."""
+    last = window[-1]
+    feats: list[float] = []
+    for k in _FEATURE_RETURNS:
+        base = window[-1 - k]
+        feats.append((last - base) / base if base else 0.0)
+    for w in _FEATURE_VOL_WINDOWS:
+        rets = [
+            (window[j] - window[j - 1]) / window[j - 1]
+            for j in range(len(window) - w, len(window))
+            if window[j - 1]
+        ]
+        mean = sum(rets) / len(rets) if rets else 0.0
+        var = sum((r - mean) ** 2 for r in rets) / len(rets) if rets else 0.0
+        feats.append(math.sqrt(var))
+    sma_fast = sum(window[-5:]) / 5
+    sma_slow = sum(window[-10:]) / min(10, len(window))
+    feats.append(last / sma_fast - 1.0 if sma_fast else 0.0)
+    feats.append(last / sma_slow - 1.0 if sma_slow else 0.0)
+    return feats
+
+
+def min_bars_required() -> int:
+    """Bars needed before one trainable feature row exists."""
+    return max(*_FEATURE_RETURNS, *_FEATURE_VOL_WINDOWS)
 
 
 def build_features(closes: list[float]) -> tuple[list[list[float]], list[int], list[int]]:
@@ -84,29 +136,22 @@ def build_features(closes: list[float]) -> tuple[list[list[float]], list[int], l
     y: list[int] = []
     predict_at: list[int] = []
     for i in range(max_lookback - 1, len(closes) - 1):
-        window = closes[: i + 1]
-        last = window[-1]
-        feats: list[float] = []
-        for k in _FEATURE_RETURNS:
-            base = window[-1 - k]
-            feats.append((last - base) / base if base else 0.0)
-        for w in _FEATURE_VOL_WINDOWS:
-            rets = [
-                (window[j] - window[j - 1]) / window[j - 1]
-                for j in range(len(window) - w, len(window))
-                if window[j - 1]
-            ]
-            mean = sum(rets) / len(rets) if rets else 0.0
-            var = sum((r - mean) ** 2 for r in rets) / len(rets) if rets else 0.0
-            feats.append(math.sqrt(var))
-        sma_fast = sum(window[-5:]) / 5
-        sma_slow = sum(window[-10:]) / min(10, len(window))
-        feats.append(last / sma_fast - 1.0 if sma_fast else 0.0)
-        feats.append(last / sma_slow - 1.0 if sma_slow else 0.0)
-        X.append(feats)
+        X.append(_feature_row(closes[: i + 1]))
         y.append(1 if closes[i + 1] > closes[i] else 0)
         predict_at.append(i + 1)
     return X, y, predict_at
+
+
+def features_for_latest(closes: list[float]) -> list[float] | None:
+    """Inference row for the most recent bar; None when history too short.
+
+    This is the row a LIVE decision would use at bar t to bet on bar t+1 —
+    identical formulas to training rows, no label required.
+    """
+    max_lookback = max(*_FEATURE_RETURNS, *_FEATURE_VOL_WINDOWS)
+    if len(closes) < max_lookback:
+        return None
+    return _feature_row(closes)
 
 
 def walk_forward_evaluate(closes: list[float], train_min: int = _MIN_TRAIN_BARS) -> dict[str, float]:
