@@ -154,15 +154,15 @@ class HypothesisEngine:
         """Re-register non-terminal hypotheses into a fresh kernel state machine.
 
         Terminal states stay in storage only: they are history, not active work.
+        Uses the public recovery API — never state internals.
         Returns how many objects were restored.
         """
         restored = 0
         for h in self.store.list_hypotheses(limit=5000):
             if h.status in {HypothesisStatus.UNTESTED, HypothesisStatus.TESTING}:
-                key = f"hypothesis:{h.hypothesis_id}"
-                if key in sm._objects:  # noqa: SLF001 - restore is composition-root duty
+                if sm.has_object("hypothesis", h.hypothesis_id):
                     continue
-                sm._objects[key] = h.status.value  # noqa: SLF001
+                sm.restore_object("hypothesis", h.hypothesis_id, h.status.value)
                 restored += 1
         return restored
 

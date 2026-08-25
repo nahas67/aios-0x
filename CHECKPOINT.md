@@ -16,6 +16,30 @@
 
 ---
 
+### PLANE RE-HOUSING — manifest + machine-enforced boundaries (2026-08-25)
+
+The final roadmap item, done as invariants instead of file churn:
+
+- `ARCHITECTURE_PLANES.md` (NEW): the authoritative module → plane mapping
+  (Experience/Control/Intelligence/Research/Execution/DeterministicAuthority/
+  DataState/Infrastructure) with judgment calls documented inline.
+- `tests/test_architecture_boundaries.py` (NEW): the planes are machine-checked:
+  1. communities never import kernel.* (mutation only via composition roots)
+  2. no cross-community imports (contracts + bus topics are the only coupling)
+  3. Experience plane (api/) is read-only — no store writes
+  4. no private-state access (`_objects[` etc.) outside kernel/simulation/tests
+  5. every community package + composition root declared in the manifest
+- Ground truth before enforcement was already clean (zero violations found) —
+  now it can never silently regress.
+- One real fix: research engine's cross-session restore poked
+  `StateMachineEngine._objects` directly → new public
+  `restore_object()/has_object()` recovery API; internals stay internal.
+
+Tests: 256 hermetic / **262 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+Gap-analysis migration list: COMPLETE (all five phases A–E addressed).
+
+---
+
 ### MULTI-PROCESS CONSUMPTION PROVEN — `python -m aios tail` (2026-08-25)
 
 - CLI: `tail` subcommand — an independent consumer process following the

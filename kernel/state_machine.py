@@ -120,6 +120,23 @@ class StateMachineEngine:
         self._objects[key] = definition.initial_state
         return definition.initial_state
 
+    def restore_object(self, object_type: str, object_id: str, state: str) -> None:
+        """Re-register an object at an EXISTING state after a restart.
+
+        Cross-session recovery path (used by the research plane at boot).
+        Public API on purpose: callers must never touch ``_objects`` directly.
+        Validates that ``state`` is a legal state of the registered machine.
+        """
+        definition = self._get_definition(object_type)
+        key = f"{object_type}:{object_id}"
+        legal = set(definition._transitions.keys()) | {definition.initial_state}
+        if state not in legal:
+            raise ValueError(f"illegal state {state!r} for {object_type}")
+        self._objects[key] = state
+
+    def has_object(self, object_type: str, object_id: str) -> bool:
+        return f"{object_type}:{object_id}" in self._objects
+
     def get_state(self, object_type: str, object_id: str) -> str:
         key = f"{object_type}:{object_id}"
         state = self._objects.get(key)
