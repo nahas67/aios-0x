@@ -969,3 +969,88 @@ class ComplianceAlert(BaseModel):
     symbol: str | None = None
     ref_execution_id: str | None = None
     blocks_execution: bool = False
+
+
+# --------------------------------------------- research plane (Phase C) ----
+
+
+class HypothesisStatus(StrEnum):
+    """First-class hypothesis lifecycle (original architecture §5)."""
+
+    UNTESTED = "UNTESTED"
+    TESTING = "TESTING"
+    SUPPORTED = "SUPPORTED"
+    PARTIALLY_SUPPORTED = "PARTIALLY_SUPPORTED"
+    REJECTED = "REJECTED"
+    INVALIDATED = "INVALIDATED"
+    SUPERSEDED = "SUPERSEDED"
+
+
+TERMINAL_HYPOTHESIS_STATUSES = frozenset(
+    {HypothesisStatus.SUPERSEDED, HypothesisStatus.INVALIDATED}
+)
+
+
+class Hypothesis(BaseModel):
+    """Persistent, versioned knowledge object — survives across sessions.
+
+    Rejected hypotheses are valuable negative knowledge; they compound.
+    Distinct from CandidateHypothesis, which is the transient debate payload.
+    """
+
+    hypothesis_id: str = Field(default_factory=generate_uuid)
+    statement: str = Field(..., min_length=1, description="What we believe")
+    rationale: str = ""
+    expected_outcome: str = ""
+    applicable_regime: str = ""
+    assumptions: list[str] = Field(default_factory=list)
+    symbol: str | None = None
+    timeframe: str | None = None
+    expected_risk_reward_ratio: float | None = None
+    evidence_ids: list[str] = Field(
+        default_factory=list, description="Linked EvidencePackage ids"
+    )
+    confidence: float = Field(default=50.0, ge=0.0, le=100.0)
+    status: HypothesisStatus = HypothesisStatus.UNTESTED
+    parent_hypotheses: list[str] = Field(
+        default_factory=list, description="Lineage: hypotheses this refines/supersedes"
+    )
+    dataset_ref: dict[str, str] = Field(default_factory=dict)
+    first_seen: datetime = Field(default_factory=generate_utc_now)
+    last_updated: datetime = Field(default_factory=generate_utc_now)
+
+
+class EvidencePackage(BaseModel):
+    """Structured, hash-addressable, linkable evidence (original architecture §4).
+
+    Preserves WHAT was concluded and WHY. content_hash pins the exact payload;
+    identical payloads dedupe to one row regardless of how many times linked.
+    """
+
+    evidence_id: str = Field(default_factory=generate_uuid)
+    source: str = Field(..., min_length=1, description="'c3_verification' | 'postmortem' | ...")
+    source_version: str = "v1"
+    retrieval_time: datetime = Field(default_factory=generate_utc_now)
+    claims: list[str] = Field(default_factory=list)
+    counter_claims: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=50.0, ge=0.0, le=100.0)
+    provenance: dict[str, Any] = Field(default_factory=dict)
+    linked_hypotheses: list[str] = Field(default_factory=list)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+    def content_hash(self) -> str:
+        import hashlib
+        import json
+
+        canonical = json.dumps(
+            {
+                "source": self.source,
+                "source_version": self.source_version,
+                "claims": self.claims,
+                "counter_claims": self.counter_claims,
+                "payload": self.payload,
+            },
+            sort_keys=True,
+            default=str,
+        )
+        return hashlib.sha256(canonical.encode()).hexdigest()

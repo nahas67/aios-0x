@@ -160,9 +160,20 @@ class ReplayRunner:
                 store_path, database_url=self.settings.database_url
             )
 
+        # ---- Research Plane persistence (Phase C): durable hypotheses + evidence
+        from core.research_store import build_research_store
+        from research.engine import HypothesisEngine
+
+        self.research_store = build_research_store(
+            store_path, database_url=self.settings.database_url
+        )
+        self.research_engine = HypothesisEngine(self.research_store)
+
         # ---- AIOS kernel (Phase A completion): every mutation below flows
         # through the authority gateway; receipts mirror into the audit log.
-        self.kernel_bridge = KernelBridge(audit_log=self._append_kernel_event)
+        self.kernel_bridge = KernelBridge(
+            audit_log=self._append_kernel_event, research_engine=self.research_engine
+        )
         self._experiment_repro_hash = ""
 
         self.gateway = gateway if gateway is not None else build_gateway(self.settings)

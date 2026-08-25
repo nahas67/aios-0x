@@ -16,6 +16,34 @@
 
 ---
 
+### ORIGINAL-ARCHITECTURE BUILD: Phase C Research Plane — COMPLETE (2026-08-25)
+
+Per `ARCHITECTURE_GAP_ANALYSIS.md` Phase C: durable knowledge that survives sessions.
+
+- `schemas/contracts.py`: **`Hypothesis`** (persistent first-class object: statement,
+  rationale, expected_outcome, regime, assumptions, evidence_ids[], confidence, status
+  UNTESTED→TESTING→SUPPORTED/REJECTED/…, parent_hypotheses[] lineage) + **`EvidencePackage`**
+  (hash-addressable via `content_hash()`, claims/counter_claims, provenance) + `HypothesisStatus`.
+- `core/research_store.py` (NEW): `BaseResearchStore` with SQLite + PostgreSQL backends
+  (same DATABASE_URL selection as memory store). Tables: hypotheses / evidence
+  (deduped on source+content_hash) / hypothesis_evidence links ("supports" |
+  "contradicts" | "outcome"). Factory: `build_research_store()` → `<store>.research.db` locally.
+- `research/engine.py` (NEW): **HypothesisEngine** — CandidateHypothesis→durable row;
+  VerificationReport→EvidencePackage (+status TESTING when verified); postmortem outcome→
+  outcome evidence + SUPPORTED/REJECTED; one-outcome-per-hypothesis idempotency;
+  cross-session restore into fresh kernel state machines (`wire_kernel_to_engine`);
+  `knowledge_summary()` status counts.
+- Runner wiring: research store built alongside memory store; KernelBridge persists at
+  every hook (on_hypothesis / on_verification / on_settled). `bridge.stats()["research"]`.
+- Tests: `tests/test_phase_c_research.py` — evidence dedupe/hash, lifecycle surviving
+  simulated restart, contradicting-evidence path, kernel restore, runner end-to-end +
+  cross-session read-back, PG parity (live-verified).
+
+**Verification**: 194 passed / 1 skipped with `AIOS_TEST_PG_DSN` set (all live-PG active);
+181 passed / 5 skipped hermetic default. Ruff clean on all touched files.
+
+---
+
 ### ORIGINAL-ARCHITECTURE BUILD: Phase A completion + Phase B data layer — COMPLETE (2026-08-25)
 
 Per `ARCHITECTURE_GAP_ANALYSIS.md` migration strategy. The kernel is no longer shelfware.

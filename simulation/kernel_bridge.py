@@ -92,11 +92,21 @@ def _csv_facts(paths: list[Path]) -> dict[str, Any]:
 
 
 class KernelBridge:
-    """Adapter between the ReplayRunner event flow and the AIOS kernel."""
+    """Adapter between the ReplayRunner event flow and the AIOS kernel.
 
-    def __init__(self, kernel: AIOSKernel | None = None, audit_log: Any = None) -> None:
+    ``research_engine`` (Phase C) is optional; when present, hypotheses are
+    additionally persisted as durable knowledge with hash-addressable evidence.
+    """
+
+    def __init__(
+        self,
+        kernel: AIOSKernel | None = None,
+        audit_log: Any = None,
+        research_engine: Any = None,
+    ) -> None:
         self.kernel = kernel or create_kernel()
         self._audit_log = audit_log  # store.append_event mirror, optional
+        self.research_engine = research_engine  # HypothesisEngine, optional
         for actor_id, actor_type, display_name, roles in _COMMUNITY_ACTORS:
             self.kernel.identity.register(actor_id, actor_type, display_name, roles=roles)
         self._hypotheses: set[str] = set()
@@ -293,6 +303,11 @@ class KernelBridge:
         )
         if self.dataset_version is not None:
             self._link(f"replay:{self.dataset_version}", hid, "derived_from")
+        if self.research_engine is not None:
+            self.research_engine.register_from_candidate(
+                hypothesis,
+                dataset_ref={"dataset_id": "replay", "version": self.dataset_version},
+            )
 
     async def on_verification(self, report: VerificationReport) -> None:
         """C3 verdict moves a VERIFIED hypothesis UNTESTED -> TESTING.
@@ -302,6 +317,8 @@ class KernelBridge:
         """
         if not report.is_verified:
             return
+        if self.research_engine is not None:
+            self.research_engine.apply_verification(report)
         await self._transition(
             "hypothesis",
             report.hypothesis_id,
@@ -438,6 +455,14 @@ class KernelBridge:
         hypothesis_id = str(node.data.get("hypothesis_id", "")) if node else ""
         if hypothesis_id:
             await self.on_hypothesis_outcome(hypothesis_id, direction_correct, realized_pnl)
+            if self.research_engine is not None:
+                self.research_engine.apply_outcome(
+                    hypothesis_id,
+                    direction_correct=direction_correct,
+                    realized_pnl=realized_pnl,
+                    postmortem=postmortem,
+                    execution_id=receipt.execution_id,
+                )
         if postmortem is not None:
             try:
                 self.kernel.provenance.add_node(
@@ -463,7 +488,7 @@ class KernelBridge:
     def stats(self) -> dict[str, Any]:
         """Kernel observability snapshot (read-only)."""
         k = self.kernel
-        return {
+        stats = {
             "actors_registered": len(k.identity.list_all()),
             "capabilities_declared": len(k.capabilities.list_capabilities()),
             "receipts": k.receipts.count(),
@@ -475,6 +500,9 @@ class KernelBridge:
             "dataset_version": self.dataset_version,
             "experiment_id": self.experiment_id,
         }
+        if self.research_engine is not None:
+            stats["research"] = self.research_engine.knowledge_summary()
+        return stats
 
 
 def _lifecycle_to_node_type(object_type: str) -> NodeType:
