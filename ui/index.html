@@ -123,6 +123,7 @@ label.chk input{accent-color:var(--accent)}
   <span id="p-dd" class="pill">DD —</span>
   <span id="p-chain" class="pill">CHAIN —</span>
   <span id="p-nav" class="pill">NAV —</span>
+  <span id="p-sse" class="pill">SSE —</span>
   <div class="spacer"></div>
   <div style="position:relative">
   <input id="search" autocomplete="off" style="width:230px;background:var(--panel2);border:1px solid var(--line-soft);color:var(--text);border-radius:8px;padding:6px 11px;font-size:12.5px" placeholder="Search  ( / )" aria-label="Global search">
@@ -734,6 +735,21 @@ const LOADERS={cmd:loadCmd,opps:loadOpps,decisions:loadDecisions,pnl:loadPnl,str
  ca:loadCA,alerts:loadAlerts,portfolio:loadPortfolio,
  positions:loadPositions,execution:loadExec,risk:loadRisk,agents:loadAgents,events:loadEvents,
  memory:loadMemory,accounting:loadAccounting,tax:loadTax,audit:loadAudit,health:loadHealth,settings:loadSettings,knowledge:loadKnowledge,platform:loadPlatform};
+
+/* ---------------- SSE live stream (Sprint 2 finisher) ---------------- */
+if(window.EventSource){
+ const sse=new EventSource("/api/v1/stream");
+ pill("p-sse","SSE …");
+ sse.onopen=()=>pill("p-sse","SSE LIVE","ok");
+ sse.onerror=()=>pill("p-sse","SSE POLL","warn");
+ sse.onmessage=(m)=>{try{const d=JSON.parse(m.data);const ex=d.executive||{};
+   const dd=ex.drawdown_pct??0;
+   pill("p-state","STATE "+(ex.emergency_state||"—"),ex.emergency_state==="NORMAL"?"ok":"bad");
+   pill("p-dd",`DD ${dd}%`,dd>=2.5?"bad":dd>=1.5?"warn":"ok");
+   pill("p-chain","CHAIN "+(ex.chain_valid?"OK":"BROKEN"),ex.chain_valid?"ok":"bad");
+   pill("p-sse","SSE LIVE "+new Date((d.ts||0)*1000).toLocaleTimeString(),"ok");
+ }catch(e){}};
+}else{pill("p-sse","SSE NONE","warn");}
 async function refresh(force){
  try{await loadExec()}catch(e){}
  if(LOADERS[current])LOADERS[current]().catch(err=>{const el=document.querySelector("section.active");if(el)el.insertAdjacentHTML("beforeend",`<div class="empty">API error: ${esc(err.message)}</div>`)});

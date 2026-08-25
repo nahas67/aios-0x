@@ -55,6 +55,32 @@ def make_handler(
             self.end_headers()
             self.wfile.write(body)
 
+        def _stream(self, builder: SystemSnapshotBuilder, interval_s: float = 2.0) -> None:
+            """Server-Sent Events: executive snapshot + platform tail every tick.
+
+            Runs on this connection's worker thread until the client
+            disconnects (broken pipe ends the loop). Stdlib only.
+            """
+            import time
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            logger.info("SSE client connected: %s", self.client_address[0])
+            try:
+                while True:
+                    payload = {
+                        "ts": time.time(),
+                        "executive": builder.executive(),
+                        "platform_tail": builder.platform_feed(limit=10),
+                    }
+                    self.wfile.write(b"data: " + json.dumps(payload).encode() + b"\n\n")
+                    self.wfile.flush()
+                    time.sleep(interval_s)
+            except (BrokenPipeError, ConnectionError, OSError):
+                logger.info("SSE client disconnected: %s", self.client_address[0])
+
         def do_GET(self) -> None:  # noqa: N802 - stdlib API
             path = self.path.split("?")[0]
             if path == "/" or path == "/ui":
@@ -134,6 +160,8 @@ def make_handler(
                     qs = parse_qs(urlparse(self.path).query)
                     lim = int((qs.get("limit") or ["100"])[0])
                     self._json({"events": builder.platform_feed(limit=lim)})
+                elif path == "/api/v1/stream":
+                    self._stream(builder)
                 elif path == "/metrics":
                     self._text(prometheus_metrics(builder.executive()), ctype="text/plain")
                 else:

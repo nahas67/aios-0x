@@ -321,6 +321,16 @@ class KernelBridge:
             environment="replay",
         )
         self.kernel.experiments.start(self.experiment_id, "system")  # type: ignore[union-attr]
+        # Model registry: the deterministic strategy stack is a first-class
+        # model version (feature-pinned); evaluated with real run metrics at
+        # completion. No magic — the "model" IS what traded.
+        self.kernel.models.register(  # type: ignore[union-attr]
+            model_id="deterministic_baseline",
+            version="v1",
+            model_type="rule_stack",
+            feature_ref={"feature_id": "ohlcv_passthrough", "version": "v1"},
+            metadata={"description": "deterministic multi-family strategy stack"},
+        )
         await self._emit(
             experiment_started(self.experiment_id, self.dataset_version, random_seed)
         )
@@ -330,6 +340,14 @@ class KernelBridge:
         if self.experiment_id is None:
             return
         self.kernel.experiments.complete(self.experiment_id, "system", result_summary)  # type: ignore[union-attr]
+        metrics = {
+            key: float(value)
+            for key, value in result_summary.items()
+            if isinstance(value, int | float)
+        }
+        self.kernel.models.mark_evaluated(  # type: ignore[union-attr]
+            "deterministic_baseline", "v1", metrics
+        )
         await self._emit(experiment_completed(self.experiment_id, result_summary))
 
     # ------------------------------------------------------- research pipeline

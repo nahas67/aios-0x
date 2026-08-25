@@ -16,6 +16,23 @@
 
 ---
 
+### SPRINT 2 CLOSED — SSE live stream + model registry populated (2026-08-25)
+
+- `api/server.py`: **`GET /api/v1/stream`** — Server-Sent Events (stdlib only):
+  executive snapshot + last 10 `aios.platform.*` events every 2s per connected
+  client; worker-thread loop ends on client disconnect.
+- `ui/index.html`: EventSource consumer drives STATE/DD/CHAIN header pills live
+  (+ "SSE LIVE" pill with last-tick time); polling remains as fallback.
+- Model registry no longer empty: each run registers
+  `deterministic_baseline@v1` (rule_stack, feature-pinned to ohlcv_passthrough:v1)
+  and marks it EVALUATED with the run's real metrics (directional accuracy,
+  cumulative pnl...). Provenance edge feature→model queryable.
+
+Tests: 213 hermetic / **218 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+Sprint 2: ✅ COMPLETE (personalities, RAG, AutoResearch, SSE).
+
+---
+
 ### AUTORESEARCH — core learning loop CLOSED (2026-08-25)
 
 The core cycle's final step — UPDATE HYPOTHESIS SPACE — is now automatic:
