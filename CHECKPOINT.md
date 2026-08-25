@@ -16,6 +16,25 @@
 
 ---
 
+### ZERO-TRUST BUS ACLs (§24) — communities publish only their topics (2026-08-25)
+
+- `core/event_bus.py`: `ScopedEventBus` — per-actor bus view; off-roster
+  publishes raise PermissionError and are recorded (`denied` trail).
+  Listening stays unrestricted: subscribing is not authority.
+- `ReplayRunner`: `_COMPONENT_BUS_SCOPES` ownership map (12 actors, incl. the
+  legitimate dual-owner OPPORTUNITY_RANKED for c4+c9); every community
+  component now receives its scoped view. Kernel bridge + composition-root
+  keep the unscoped bus (system actor).
+- Roster registrations synced to runtime scopes (c1/c5/c8/c9 updated, new
+  c10-world identity) — audit log and enforcement can no longer diverge.
+- `runner.acl_denials` must stay empty; integration test proves a FULL replay
+  runs with ZERO off-roster publishes.
+
+Tests: 238 hermetic / **248 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+Tech debt #4 (per-agent ACL wiring) CLOSED.
+
+---
+
 ### OS CLI — `python -m aios {boot,replay,summary-json,serve}` (2026-08-25)
 
 The system boots like an operating system now:

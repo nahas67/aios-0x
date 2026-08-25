@@ -67,6 +67,46 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# ---- Zero-trust publishing map (§24): actor -> topics it may publish.
+# Everything else (DATA_ANOMALY, RECONCILIATION_FAILED, aios.platform.*) is
+# published by the composition root / kernel bridge on the unscoped bus.
+_COMPONENT_BUS_SCOPES: dict[str, frozenset[EventTopic]] = {
+    "c1-data-fabric": frozenset({EventTopic.DATA_ACQUIRED}),
+    "c2-research": frozenset({EventTopic.HYPOTHESIS_GENERATED}),
+    "c3-verification": frozenset({EventTopic.VERIFICATION_COMPLETED}),
+    "c4-strategy": frozenset(
+        {EventTopic.STRATEGY_GENERATED, EventTopic.OPPORTUNITY_RANKED}
+    ),
+    "c5-execution": frozenset(
+        {
+            EventTopic.ORDER_SUBMITTED,
+            EventTopic.ORDER_FILLED,
+            EventTopic.TRADE_EXECUTED,
+        }
+    ),
+    "c6-observation": frozenset({EventTopic.OBSERVATION_COMPLETED}),
+    "c7-memory": frozenset({EventTopic.MEMORY_STORED}),
+    "c8-evolution": frozenset({EventTopic.EVOLUTION_TRIGGERED}),
+    "c9-governor": frozenset(
+        {
+            EventTopic.OPPORTUNITY_RANKED,
+            EventTopic.PORTFOLIO_ALLOCATED,
+            EventTopic.PORTFOLIO_REJECTED,
+        }
+    ),
+    "c10-world": frozenset(
+        {
+            EventTopic.REGIME_CHANGED,
+            EventTopic.EXPECTATION_UPDATED,
+            EventTopic.SCENARIOS_PUBLISHED,
+        }
+    ),
+    "c11-finance": frozenset(
+        {EventTopic.LEDGER_POSTED, EventTopic.COMPLIANCE_ALERT}
+    ),
+    "risk-governor": frozenset({EventTopic.RISK_EMERGENCY}),
+}
+
 
 class RunSummary(BaseModel):
     """Outcome of one replay run (timestamps excluded from determinism hash)."""
@@ -179,6 +219,7 @@ class ReplayRunner:
             research_engine=self.research_engine,
             event_bus=self.bus,
         )
+        self._scoped_buses: list[Any] = []
         self._experiment_repro_hash = ""
 
         self.gateway = gateway if gateway is not None else build_gateway(self.settings)
@@ -202,21 +243,21 @@ class ReplayRunner:
         else:
             self.fetcher_any = self.fetcher
 
-        self.c1 = DataAcquisitionAgent(fetcher=self.fetcher_any, event_bus=self.bus)
+        self.c1 = DataAcquisitionAgent(fetcher=self.fetcher_any, event_bus=self._scoped("c1-data-fabric"))
 
         # ---- Data-quality pipeline (Directive 9 reactions)
         self.anomaly_detector = AnomalyDetector()
         self.health = SymbolHealthRegistry()
 
         # ---- C10 world intelligence
-        self.regime_engine = RegimeEngine(event_bus=self.bus)
+        self.regime_engine = RegimeEngine(event_bus=self._scoped("c10-world"))
         self.calendar: FileMacroCalendar | None = None
         self.expectation_engine: ExpectationEngine | None = None
         self.scenario_engine: ScenarioEngine | None = None
         if macro_calendar_path is not None:
             self.calendar = FileMacroCalendar(macro_calendar_path)
-            self.expectation_engine = ExpectationEngine(event_bus=self.bus)
-            self.scenario_engine = ScenarioEngine(event_bus=self.bus)
+            self.expectation_engine = ExpectationEngine(event_bus=self._scoped("c10-world"))
+            self.scenario_engine = ScenarioEngine(event_bus=self._scoped("c10-world"))
 
         # ---- Trading memory log (closed learning loop, created before C2)
         from core.memory_log import TradingMemoryLog
@@ -236,41 +277,41 @@ class ReplayRunner:
                 past_context_provider=self.memory_log.get_past_context,
             )
             self.c2: ResearchAgent | DebateResearchAgent = DebateResearchAgent(
-                event_bus=self.bus,
+                event_bus=self._scoped("c2-research"),
                 engine=debate,
                 transcript_sink=self._on_transcript,
             )
             self._research_mode_used = "debate"
         else:
-            self.c2 = ResearchAgent(event_bus=self.bus)
+            self.c2 = ResearchAgent(event_bus=self._scoped("c2-research"))
             self.model_calls = 0
             self.total_model_cost_usd = 0.0
             self._research_mode_used = "deterministic"
 
-        self.c3 = VerificationAgent(event_bus=self.bus, min_confidence_threshold=70.0)
+        self.c3 = VerificationAgent(event_bus=self._scoped("c3-verification"), min_confidence_threshold=70.0)
         self.risk_firewall = RiskFirewall(RiskConfig())
         self.c4 = StrategyAgent(
-            event_bus=self.bus,
+            event_bus=self._scoped("c4-strategy"),
             risk_firewall=self.risk_firewall,
             portfolio_value_estimate=initial_balance,
         )
         self.paper = PaperEngine(
-            event_bus=self.bus,
+            event_bus=self._scoped("c5-execution"),
             initial_balance=initial_balance,
             slippage_pct=slippage_pct,
             max_open_positions_per_symbol=1,
             shadow_mode=shadow_mode,
         )
-        self.c6 = ObservationAgent(event_bus=self.bus)
+        self.c6 = ObservationAgent(event_bus=self._scoped("c6-observation"))
         self.postmortems = PostmortemEngine()
-        self.c7 = MemoryAgent(event_bus=self.bus)
+        self.c7 = MemoryAgent(event_bus=self._scoped("c7-memory"))
         self.c8 = EvolutionAgent(
-            event_bus=self.bus, performance_provider=self.c7.get_performance_summary
+            event_bus=self._scoped("c8-evolution"), performance_provider=self.c7.get_performance_summary
         )
 
         # ---- C9 portfolio gate: nothing executes without an allocation plan
         self.governor = PortfolioGovernor(
-            event_bus=self.bus,
+            event_bus=self._scoped("c9-governor"),
             initial_equity=initial_balance,
             equity_provider=self._current_equity,
             exposure_by_class_provider=self._class_exposures,
@@ -279,13 +320,13 @@ class ReplayRunner:
         # ---- C5 execution chain: plan -> order lifecycle -> venue
         self.adapter = PaperExecutionAdapter(self.paper)
         self.order_manager = OrderManager(
-            event_bus=self.bus,
+            event_bus=self._scoped("c5-execution"),
             adapter=self.adapter,
             quantity_provider=self._plan_quantity,
         )
 
         # ---- Emergency authority + kill switch
-        self.risk_governor = RiskGovernor(event_bus=self.bus)
+        self.risk_governor = RiskGovernor(event_bus=self._scoped("risk-governor"))
         if store is not None and load_lockout_from_store(self.store):
             from schemas.contracts import EmergencyStateValue
 
@@ -310,11 +351,11 @@ class ReplayRunner:
         self._fill_mirror: dict[str, str] = {}  # execution_id -> symbol (reconciliation)
 
         # ---- C11 finance back office
-        self.ledger = DoubleEntryLedger(event_bus=self.bus)
+        self.ledger = DoubleEntryLedger(event_bus=self._scoped("c11-finance"))
         self.lot_book = LotBook()
         self.tax_engine = TaxEngine(BUILTIN_RULES["GENERIC_25"])
         self.ca_workflow = CAWorkflow()
-        self.surveillance = Surveillance(event_bus=self.bus)
+        self.surveillance = Surveillance(event_bus=self._scoped("c11-finance"))
         self._disposals_by_execution: dict[str, list[Disposal]] = {}
         self._all_disposals: list[Disposal] = []
         self._tax_computation: TaxComputation | None = None
@@ -330,7 +371,7 @@ class ReplayRunner:
         register_roster(
             self.store,
             [
-                AgentIdentity(agent_id="c1-data-fabric", community="C1", role="data"),
+                AgentIdentity(agent_id="c1-data-fabric", community="C1", role="data", publishes=["aios.c1.data_acquired"]),
                 AgentIdentity(
                     agent_id="c2-research",
                     community="C2",
@@ -354,7 +395,7 @@ class ReplayRunner:
                     agent_id="c5-execution",
                     community="C5",
                     role="execution",
-                    publishes=["aios.c5.order_submitted", "aios.c5.order_filled"],
+                    publishes=["aios.c5.order_submitted", "aios.c5.order_filled", "aios.c5.order_executed"],
                 ),
                 AgentIdentity(
                     agent_id="c6-observation",
@@ -368,12 +409,26 @@ class ReplayRunner:
                     role="memory",
                     publishes=["aios.c7.memory_stored"],
                 ),
-                AgentIdentity(agent_id="c8-evolution", community="C8", role="evolution"),
+                AgentIdentity(agent_id="c8-evolution", community="C8", role="evolution", publishes=["aios.c8.evolution_triggered"]),
+                AgentIdentity(
+                    agent_id="c10-world",
+                    community="C10",
+                    role="world",
+                    publishes=[
+                        "aios.c10.regime_changed",
+                        "aios.c10.expectation_updated",
+                        "aios.c10.scenarios_published",
+                    ],
+                ),
                 AgentIdentity(
                     agent_id="c9-governor",
                     community="C9",
                     role="portfolio",
-                    publishes=["aios.c9.portfolio_allocated", "aios.c9.portfolio_rejected"],
+                    publishes=[
+                        "aios.c4.opportunity_ranked",
+                        "aios.c9.portfolio_allocated",
+                        "aios.c9.portfolio_rejected",
+                    ],
                 ),
                 AgentIdentity(
                     agent_id="risk-governor",
@@ -441,6 +496,22 @@ class ReplayRunner:
     def _append_kernel_event(self, kind: str, ref_id: str | None, payload: dict[str, Any]) -> None:
         """Audit-log mirror for kernel decision receipts (tamper-evident trail)."""
         self.store.append_event(kind, ref_id, payload)
+
+    def _scoped(self, actor_id: str) -> BaseEventBus:
+        """Zero-trust bus view for a community (fails closed off-roster)."""
+        from core.event_bus import ScopedEventBus
+
+        allowed = _COMPONENT_BUS_SCOPES.get(actor_id)
+        if allowed is None:
+            return self.bus
+        scoped = ScopedEventBus(self.bus, actor_id, allowed)
+        self._scoped_buses.append(scoped)
+        return scoped
+
+    @property
+    def acl_denials(self) -> list[str]:
+        """Every off-roster publish attempt this run (must stay empty)."""
+        return [t for scoped in self._scoped_buses for t in scoped.denied]
 
     def _logger_for(self, topic: EventTopic) -> Callable[[Any], Awaitable[None]]:
         """Bind the canonical topic value as the audit-log ``kind``."""
@@ -1263,3 +1334,7 @@ class ReplayRunner:
             benchmark_return_pct=bench_return,
             alpha_pct=round(our_return - bench_return, 2),
         )
+
+
+
+

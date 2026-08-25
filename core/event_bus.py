@@ -166,3 +166,43 @@ class InMemoryEventBus(BaseEventBus):
                         )
             finally:
                 self._queue.task_done()
+
+class ScopedEventBus(BaseEventBus):
+    """Zero-trust bus view for ONE publisher (security architecture section 24).
+
+    Communities receive this instead of the raw bus: publishing a topic
+    outside their declared ownership fails CLOSED with PermissionError.
+    Subscriptions stay unrestricted (listening is not authority).
+    """
+
+    def __init__(
+        self,
+        inner: BaseEventBus,
+        actor_id: str,
+        allowed_publish_topics: frozenset[EventTopic],
+    ) -> None:
+        self._inner = inner
+        self.actor_id = actor_id
+        self._allowed = frozenset(allowed_publish_topics)
+        self.denied: list[str] = []
+
+    async def publish(self, topic: EventTopic, payload: BaseModel) -> None:
+        if topic not in self._allowed:
+            self.denied.append(topic.value)
+            raise PermissionError(
+                f"actor {self.actor_id!r} may not publish {topic.value}; "
+                f"allowed: {sorted(t.value for t in self._allowed)}"
+            )
+        await self._inner.publish(topic, payload)
+
+    async def subscribe(self, topic: EventTopic, handler: EventHandler) -> None:
+        await self._inner.subscribe(topic, handler)
+
+    async def start(self) -> None:
+        await self._inner.start()
+
+    async def stop(self) -> None:
+        await self._inner.stop()
+
+    async def wait_until_idle(self) -> None:
+        await self._inner.wait_until_idle()
