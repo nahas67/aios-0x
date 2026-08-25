@@ -16,6 +16,24 @@
 
 ---
 
+### MULTI-PROCESS CONSUMPTION PROVEN — `python -m aios tail` (2026-08-25)
+
+- CLI: `tail` subcommand — an independent consumer process following the
+  durable log (`--follow`, `--json` lines, `--state-file` cursor persistence,
+  poll-interval). Fresh consumers with `--follow` start from the CURRENT
+  checkpoint (bug found by test: was falling back to --after 0).
+- **Cross-process proof**: test spawns `python -m aios tail --follow
+  --state-file …` as a REAL second OS process; the first process then writes
+  events into the log; the tail receives exactly those seqs and persists its
+  cursor to the state file. Restart case: exactly-once resume from cursor 4 →
+  receives only 5,6.
+- This is the service-split seam working end-to-end: trading OS writes the
+  log; any number of independent processes consume it with their own cursors.
+
+Tests: 249 hermetic / **255 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+
+---
+
 ### EVENT RECOVERY (§26) — durable replay with exactly-once cursors (2026-08-25)
 
 - `BaseMemoryStore.read_events(after_seq, limit)`: ordered, cursor-based reads

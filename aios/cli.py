@@ -190,6 +190,71 @@ def _open_store(db: str) -> Any:
     return SqliteMemoryStore(Path(db))
 
 
+# --------------------------------------------------------------------- tail
+
+
+def cmd_tail(args: argparse.Namespace) -> int:
+    """Independent consumer process: follow the durable log from a cursor.
+
+    This is the multi-process seam (§26 + §2): the trading OS writes the
+    hash-chained log; ANY number of processes consume it independently —
+    analytics, alerting, research services — each with its own cursor.
+    """
+    import time
+
+    from core.event_recovery import EventReplay, checkpoint
+
+    store = _open_store(args.db)
+
+    after_seq = args.after
+    if args.state_file:
+        state_path = Path(args.state_file)
+        if state_path.exists():
+            try:
+                after_seq = int(json.loads(state_path.read_text())["after_seq"])
+            except (ValueError, KeyError):
+                print(f"bad state file {state_path}; falling back", file=sys.stderr)
+                after_seq = checkpoint(store) if args.follow else args.after
+        else:
+            # fresh consumer: --follow starts from NOW; one-shot honours --after
+            after_seq = checkpoint(store) if args.follow else args.after
+    elif args.follow:
+        after_seq = checkpoint(store)
+
+    print(f"tail {args.db} from seq {after_seq} (poll={args.poll_interval}s)", flush=True)
+    replay = EventReplay(store, after_seq=after_seq)
+    idle = False
+    try:
+        while True:
+            batch = replay.next(limit=args.batch)
+            for event in batch:
+                line = (
+                    json.dumps(
+                        {
+                            "seq": event["seq"],
+                            "ts": event["ts"],
+                            "kind": event["kind"],
+                            "ref_id": event["ref_id"],
+                            "payload": event["payload"],
+                        }
+                    )
+                    if args.json
+                    else f"{event['seq']:>6}  {event['ts'][:19]}  {event['kind']:<42} {event['ref_id'] or ''}"
+                )
+                print(line, flush=True)
+            if args.state_file and batch:
+                Path(args.state_file).write_text(json.dumps({"after_seq": replay.after_seq}))
+            idle = not batch
+            if not args.follow:
+                if idle:
+                    break
+                continue
+            time.sleep(args.poll_interval if idle else 0.0)
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
 # ------------------------------------------------------------------ parser
 
 
@@ -222,6 +287,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_events.add_argument("--after", type=int, default=0)
     p_events.add_argument("--limit", type=int, default=50)
     p_events.add_argument("--kind", default="", help="filter by kind prefix (e.g. aios.platform.)")
+
+    p_tail = sub.add_parser(
+        "tail", help="independent consumer process: follow the durable log"
+    )
+    p_tail.add_argument("--db", default="data/aios.db")
+    p_tail.add_argument("--after", type=int, default=0)
+    p_tail.add_argument("--batch", type=int, default=200)
+    p_tail.add_argument("--poll-interval", type=float, default=0.25)
+    p_tail.add_argument("--json", action="store_true", help="JSON lines output")
+    p_tail.add_argument(
+        "--follow", action="store_true", help="keep polling for new events (long-running)"
+    )
+    p_tail.add_argument(
+        "--state-file",
+        default="",
+        help="persist the cursor here so restarts resume exactly once",
+    )
     return parser
 
 
@@ -233,6 +315,7 @@ def main(argv: list[str] | None = None) -> int:
         "summary-json": cmd_summary_json,
         "serve": cmd_serve,
         "events": cmd_events,
+        "tail": cmd_tail,
     }
     return int(handlers[args.command](args))
 
