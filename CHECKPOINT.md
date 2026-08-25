@@ -16,6 +16,26 @@
 
 ---
 
+### FULL-SCALE SOAK + PERF REGRESSION FIXED — 603s → 142.7s (2026-08-25)
+
+Post-slice validation run over the full golden set (730 bars × 7 symbols,
+22k events, 5110 hypotheses, 167 strategies, 142 trades):
+
+- **Regression found**: 603s vs the KB's ~145s baseline (4.2×). Root cause NOT
+  the kernel instrumentation — it was the §12 model lab's walk-forward
+  evaluation refitting a fresh LogReg at every bar (4550 pure-Python fits).
+- **Fix**: periodic-retraining walk-forward (`refit_every=10`): fit every K
+  steps, predict gaps with the held model. Strictly causal regardless of
+  staleness; documented in the docstring; refit count surfaced in metrics.
+  10.4× faster per symbol (68.3s → 6.6s), metric drift at noise level
+  (54.99%→53.76% acc, brier 0.2484→0.2489 on the same seed).
+- **Result: 142.7s wall** — under the pre-OS baseline, with IDENTICAL
+  determinism hash (trading loop untouched by both instrumentation and fix).
+
+Honest full-scale numbers now in this file replace KB estimates.
+
+---
+
 ### PLANE RE-HOUSING — manifest + machine-enforced boundaries (2026-08-25)
 
 The final roadmap item, done as invariants instead of file churn:

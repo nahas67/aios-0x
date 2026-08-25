@@ -154,18 +154,38 @@ def features_for_latest(closes: list[float]) -> list[float] | None:
     return _feature_row(closes)
 
 
-def walk_forward_evaluate(closes: list[float], train_min: int = _MIN_TRAIN_BARS) -> dict[str, float]:
-    """Expanding-window honesty check: fit on past, predict next bar."""
+def walk_forward_evaluate(
+    closes: list[float],
+    train_min: int = _MIN_TRAIN_BARS,
+    refit_every: int = 10,
+) -> dict[str, float]:
+    """Expanding-window honesty check: fit on past, predict next bar.
+
+    Retraining happens every ``refit_every`` steps; intermediate predictions
+    use the held model. STRICTLY CAUSAL regardless of staleness — a model
+    fitted at t never saw labels from t+1..t+K. This is the standard
+    periodic-retraining walk-forward; refit_every=1 is the (much slower)
+    fully-greedy variant.
+    """
     X, y, _ = build_features(closes)
     n_predictions = max(0, len(y) - train_min)
     if n_predictions <= 0:
-        return {"n_predictions": 0.0, "accuracy_pct": 0.0, "brier": 0.0}
+        return {
+            "n_predictions": 0.0,
+            "accuracy_pct": 0.0,
+            "brier": 0.0,
+            "refit_every": float(refit_every),
+        }
 
     correct = 0
     brier_total = 0.0
+    refits = 0
+    model: LogRegModel | None = None
     for t in range(train_min, len(y)):
-        model = LogRegModel(epochs=120)
-        model.fit(X[:t], y[:t])
+        if model is None or (t - train_min) % refit_every == 0:
+            model = LogRegModel(epochs=120)
+            model.fit(X[:t], y[:t])
+            refits += 1
         proba = model.predict_proba(X[t])
         predicted_up = proba >= 0.5
         if predicted_up == (y[t] == 1):
@@ -176,6 +196,8 @@ def walk_forward_evaluate(closes: list[float], train_min: int = _MIN_TRAIN_BARS)
         "n_predictions": float(n_predictions),
         "accuracy_pct": round(correct / n_predictions * 100.0, 2),
         "brier": round(brier_total / n_predictions, 4),
+        "refit_every": float(refit_every),
+        "refits": float(refits),
     }
 
 
