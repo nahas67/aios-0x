@@ -248,6 +248,26 @@ class PostgresMemoryStore(BaseMemoryStore):
                 rows = cur.fetchall()
         return [json.loads(r[0]) for r in rows]
 
+    def read_events(self, after_seq: int = 0, limit: int = 1000) -> list[dict[str, Any]]:
+        with self._lock:
+            with self._conn.cursor() as cur:
+                cur.execute(
+                    "SELECT seq, ts, kind, ref_id, payload_json FROM event_log "
+                    "WHERE seq > %s ORDER BY seq ASC LIMIT %s",
+                    (after_seq, limit),
+                )
+                rows = cur.fetchall()
+        return [
+            {
+                "seq": int(r[0]),
+                "ts": r[1],
+                "kind": r[2],
+                "ref_id": r[3],
+                "payload": json.loads(r[4]),
+            }
+            for r in rows
+        ]
+
     def close(self) -> None:
         with self._lock:
             self._conn.close()

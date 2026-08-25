@@ -16,6 +16,25 @@
 
 ---
 
+### EVENT RECOVERY (§26) — durable replay with exactly-once cursors (2026-08-25)
+
+- `BaseMemoryStore.read_events(after_seq, limit)`: ordered, cursor-based reads
+  on SQLite + PostgreSQL — the durability contract: resume from {seq} and get
+  exactly what you missed.
+- `core/event_recovery.py` (NEW): `checkpoint(store)` + `EventReplay` cursor
+  reader (`next`/`drain`, kind-prefix filter). The hash-chained log is now the
+  durable transport; this is its read side. Also the seam where a future
+  multi-process deployment attaches.
+- CLI: `python -m aios events --db … --after N [--kind prefix]` — operator-
+  visible recovery. Verified against this morning's real log.
+- Tests incl. simulated crash: consumer checkpoints at seq 8 of 20, "dies",
+  restarts → receives exactly events 9–20 in order, nothing twice.
+
+Tests: 247 hermetic / **253 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+§26 "Event Failure → durable recovery/replay": CLOSED.
+
+---
+
 ### ZERO-TRUST BUS ACLs (§24) — communities publish only their topics (2026-08-25)
 
 - `core/event_bus.py`: `ScopedEventBus` — per-actor bus view; off-roster

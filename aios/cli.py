@@ -160,6 +160,36 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+# ------------------------------------------------------------------- events
+
+
+def cmd_events(args: argparse.Namespace) -> int:
+    """Durable recovery: read events after a cursor (§26 crash-recovery seam)."""
+    from core.event_recovery import EventReplay, checkpoint
+
+    store = _open_store(args.db)
+    mark = checkpoint(store)
+    print(f"log checkpoint: seq {mark}")
+    replay = EventReplay(store, after_seq=args.after)
+    batch = replay.drain(kind_prefix=args.kind or None)
+    shown = 0
+    for event in batch:
+        if shown >= args.limit:
+            print(f"... {len(batch) - args.limit} more (raise --limit)")
+            break
+        payload_preview = json.dumps(event["payload"])[:110]
+        print(f"{event['seq']:>6}  {event['ts'][:19]}  {event['kind']:<42} {payload_preview}")
+        shown += 1
+    print(f"replayed {min(len(batch), args.limit)} of {len(batch)} events after seq {args.after}")
+    return 0
+
+
+def _open_store(db: str) -> Any:
+    from core.persistence import SqliteMemoryStore
+
+    return SqliteMemoryStore(Path(db))
+
+
 # ------------------------------------------------------------------ parser
 
 
@@ -186,6 +216,12 @@ def build_parser() -> argparse.ArgumentParser:
     _common(p_serve)
     p_serve.add_argument("--port", type=int, default=8787)
     p_serve.add_argument("--shadow", action="store_true", help="no cash mutation")
+
+    p_events = sub.add_parser("events", help="durable event recovery: read log after cursor")
+    p_events.add_argument("--db", default="data/aios.db")
+    p_events.add_argument("--after", type=int, default=0)
+    p_events.add_argument("--limit", type=int, default=50)
+    p_events.add_argument("--kind", default="", help="filter by kind prefix (e.g. aios.platform.)")
     return parser
 
 
@@ -196,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
         "replay": cmd_replay,
         "summary-json": cmd_summary_json,
         "serve": cmd_serve,
+        "events": cmd_events,
     }
     return int(handlers[args.command](args))
 

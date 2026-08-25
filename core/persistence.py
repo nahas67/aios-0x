@@ -72,6 +72,18 @@ class BaseMemoryStore(ABC):
     def iter_event_payloads(self, kind: str) -> list[dict[str, Any]]:
         """All payloads of one event kind in sequence order."""
 
+    @abstractmethod
+    def read_events(
+        self, after_seq: int = 0, limit: int = 1000
+    ) -> list[dict[str, Any]]:
+        """Events STRICTLY AFTER a sequence number, ascending order.
+
+        The durability contract behind crash recovery and service restarts:
+        a consumer checkpoints {seq}, and read_events(after_seq) returns
+        exactly what it missed — nothing twice, nothing skipped.
+        Each row: {seq, ts, kind, ref_id, payload}.
+        """
+
 
 class SqliteMemoryStore(BaseMemoryStore):
     """Local SQLite implementation of the memory store (thread-safe)."""
@@ -249,6 +261,24 @@ class SqliteMemoryStore(BaseMemoryStore):
                 (kind,),
             ).fetchall()
         return [json.loads(r["payload_json"]) for r in rows]
+
+    def read_events(self, after_seq: int = 0, limit: int = 1000) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT seq, ts, kind, ref_id, payload_json FROM event_log "
+                "WHERE seq > ? ORDER BY seq ASC LIMIT ?",
+                (after_seq, limit),
+            ).fetchall()
+        return [
+            {
+                "seq": int(r["seq"]),
+                "ts": r["ts"],
+                "kind": r["kind"],
+                "ref_id": r["ref_id"],
+                "payload": json.loads(r["payload_json"]),
+            }
+            for r in rows
+        ]
 
     def close(self) -> None:
         self._conn.close()
