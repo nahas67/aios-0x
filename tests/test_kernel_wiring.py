@@ -143,14 +143,12 @@ def test_full_run_lifecycle_through_kernel(small_dataset, tmp_path) -> None:
     ]
     assert evaluated, "no strategy reached EVALUATED"
 
-    # Receipts exist and are mirrored into the hash-chained audit log.
-    # (The state machine co-saves its own receipt per transition, so the kernel
-    # store holds >= the bridge's authorization decisions; every bridge decision
-    # is mirrored 1:1.)
+    # Every kernel receipt — gateway decisions AND state-machine co-receipts —
+    # is mirrored 1:1 into the hash-chained audit log by the receipt sink.
     stats = bridge.stats()
     assert stats["receipts"] >= stats["authorizations"] > 0
     mirrored = runner.store.iter_event_payloads("DECISION_RECEIPT")
-    assert len(mirrored) == stats["authorizations"]
+    assert len(mirrored) == stats["receipts"]
     assert any(r["decision"] == "ALLOW" for r in mirrored)
 
 

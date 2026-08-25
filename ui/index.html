@@ -163,7 +163,8 @@ function toggle(id){$(id).classList.toggle("hidden")}
 /* ================================================================ nav */
 const NAV={
  "COMMAND":[["cmd","Command Center"],["opps","Opportunities"],["decisions","Decisions"],["pnl","P&L Analysis"],["portfolio","Portfolio"],["positions","Positions"],["execution","Execution"],["risk","Risk"]],
- "INTELLIGENCE":[["agents","Agent Network"],["events","Global Events"],["memory","Memory & Research"],["strategies","Strategy Center"]],
+  "INTELLIGENCE":[["agents","Agent Network"],["events","Global Events"],["memory","Memory & Research"],["strategies","Strategy Center"]],
+  "RESEARCH":[["knowledge","Hypothesis Graph"],["platform","Platform Events"]],
  "OPERATIONS":[["accounting","Accounting"],["tax","Tax & CA"],["ca","CA Review"],["audit","Audit"]],
  "SYSTEM":[["alerts","Alerts"],["health","System Health"],["settings","Settings"]],
 };
@@ -425,6 +426,46 @@ async function loadMemory(){
   <div class="card"><b>Store Health</b>
   <div class="kv"><span class="k">Audit chain</span><span>${h.audit_chain_valid?badge("OK","b-ok"):badge("BROKEN","b-bad")}</span></div>
   ${Object.entries(h.counts||{}).map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span>${v}</span></div>`).join("")}</div>`;}
+
+/* ---------------- research plane (hypothesis graph + platform events) ---------------- */
+SECTIONS.knowledge=`<h2 class="sec">Hypothesis Graph <small style="color:var(--faint);text-transform:none">durable knowledge — rejected hypotheses are negative knowledge that compounds</small></h2><div id="kn-summary" class="grid cards"></div><div id="kn-body"></div>`;
+function knBadge(status){const map={SUPPORTED:"b-ok",REJECTED:"b-bad",TESTING:"b-warn",UNTESTED:"b-dim",PARTIALLY_SUPPORTED:"b-acc",INVALIDATED:"b-bad",SUPERSEDED:"b-dim"};return badge(status,map[status]||"b-dim");}
+async function loadKnowledge(){
+ const d=await j("/api/v1/knowledge");
+ if(!d.available){$("kn-body").innerHTML=`<div class="empty">Research plane not wired.</div>`;return;}
+ const st=d.statuses||{};
+ $("kn-summary").innerHTML=`<div class="card"><b>Hypotheses</b><div class="kv"><span class="k">Total</span><span>${d.hypotheses||0}</span></div>
+   ${Object.entries(st).map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span>${v}</span></div>`).join("")}</div>
+  <div class="card"><b>Evidence</b><div class="kv"><span class="k">Packages</span><span>${d.evidence||0}</span></div>
+   <div class="kv"><span class="k">Links</span><span>${d.hypothesis_evidence||0}</span></div></div>`;
+ $("kn-body").innerHTML=(d.recent||[]).length?`<table><thead><tr><th>Hypothesis</th><th>Symbol</th><th>Status</th><th>Confidence</th><th>Evidence</th><th></th></tr></thead><tbody>${
+  d.recent.map(h=>`<tr><td title="${h.statement}">${h.statement.slice(0,70)}${h.statement.length>70?"…":""}</td><td>${h.symbol||"—"}</td>
+   <td>${knBadge(h.status)}</td><td>${Math.round(h.confidence)}%</td>
+   <td>${h.supports}↑ ${h.contradicts}↓ ${h.outcomes}◎</td>
+   <td><button onclick="loadHypothesisDetail('${h.hypothesis_id}')">detail</button></td></tr>`).join("")}</tbody></table>`
+ :`<div class="empty">No hypotheses recorded yet — run a replay first.</div>`;}
+async function loadHypothesisDetail(id){
+ let d;try{d=await j("/api/v1/knowledge/"+id);}catch(e){alert("not found");return;}
+ const ev=(d.evidence||[]).map(e=>`<div class="card"><b>${e.relationship.toUpperCase()}</b> ${badge(e.source,"b-acc")} · confidence ${Math.round(e.confidence)}%
+  <div style="font-size:11px;color:var(--faint);margin-top:4px">hash ${String(e.content_hash).slice(0,16)}…</div>
+  ${(e.claims||[]).map(c=>`<div>+ ${c}</div>`).join("")}${(e.counter_claims||[]).map(c=>`<div style="color:var(--warn)">− ${c}</div>`).join("")}</div>`).join("");
+ $("d-body").innerHTML=`<h3>${d.statement}</h3>
+  <div class="kv"><span class="k">Status</span><span>${knBadge(d.status)}</span></div>
+  <div class="kv"><span class="k">Symbol / TF</span><span>${d.symbol||"—"} / ${d.timeframe||"—"}</span></div>
+  <div class="kv"><span class="k">Expected</span><span>${d.expected_outcome||"—"}</span></div>
+  <div class="kv"><span class="k">First seen</span><span>${(d.first_seen||"").slice(0,19)}</span></div>
+  <div style="margin-top:10px">${ev||'<div class="empty">no evidence linked</div>'}</div>`;
+ openDrawer("hypothesis detail");}
+
+SECTIONS.platform=`<h2 class="sec">Platform Events <small style="color:var(--faint);text-transform:none">aios.platform.* — the control plane's orchestration stream (hash-chained)</small></h2><div id="pf-body"></div>`;
+async function loadPlatform(){
+ const d=await j("/api/v1/platform-events?limit=120");
+ const rows=(d.events||[]).map(e=>`<tr><td style="white-space:nowrap;font-size:11px">${String(e.occurred_at).slice(11,19)}</td>
+  <td>${badge(String(e.kind).replace("aios.platform.",""),"b-acc")}</td><td>${e.actor_id}</td>
+  <td title="${e.object_type}:${e.object_id}">${String(e.object_id).slice(0,26)}</td>
+  <td>${e.reason||""}</td></tr>`).join("");
+ $("pf-body").innerHTML=rows?`<table><thead><tr><th>Time</th><th>Event</th><th>Actor</th><th>Object</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table>`
+  :`<div class="empty">No platform events yet.</div>`;}
 
 /* ---------------- strategy center (live family performance) ---------------- */
 SECTIONS.strategies=`<h2 class="sec">Strategy Center <small style="color:var(--faint);text-transform:none">live family performance — confidence is not a profit guarantee</small></h2><div id="st-body"></div>`;
@@ -692,7 +733,7 @@ function closeModal(){$("modal-back").style.display="none"}
 const LOADERS={cmd:loadCmd,opps:loadOpps,decisions:loadDecisions,pnl:loadPnl,strategies:loadStrategies,
  ca:loadCA,alerts:loadAlerts,portfolio:loadPortfolio,
  positions:loadPositions,execution:loadExec,risk:loadRisk,agents:loadAgents,events:loadEvents,
- memory:loadMemory,accounting:loadAccounting,tax:loadTax,audit:loadAudit,health:loadHealth,settings:loadSettings};
+ memory:loadMemory,accounting:loadAccounting,tax:loadTax,audit:loadAudit,health:loadHealth,settings:loadSettings,knowledge:loadKnowledge,platform:loadPlatform};
 async function refresh(force){
  try{await loadExec()}catch(e){}
  if(LOADERS[current])LOADERS[current]().catch(err=>{const el=document.querySelector("section.active");if(el)el.insertAdjacentHTML("beforeend",`<div class="empty">API error: ${esc(err.message)}</div>`)});

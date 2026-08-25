@@ -619,6 +619,7 @@ class ReplayRunner:
             regime_engine=self.regime_engine,
             equity_curve=self.equity_curve,
             benchmark_curve=getattr(self, "benchmark_curve", []),
+            research_engine=self.research_engine,
         )
 
     def serve(self, port: int = 8787) -> Any:

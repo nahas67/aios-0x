@@ -16,6 +16,22 @@
 
 ---
 
+### ORIGINAL-ARCHITECTURE BUILD: D/E bridge — durable receipts + research surface — COMPLETE (2026-08-25)
+
+- `kernel/receipts.py`: `ReceiptStore(sink)` — EVERY receipt (gateway + state-machine
+  co-receipts) mirrors into the hash-chained log via one persistence path;
+  `create_kernel(receipt_sink=...)`; KernelBridge's per-call mirroring removed.
+- `api/views.py` + `api/server.py` + runner wiring: **research plane is now visible** —
+  `GET /api/v1/knowledge` (status counts + recent hypotheses with evidence tallies),
+  `GET /api/v1/knowledge/{id}` (full record + evidence graph incl. content hashes),
+  `GET /api/v1/platform-events` (typed aios.platform.* stream, newest-first).
+- `ui/index.html`: new RESEARCH nav group — "Hypothesis Graph" workspace (summary cards,
+  status badges, per-hypothesis evidence drawer) + "Platform Events" live stream view.
+
+Tests: 201 hermetic / **206 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+
+---
+
 ### ORIGINAL-ARCHITECTURE BUILD: Phase D typed platform events — COMPLETE (2026-08-25)
 
 Per `ARCHITECTURE_GAP_ANALYSIS.md` §3.10 / original architecture §18:

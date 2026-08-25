@@ -5,6 +5,7 @@ The receipt is the bridge between WHAT AIOS did and WHY AIOS did it.
 
 import hashlib
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -50,16 +51,27 @@ def _receipt_entropy() -> bytes:
 
 
 class ReceiptStore:
-    """In-memory receipt store; swap for PostgreSQL in deployment."""
+    """Receipt store with optional durable sink.
 
-    def __init__(self) -> None:
+    When ``sink`` is provided, EVERY saved receipt (gateway ALLOW/DENY and
+    state-machine co-receipts alike) is mirrored through it — typically into
+    the hash-chained audit log. One persistence path, no double logging.
+    """
+
+    def __init__(
+        self,
+        sink: Callable[[str, str | None, dict[str, Any]], None] | None = None,
+    ) -> None:
         self._receipts: list[DecisionReceipt] = []
         self._by_object: dict[str, list[DecisionReceipt]] = {}
+        self._sink = sink
 
     def save(self, receipt: DecisionReceipt) -> None:
         self._receipts.append(receipt)
         key = f"{receipt.object_type}:{receipt.object_id}"
         self._by_object.setdefault(key, []).append(receipt)
+        if self._sink is not None:
+            self._sink("DECISION_RECEIPT", receipt.receipt_id, receipt.model_dump(mode="json"))
 
     def by_object(self, object_type: str, object_id: str) -> list[DecisionReceipt]:
         return self._by_object.get(f"{object_type}:{object_id}", [])

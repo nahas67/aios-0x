@@ -137,8 +137,11 @@ class KernelBridge:
         research_engine: Any = None,
         event_bus: BaseEventBus | None = None,
     ) -> None:
-        self.kernel = kernel or create_kernel()
-        self._audit_log = audit_log  # store.append_event mirror, optional
+        # When we own kernel creation, wire the audit log as the receipt sink:
+        # EVERY decision receipt (gateway + state-machine co-receipts) is then
+        # mirrored into the hash-chained log by the store itself.
+        self.kernel = kernel or create_kernel(receipt_sink=audit_log)
+        self._audit_log = audit_log
         self.research_engine = research_engine  # HypothesisEngine, optional
         self.event_bus = event_bus  # typed platform events, optional
         for actor_id, actor_type, display_name, roles in _COMMUNITY_ACTORS:
@@ -150,15 +153,6 @@ class KernelBridge:
         self._authorization_calls = 0
 
     # ------------------------------------------------------------ internals
-
-    def _mirror_receipt(self, result: AuthorityResult) -> None:
-        if self._audit_log is None:
-            return
-        self._audit_log(
-            "DECISION_RECEIPT",
-            result.receipt.receipt_id,
-            result.receipt.model_dump(mode="json"),
-        )
 
     async def _emit(self, event: PlatformEvent) -> None:
         """Publish a typed platform event onto the bus.
@@ -196,7 +190,6 @@ class KernelBridge:
                 evidence_refs=evidence_refs or [],
             )
         )
-        self._mirror_receipt(result)
         return result
 
     async def _transition(
@@ -486,9 +479,6 @@ class KernelBridge:
         )
         self.kernel.receipts.save(receipt)
         self._authorization_calls += 1
-        self._mirror_receipt(
-            AuthorityResult(decision=Decision.DENY, receipt=receipt)
-        )
         await self._emit(
             order_denied(strategy_id, reason, [receipt.receipt_id], source="c9-governor")
         )

@@ -6,6 +6,7 @@ the returned ``AIOSKernel`` instance — never around it.
 """
 
 from abc import ABC
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -176,11 +177,17 @@ def _lifecycle_to_node_type(object_type: str) -> NodeType:
 # ------------------------------------------------------- bootstrap factory
 
 
-def create_kernel() -> AIOSKernel:
-    """Create and wire a fully configured AIOS kernel."""
+def create_kernel(
+    receipt_sink: Callable[[str, str | None, dict[str, Any]], None] | None = None,
+) -> AIOSKernel:
+    """Create and wire a fully configured AIOS kernel.
+
+    ``receipt_sink`` (optional) receives every decision receipt for durable
+    mirroring — typically the hash-chained audit log's append_event.
+    """
     identity = IdentityRegistry()
     capabilities = CapabilityRouter()
-    receipts = ReceiptStore()
+    receipts = ReceiptStore(receipt_sink)
     sm = StateMachineEngine(receipts)
     authority = AuthorityGateway(identity, capabilities, receipts, sm)
     provenance = ProvenanceGraph()

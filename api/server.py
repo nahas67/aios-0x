@@ -120,6 +120,20 @@ def make_handler(
                     self._json(builder.memory_center())
                 elif path == "/api/v1/graduation":
                     self._json(builder.graduation())
+                elif path == "/api/v1/knowledge":
+                    self._json(builder.knowledge())
+                elif path.startswith("/api/v1/knowledge/"):
+                    hypothesis_id = path.rsplit("/", 1)[-1]
+                    try:
+                        self._json(builder.hypothesis_detail(hypothesis_id))
+                    except KeyError:
+                        self._json({"error": "unknown hypothesis"}, status=404)
+                elif path == "/api/v1/platform-events":
+                    from urllib.parse import parse_qs, urlparse
+
+                    qs = parse_qs(urlparse(self.path).query)
+                    lim = int((qs.get("limit") or ["100"])[0])
+                    self._json({"events": builder.platform_feed(limit=lim)})
                 elif path == "/metrics":
                     self._text(prometheus_metrics(builder.executive()), ctype="text/plain")
                 else:

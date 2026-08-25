@@ -30,6 +30,7 @@ class SystemSnapshotBuilder:
         regime_engine: Any = None,
         equity_curve: Any = None,
         benchmark_curve: Any = None,
+        research_engine: Any = None,
     ) -> None:
         self.store = store
         self.ledger = ledger
@@ -43,6 +44,7 @@ class SystemSnapshotBuilder:
         self.regime_engine = regime_engine
         self.equity_curve = equity_curve if equity_curve is not None else []
         self._benchmark_curve = benchmark_curve if benchmark_curve is not None else []
+        self.research_engine = research_engine
 
     # ------------------------------------------------------------- executive
 
@@ -512,6 +514,89 @@ class SystemSnapshotBuilder:
                 "ORDER BY seq DESC LIMIT 500"
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------- research plane (Phase C/D)
+
+    def knowledge(self) -> dict[str, Any]:
+        """Durable hypothesis knowledge: status counts + recent hypotheses."""
+        engine = self.research_engine
+        if engine is None:
+            return {"available": False}
+        summary = engine.knowledge_summary()
+        recent = []
+        for h in engine.store.list_hypotheses(limit=60):
+            relationships: dict[str, int] = defaultdict(int)
+            try:
+                pairs = engine.store.evidence_for_hypothesis(h.hypothesis_id)
+            except Exception:  # noqa: BLE001 - view must not crash the API
+                pairs = []
+            for _, rel in pairs:
+                relationships[rel] += 1
+            recent.append(
+                {
+                    "hypothesis_id": h.hypothesis_id,
+                    "statement": h.statement[:160],
+                    "symbol": h.symbol,
+                    "status": h.status.value,
+                    "confidence": h.confidence,
+                    "evidence_total": len(pairs),
+                    "supports": relationships.get("supports", 0),
+                    "contradicts": relationships.get("contradicts", 0),
+                    "outcomes": relationships.get("outcome", 0),
+                    "last_updated": h.last_updated.isoformat(),
+                }
+            )
+        return {"available": True, **summary, "recent": recent}
+
+    def hypothesis_detail(self, hypothesis_id: str) -> dict[str, Any]:
+        """Full hypothesis record with its evidence graph."""
+        engine = self.research_engine
+        if engine is None:
+            raise KeyError("research plane unavailable")
+        h = engine.get(hypothesis_id)
+        evidence = []
+        for ev, relationship in engine.store.evidence_for_hypothesis(hypothesis_id):
+            evidence.append(
+                {
+                    "evidence_id": ev.evidence_id,
+                    "source": ev.source,
+                    "relationship": relationship,
+                    "confidence": ev.confidence,
+                    "claims": ev.claims,
+                    "counter_claims": ev.counter_claims,
+                    "content_hash": ev.content_hash(),
+                    "retrieval_time": ev.retrieval_time.isoformat(),
+                }
+            )
+        return {
+            "hypothesis_id": h.hypothesis_id,
+            "statement": h.statement,
+            "rationale": h.rationale,
+            "expected_outcome": h.expected_outcome,
+            "assumptions": h.assumptions,
+            "symbol": h.symbol,
+            "timeframe": h.timeframe,
+            "expected_risk_reward_ratio": h.expected_risk_reward_ratio,
+            "status": h.status.value,
+            "confidence": h.confidence,
+            "parent_hypotheses": h.parent_hypotheses,
+            "dataset_ref": h.dataset_ref,
+            "first_seen": h.first_seen.isoformat(),
+            "last_updated": h.last_updated.isoformat(),
+            "evidence": evidence,
+        }
+
+    def platform_feed(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Recent typed platform events across all kinds, newest first."""
+        from core.platform_events import PlatformEventType
+
+        rows: list[dict[str, Any]] = []
+        for event_type in PlatformEventType:
+            for payload in self.store.iter_event_payloads(event_type.value):
+                payload["kind"] = event_type.value
+                rows.append(payload)
+        rows.sort(key=lambda p: str(p.get("occurred_at", "")), reverse=True)
+        return rows[:limit]
 
     # ------------------------------------------------- analytics (Phase: charts)
 
