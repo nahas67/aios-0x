@@ -32,6 +32,7 @@ class SystemSnapshotBuilder:
         benchmark_curve: Any = None,
         research_engine: Any = None,
         kernel_bridge: Any = None,
+        ca_workflow: Any = None,
     ) -> None:
         self.store = store
         self.ledger = ledger
@@ -47,6 +48,7 @@ class SystemSnapshotBuilder:
         self._benchmark_curve = benchmark_curve if benchmark_curve is not None else []
         self.research_engine = research_engine
         self.kernel_bridge = kernel_bridge
+        self.ca_workflow = ca_workflow
 
     # ------------------------------------------------------------- executive
 
@@ -620,6 +622,86 @@ class SystemSnapshotBuilder:
         """Recent formal EvaluationRecords (§14): PASS/FAIL/INCONCLUSIVE."""
         rows = self.store.iter_event_payloads("EVALUATION_RECORD")
         return list(reversed(rows))[:limit]
+
+    # ------------------------------------------------------------- human gates
+
+    def gates_view(self) -> dict[str, Any]:
+        """Constitution §5 human-held production gates, live status.
+
+        The user controls these; this view makes visible WHAT blocks WHAT.
+        """
+        import os
+
+        broker_ready = bool(
+            os.environ.get("AIOS_EXCHANGE_API_KEY")
+            and os.environ.get("AIOS_EXCHANGE_SECRET")
+        )
+        licensed_data = bool(
+            os.environ.get("MARKETSTACK_API_KEY") or os.environ.get("FINNHUB_API_KEY")
+        )
+        ca_approved = False
+        if self.ca_workflow is not None:
+            try:
+                items = self.ca_workflow.items  # type: ignore[attr-defined]
+                ca_approved = any(
+                    getattr(i, "state", None).value == "APPROVED_BY_CA" for i in items
+                )
+            except Exception:  # noqa: BLE001 - view must not crash
+                ca_approved = False
+        capital_by = (
+            self.control_plane.live_capital_approved_by
+            if self.control_plane is not None
+            else None
+        )
+        autonomy = (
+            self.control_plane.autonomy.value if self.control_plane is not None else "—"
+        )
+
+        def gate(gid: str, title: str, approved: bool | None, ready: bool, unblock: str) -> dict[str, Any]:
+            status = "APPROVED" if approved else ("READY" if ready else "BLOCKED")
+            return {
+                "gate": gid,
+                "title": title,
+                "status": status,
+                "how_to_unblock": "" if approved or ready else unblock,
+            }
+
+        gates = [
+            gate(
+                "broker_testnet",
+                "Broker testnet execution",
+                None,
+                broker_ready,
+                "Set AIOS_EXCHANGE_API_KEY + AIOS_EXCHANGE_SECRET (+ AIOS_EXCHANGE_TESTNET=1) in .env",
+            ),
+            gate(
+                "market_data_licensed",
+                "Licensed market data",
+                None,
+                licensed_data,
+                "Set MARKETSTACK_API_KEY (or FINNHUB_API_KEY); synthetic goldens remain default until then",
+            ),
+            gate(
+                "tax_signoff",
+                "Tax professional sign-off",
+                ca_approved,
+                False,
+                "A licensed professional must move the filing review to APPROVED_BY_CA",
+            ),
+            gate(
+                "live_capital",
+                "Live capital approval",
+                capital_by is not None,
+                False,
+                "ADMIN action approve_live_capital (audited in CONTROL_ACTION)",
+            ),
+        ]
+        return {
+            "autonomy": autonomy,
+            "live_capital_approved_by": capital_by,
+            "gates": gates,
+            "production_allowed": all(g["status"] == "APPROVED" for g in gates),
+        }
 
     # ------------------------------------------------- analytics (Phase: charts)
 

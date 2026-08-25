@@ -163,7 +163,7 @@ function toggle(id){$(id).classList.toggle("hidden")}
 
 /* ================================================================ nav */
 const NAV={
- "COMMAND":[["cmd","Command Center"],["opps","Opportunities"],["decisions","Decisions"],["pnl","P&L Analysis"],["portfolio","Portfolio"],["positions","Positions"],["execution","Execution"],["risk","Risk"]],
+  "COMMAND":[["cmd","Command Center"],["opps","Opportunities"],["decisions","Decisions"],["pnl","P&L Analysis"],["portfolio","Portfolio"],["positions","Positions"],["execution","Execution"],["risk","Risk"],["chat","Operator Console"]],
   "INTELLIGENCE":[["agents","Agent Network"],["events","Global Events"],["memory","Memory & Research"],["strategies","Strategy Center"]],
   "RESEARCH":[["knowledge","Hypothesis Graph"],["platform","Platform Events"],["models","Model Registry"]],
  "OPERATIONS":[["accounting","Accounting"],["tax","Tax & CA"],["ca","CA Review"],["audit","Audit"]],
@@ -484,6 +484,34 @@ async function loadModels(){
     <td>${wfTxt}</td></tr>`;}).join("")}</tbody></table>`
  :`<div class="empty">No models registered yet.</div>`;}
 
+/* ---------------- operator chat console ---------------- */
+SECTIONS.chat=`<h2 class="sec">Operator Console <small style="color:var(--faint);text-transform:none">ask anything (read-only) · commands run through RBAC with your role — the bot holds no authority</small></h2>
+<div class="grid" style="grid-template-columns:1fr 260px">
+ <div><div id="chat-log" class="card" style="min-height:300px;max-height:460px;overflow:auto;white-space:pre-wrap;font-size:12.5px"></div>
+ <div style="display:flex;gap:8px;margin-top:8px">
+  <input id="chat-in" style="flex:1;background:var(--panel2);border:1px solid var(--line-soft);color:var(--text);border-radius:8px;padding:8px 12px;font-size:13px" placeholder='e.g. "pnl" · "gates" · "pause trading" · "promote model direction_logreg"' aria-label="Chat message">
+  <select id="chat-role" class="btn"><option>OPERATOR</option><option>VIEWER</option><option>RISK_ADMIN</option><option>ADMIN</option></select>
+  <button class="btn" onclick="sendChat()">send</button></div></div>
+ <div class="card"><b>Try</b><div style="font-size:12px;color:var(--dim);margin-top:6px;line-height:1.7">pnl<br>gates<br>hypotheses<br>models<br>evaluations<br>risk<br>platform events<br><span style="color:var(--warn)">pause trading</span><br><span style="color:var(--warn)">set autonomy supervised</span><br><span style="color:var(--warn)">approve live capital</span></div></div></div>`;
+async function sendChat(){
+ const inp=$("chat-in");const msg=inp.value.trim();if(!msg)return;
+ const role=$("chat-role").value;
+ chatAppend("you ["+role+"]",msg);
+ inp.value="";
+ try{
+  const r=await fetch("/api/v1/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({operator_id:"console-user",role,message:msg})});
+  const d=await r.json();
+  const cls=d.kind==="denied"?"b-bad":d.kind==="command"?"b-warn":"b-ok";
+  let text=d.answer||JSON.stringify(d);
+  if(d.kind==="query"&&d.data){try{text+="\n"+JSON.stringify(d.data).slice(0,600);}catch(e){}}
+  chatAppend("aios",text,cls);
+ }catch(e){chatAppend("aios","request failed: "+e,"b-bad");}}
+function chatAppend(who,text,badgeCls){
+ const log=$("chat-log");
+ log.innerHTML+=`<div style="margin-bottom:10px">${badge(who,badgeCls||"b-acc")}<div style="margin-top:3px">${esc(String(text))}</div></div>`;
+ log.scrollTop=log.scrollHeight;}
+
 /* ---------------- strategy center (live family performance) ---------------- */
 SECTIONS.strategies=`<h2 class="sec">Strategy Center <small style="color:var(--faint);text-transform:none">live family performance — confidence is not a profit guarantee</small></h2><div id="st-body"></div>`;
 async function loadStrategies(){const d=await j("/api/v1/strategies");
@@ -751,6 +779,7 @@ const LOADERS={cmd:loadCmd,opps:loadOpps,decisions:loadDecisions,pnl:loadPnl,str
  ca:loadCA,alerts:loadAlerts,portfolio:loadPortfolio,
  positions:loadPositions,execution:loadExec,risk:loadRisk,agents:loadAgents,events:loadEvents,
  memory:loadMemory,accounting:loadAccounting,tax:loadTax,audit:loadAudit,health:loadHealth,settings:loadSettings,knowledge:loadKnowledge,platform:loadPlatform,models:loadModels};
+if($("chat-in")){$("chat-in").addEventListener("keydown",e=>{if(e.key==="Enter")sendChat();});}
 
 /* ---------------- SSE live stream (Sprint 2 finisher) ---------------- */
 if(window.EventSource){

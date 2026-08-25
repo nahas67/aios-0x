@@ -16,6 +16,30 @@
 
 ---
 
+### OPERATOR CHAT + GATES DASHBOARD — user-controlled, bot holds no authority (2026-08-25)
+
+Answering two operator asks:
+
+- **Gates dashboard** (`GET /api/v1/gates`): the constitution §5 human-held
+  production controls are now VISIBLE and USER-CONTROLLABLE — broker testnet
+  keys, licensed data, CA tax sign-off, live-capital approval; each gate shows
+  status (APPROVED/READY/BLOCKED) + exactly how to unblock it. Live-capital
+  flips via the existing audited `approve_live_capital` ADMIN action.
+- **Operator chat console** (`POST /api/v1/chat` + UI "Operator Console"
+  workspace):
+  - QUERIES ("pnl", "gates", "hypotheses", "models", "evaluations"…) answered
+    from read-only snapshot builders.
+  - COMMANDS ("pause trading", "set autonomy supervised", "promote model
+    direction_logreg", "evaluate trial auto:…", "approve live capital")
+    executed THROUGH the audited ControlPlane with the operator's OWN role —
+    the bot never holds authority; RBAC denies (VIEWER tested) and every
+    action lands in CONTROL_ACTION receipts.
+  - Deterministic intent matching: works with zero LLM keys.
+
+Tests: 260 hermetic / **266 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+
+---
+
 ### FULL-SCALE SOAK + PERF REGRESSION FIXED — 603s → 142.7s (2026-08-25)
 
 Post-slice validation run over the full golden set (730 bars × 7 symbols,

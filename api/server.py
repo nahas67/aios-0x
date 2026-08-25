@@ -170,6 +170,8 @@ def make_handler(
                     qs = parse_qs(urlparse(self.path).query)
                     lim = int((qs.get("limit") or ["50"])[0])
                     self._json({"evaluations": builder.evaluations_view(limit=lim)})
+                elif path == "/api/v1/gates":
+                    self._json(builder.gates_view())
                 elif path == "/metrics":
                     self._text(prometheus_metrics(builder.executive()), ctype="text/plain")
                 else:
@@ -180,6 +182,23 @@ def make_handler(
 
         def do_POST(self) -> None:  # noqa: N802 - stdlib API
             path = self.path.split("?")[0]
+            if path == "/api/v1/chat":
+                length = int(self.headers.get("Content-Length") or 0)
+                raw = self.rfile.read(length) if length else b"{}"
+                try:
+                    body = json.loads(raw or b"{}")
+                    result = run_chat(
+                        builder,
+                        control_plane,
+                        str(body.get("operator_id", "console")),
+                        str(body.get("role", "OPERATOR")),
+                        str(body.get("message", "")),
+                    )
+                    self._json(result)
+                except Exception as exc:  # noqa: BLE001 - server boundary
+                    logger.exception("chat failed")
+                    self._json({"error": str(exc)}, status=500)
+                return
             if control_plane is None or not path.startswith("/api/v1/control/"):
                 self._json({"error": "not found"}, status=404)
                 return
@@ -208,6 +227,24 @@ def make_handler(
         loop = asyncio.new_event_loop()
         try:
             return loop.run_until_complete(plane.execute(operator_id, role, action, params))
+        finally:
+            loop.close()
+
+    def run_chat(
+        builder: SystemSnapshotBuilder,
+        control_plane: ControlPlane | None,
+        operator_id: str,
+        role: str,
+        message: str,
+    ) -> dict[str, Any]:
+        import asyncio
+
+        from core.chat_console import OperatorChat
+
+        chat = OperatorChat(builder, control_plane)
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(chat.ask(operator_id, role, message))
         finally:
             loop.close()
 
