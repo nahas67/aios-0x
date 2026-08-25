@@ -16,6 +16,28 @@
 
 ---
 
+### OS CLI — `python -m aios {boot,replay,summary-json,serve}` (2026-08-25)
+
+The system boots like an operating system now:
+
+- `aios/` package (NEW): single entrypoint over the same kernel/runner/authority
+  paths the tests exercise.
+  - `boot` — constitution SHA gate + kernel inventory (actors, capabilities,
+    lifecycles, registries, fail-closed authority). Nothing else needed to
+    prove the OS stands up.
+  - `replay` — honest summary table; **exit code 1 if audit chain broken**;
+    existing goldens are never rewritten (reproducibility), `--bars` honestly
+    reported as ignored for pre-existing files.
+  - `summary-json` — machine-readable RunSummary.
+  - `serve` — replay → refuse-if-chain-broken → live command center (SSE).
+- pyproject packages updated.
+
+Verified live: `python -m aios boot` exit 0; `python -m aios replay --symbols SPY`
+ran the full 730-bar golden, chain valid, alpha +3.11%, 2825 events audited.
+Tests: 233 hermetic / **243 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clean.
+
+---
+
 ### EVALUATION PLANE (§14) + PROMOTION/ROLLBACK (§21/§22) — fail-closed gates live (2026-08-25)
 
 - `research/evaluation.py` (NEW): `EvaluationRecord` with PASS/FAIL/INCONCLUSIVE
