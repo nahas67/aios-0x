@@ -83,6 +83,33 @@ logger = logging.getLogger(__name__)
 #: always be traced to the code that produced the venue's answer.
 PAPER_RECONCILIATION_ADAPTER = "paper-positions-only-1.0"
 
+#: Notional ceiling the execution Guardian clamps to in the paper tier. A paper
+#: tier has no capital at risk, so this is not a safety control -- it is a
+#: deliberate stand-in for the real firewall, so that a clamp reached in replay
+#: is the clamp that will run in testnet. A replay path that never exercises
+#: governance cannot demonstrate that governance works.
+_REPLAY_MAX_NOTIONAL = 5000.0
+
+#: Fallback signing secret for the replay tier only. Per-deployment deployments
+#: must set AIOS_GOVERNANCE_SECRET; this constant exists so `python -m aios
+#: replay` works from a clean checkout without pretending the paper tier is
+#: authenticated. It is deliberately NOT used by the live or testnet adapters.
+_REPLAY_GOVERNANCE_SECRET = b"aios-replay-tier-not-a-production-key"
+
+
+def _replay_governance_secret() -> bytes:
+    """Signing key for the replay tier: deployment secret, else the paper default."""
+    from kernel.tool_governance import GovernanceError, guardian_secret_from_env
+
+    try:
+        return guardian_secret_from_env()
+    except GovernanceError:
+        logger.warning(
+            "AIOS_GOVERNANCE_SECRET unset; using the replay-tier paper key. A signature "
+            "from this key authenticates nothing, so it is confined to the paper tier."
+        )
+        return _REPLAY_GOVERNANCE_SECRET
+
 # ---- Zero-trust publishing map (§24): actor -> topics it may publish.
 # Everything else (DATA_ANOMALY, RECONCILIATION_FAILED, aios.platform.*) is
 # published by the composition root / kernel bridge on the unscoped bus.
@@ -364,7 +391,18 @@ class ReplayRunner:
         # It reads lockouts from the financial store rather than process memory,
         # so a CRITICAL reconciliation discrepancy still blocks orders after a
         # restart. It is consulted at the last moment before a venue call.
-        self.adapter = PaperExecutionAdapter(self.paper)
+        #
+        # The Guardian sits in the adapter rather than here, so it governs every
+        # venue call regardless of which component issued the plan. Wiring it
+        # at the composition root would leave a second construction path
+        # ungoverned, and an ungoverned path is the one that gets used at 3am.
+        from kernel.tool_governance import build_execution_guardian
+
+        self.guardian = build_execution_guardian(
+            _replay_governance_secret(),
+            max_notional=_REPLAY_MAX_NOTIONAL,
+        )
+        self.adapter = PaperExecutionAdapter(self.paper, guardian=self.guardian)
         self.safety_plane = SafetyPlane(
             self.financial_store, audit=self.store, broker=self.adapter.venue
         )
