@@ -1,0 +1,967 @@
+{
+  "schema_version": 1,
+  "_format_note": "JSON rather than YAML deliberately: this repository has no YAML parser, and docs/DEPENDENCY_POLICY.md forbids adding one for a data file. JSON is a subset of YAML 1.2, so this file is readable by any YAML consumer.",
+  "statuses": [
+    "LANDED",
+    "PARTIAL",
+    "NOT_STARTED",
+    "BLOCKED",
+    "SUPERSEDED"
+  ],
+  "check_schemes": [
+    "test",
+    "lint",
+    "constitution",
+    "manual"
+  ],
+  "goals": [
+    {
+      "id": "G010",
+      "title": "Financial Truth",
+      "layer": 14,
+      "workstream": "W0",
+      "status": "LANDED",
+      "depends_on": [],
+      "summary": "Double-entry ledger, durable positions, transactional outbox/inbox, and deterministic financial invariants. Sum of debits equals sum of credits, proven on both storage dialects.",
+      "gates": [
+        {
+          "check": "test:tests/test_financial_invariants.py",
+          "statement": "Every journal balances; no order is overfilled; positions reconstruct exactly from the fill log."
+        }
+      ],
+      "evidence": [
+        "core/financial_kernel.py",
+        "core/financial_invariants.py",
+        "communities/c11_finance/ledger.py"
+      ],
+      "notes": "The only goal group in the vNEXT sequence that is genuinely complete. Everything else is permitted to assume it."
+    },
+    {
+      "id": "G020",
+      "title": "Security Master and Corporate Action Engine",
+      "layer": 1,
+      "workstream": "W1",
+      "status": "LANDED",
+      "depends_on": [
+        "G010"
+      ],
+      "summary": "Bitemporal instrument identity (instrument_id, listing_id, MIC, venue, currency, tick size, lot size, multiplier, FIGI, ISIN, CIK) plus splits, dividends, mergers, symbol changes, and delistings.",
+      "gates": [
+        {
+          "check": "test:tests/test_security_master.py",
+          "statement": "as_of(t) and as_known(t) are both queryable, and a reused ticker never collapses two distinct issuers into one row."
+        },
+        {
+          "check": "test:tests/test_corporate_actions.py",
+          "statement": "A known historical split reproduces its expected adjusted price series exactly."
+        },
+        {
+          "check": "test:tests/test_security_master_parity.py",
+          "statement": "Every behavioural assertion holds identically on SQLite and PostgreSQL; the v3 DDL defines the same tables, indexes, triggers, and columns on both dialects."
+        },
+        {
+          "check": "test:tests/test_seed_ingest.py",
+          "statement": "The bootstrap corpus populates an empty master, re-ingest changes nothing, and a bundle with one bad row records nothing."
+        }
+      ],
+      "evidence": [
+        "core/security_master.py",
+        "core/security_master_store.py",
+        "core/seed_ingest.py",
+        "core/migrations.py",
+        "data/seed/bootstrap_v1.json",
+        "tests/test_security_master.py",
+        "tests/test_corporate_actions.py",
+        "tests/test_security_master_parity.py",
+        "tests/test_seed_ingest.py"
+      ],
+      "notes": "PostgresSecurityMasterStore mirrors the SQLite tier statement-for-statement with a mechanical placeholder rewrite, so the two dialects cannot drift into two different queries wearing the same name; the row mappers already accepted native datetime/date/Decimal objects, which is what makes the mirror exact. The PostgreSQL leg of the parity suite runs wherever AIOS_TEST_PG_DSN is set and skips otherwise, per the repo's integration contract - and the DDL cross-checks run hermetically everywhere, so a schema fork fails without a database. Seed ingest is a versioned-bundle importer: validation through the domain models completes before the first write, identities upsert (including re-asserted history, which a nightly feed reload does every night), actions are immutable. The shipped corpus carries eight listings and nine actions with per-record provenance, including a real delisting for the survivorship detector and a symbol change with stable identity. Two defects closed on the way: the store wrote same-instant supersessions the model refused to read (zero-duration recorded intervals are now an empty truth, not a contradiction), and upsert crashed re-asserting superseded history instead of no-op-ing.",
+      "adoption_note": "FinanceDatabase (MIT) is a seed corpus only: 300k+ symbols carrying mic and delisted fields, but zero as-of support. AIOS owns the temporal layer; the importer takes an external file in the same shape when scale is needed."
+    },
+    {
+      "id": "G030",
+      "title": "Point-in-Time Data Fabric",
+      "layer": 2,
+      "workstream": "W2",
+      "status": "LANDED",
+      "depends_on": [
+        "G020"
+      ],
+      "summary": "Six-clock time authority, dataset version registry, and as-of query semantics that make look-ahead a query error rather than a warning.",
+      "gates": [
+        {
+          "check": "test:tests/test_pit_fabric.py",
+          "statement": "A query requesting data after as_of raises instead of returning a later revision."
+        },
+        {
+          "check": "test:tests/test_pit_fabric.py",
+          "statement": "Rows that cannot be backfilled are marked as_of_unknown and excluded from research evidence."
+        },
+        {
+          "check": "test:tests/test_dataset_version_sink.py",
+          "statement": "A version lifecycle survives the process with status, hashes, and PIT qualification intact; illegal transitions write nothing."
+        },
+        {
+          "check": "test:tests/test_backfill_available_at.py",
+          "statement": "Published rows derive from published_at, occurrence-only rows are flagged fallbacks, witness-less rows stay unknown, and present values are never overwritten."
+        },
+        {
+          "check": "test:tests/test_ledger_parity.py",
+          "statement": "The v7 dataset-version DDL defines identical tables, indexes, triggers, and columns on SQLite and PostgreSQL."
+        }
+      ],
+      "evidence": [
+        "kernel/registries.py",
+        "core/platform_events.py",
+        "core/temporal.py",
+        "tests/test_pit_fabric.py",
+        "core/dataset_version_sink.py",
+        "scripts/backfill_available_at.py",
+        "core/migrations.py",
+        "tests/test_dataset_version_sink.py",
+        "tests/test_backfill_available_at.py"
+      ],
+      "notes": "Six-clock TemporalInstant with enforced ordering, the look-ahead tripwire, and PIT qualification on DatasetVersion. Durable now: migration v7 installs append-only dataset_version_events and seals; DatasetRegistry writes the sink before committing memory with legality pre-checked, and resume() rebuilds versions, state-machine objects at stored status without replaying transitions, and provenance nodes in first-seen order. Backfill covered by scripts/backfill_available_at.py: published_at preferred as the latest demonstrably-held moment, occurred_at as a flagged lower-bound fallback, rows with neither witness left as_of_unknown forever rather than guessed; dry-run by default, present values never overwritten with presence re-checked at apply time, every derivation carrying its source field and policy id in a report artifact. What remains is hot-store policy (tiering/caching), explicitly out of scope for the fabric correctness this goal covers.",
+      "refusal_note": "QuestDB and Iceberg remain candidates and are refused for now: PostgreSQL already holds financial truth, and a second consistency model is a tax with no gate it currently passes. See docs/DEPENDENCY_POLICY.md."
+    },
+    {
+      "id": "G040",
+      "title": "Evidence Fabric and Claim Ledger",
+      "layer": 3,
+      "workstream": "W3",
+      "status": "LANDED",
+      "depends_on": [
+        "G020",
+        "G030"
+      ],
+      "summary": "Append-only claim ledger in which every assertion resolves to a content-addressed source artifact through a machine-recheckable claim to source to page to line to quote chain.",
+      "gates": [
+        {
+          "check": "test:tests/test_claim_ledger.py",
+          "statement": "Every stored claim resolves to a source artifact whose sha256 verifies on read."
+        },
+        {
+          "check": "test:tests/test_claim_ledger.py",
+          "statement": "The claim log is append-only: supersession writes a new row and never mutates an existing one."
+        },
+        {
+          "check": "test:tests/test_claim_ledger.py",
+          "statement": "A confidence of 1.0 is rejected unless at least two independent sources are cited."
+        },
+        {
+          "check": "test:tests/test_claim_writers.py",
+          "statement": "Verification reports and evidence packages land as claims with confidence intact, hallucinations as contraindications, and replays as no-ops."
+        },
+        {
+          "check": "test:tests/test_claim_ledger_parity.py",
+          "statement": "Artifacts, claims, supersession, and refusals behave identically on SQLite and PostgreSQL; the v6 DDL matches across dialects with no UPDATE in either tier."
+        }
+      ],
+      "evidence": [
+        "communities/c3_verification/verification_agent.py",
+        "communities/c11_finance/audit_graph.py",
+        "core/claim_ledger.py",
+        "tests/test_claim_ledger.py",
+        "core/claim_writers.py",
+        "core/migrations.py",
+        "tests/test_claim_writers.py",
+        "tests/test_claim_ledger_parity.py"
+      ],
+      "notes": "Claim ledger landed: content-addressed sources with hash verification on read, append-only claims with supersession inserts, certainty requiring two sources, and verify_chain for audit. Producers write through it now: core/claim_writers.py converts verification reports (one claim per report, verified strings as evidence refs capped at eight, hallucinations as contraindications) and research evidence packages (findings hash in the claim object, counter-claims as contraindications). Confidence is never upgraded at the boundary - a perfect score with one reference records 0.99, not 1.0. Claim ids are deterministic per producer id, making pipeline replays idempotent; re-recording the identical claim returns the stored row, while the same id with different content is refused. Recording the identical claim twice was previously refused outright; that contract was deliberately changed to the OMS idempotency-key semantic (same key plus same content returns what exists) because pipelines replay and twins would double-count judgments. PostgresClaimLedger mirrors SQLite method-for-method with dialect-agnostic row mappers shared; migration v6 (claim tables, both dialects) is registered. The v6 DDL predated registration as unregistered constants - found and registered, not rewritten.",
+      "adoption_note": "Claim shape derives from plur (Apache-2.0) claim_class and from graphify (Apache-2.0) EXTRACTED/INFERRED/AMBIGUOUS edge tags. Content addressing follows alphaXiv/OpenResearch (MIT) run manifests."
+    },
+    {
+      "id": "G050",
+      "title": "Agent Governance and Tool-Call Enforcement",
+      "layer": "cross-cutting",
+      "workstream": "W4",
+      "status": "LANDED",
+      "depends_on": [
+        "G010"
+      ],
+      "summary": "Deterministic-first tool-call governance with per-argument provenance, allow/deny/modify/ask/defer dispositions, a durable append-only decision ledger, and a rolling tamper-evident chain hash anchored by HMAC seals. The Guardian may rewrite arguments; clamping size is its primary power.",
+      "gates": [
+        {
+          "check": "test:tests/test_agent_governance.py",
+          "statement": "A Guardian decision of deny blocks the tool call."
+        },
+        {
+          "check": "test:tests/test_agent_governance.py",
+          "statement": "A Guardian decision of modify clamps an over-sized quantity before the tool runs."
+        },
+        {
+          "check": "test:tests/test_agent_governance.py",
+          "statement": "Guardian failure denies. The default posture is fail-closed, never fail-open."
+        },
+        {
+          "check": "test:tests/test_agent_governance.py",
+          "statement": "Every envelope is signed; an unsigned or tampered envelope is refused."
+        },
+        {
+          "check": "test:tests/test_agent_governance.py",
+          "statement": "A parallel tool batch is fully preflighted before any member of it executes."
+        },
+        {
+          "check": "test:tests/test_decision_ledger.py",
+          "statement": "A decision made before a restart is readable after it, from storage the process does not hold."
+        },
+        {
+          "check": "test:tests/test_decision_ledger.py",
+          "statement": "The database refuses UPDATE, DELETE, out-of-sequence INSERT, and out-of-chain INSERT against the decision log."
+        },
+        {
+          "check": "test:tests/test_decision_ledger.py",
+          "statement": "A truncated log is caught by its seal, not by the chain, which recomputes cleanly over a shortened log."
+        },
+        {
+          "check": "test:tests/test_decision_ledger.py",
+          "statement": "An unsealed or forged seal reports unanchored or compromised, never clean."
+        },
+        {
+          "check": "test:tests/test_migration_splitter.py",
+          "statement": "A trigger body is one migration statement, not a fragment per inner semicolon."
+        },
+        {
+          "check": "test:tests/test_policy_bundles.py",
+          "statement": "A tampered or unsigned bundle registers nothing; a scoped clamp does not fire off scope."
+        },
+        {
+          "check": "test:tests/test_ledger_parity.py",
+          "statement": "Decisions, denials, seals, and schema refusals behave identically on SQLite and PostgreSQL."
+        }
+      ],
+      "evidence": [
+        "kernel/identity.py",
+        "kernel/capability.py",
+        "kernel/authority.py",
+        "core/control_plane.py",
+        "kernel/tool_governance.py",
+        "schemas/governance.py",
+        "core/decision_sink.py",
+        "core/migrations.py",
+        "communities/c5_execution/adapters.py",
+        "tests/test_agent_governance.py",
+        "tests/test_execution_governance.py",
+        "tests/test_decision_ledger.py",
+        "tests/test_migration_splitter.py",
+        "core/policy_bundles.py",
+        "policies/capital_v1.json",
+        "tests/test_policy_bundles.py",
+        "tests/test_ledger_parity.py"
+      ],
+      "notes": "Landed: ToolGuardian with per-argument provenance required at the type level, five dispositions, HMAC-signed envelopes, fail-closed on rule or evaluator error, all-clamps-applied combination with tightest-bound-wins, and deterministic-before-agent ordering a model cannot widen. Wired into BaseExecutionAdapter, so no venue call is reachable without a per-call verdict, and a guard is a required constructor argument. The community-to-kernel boundary is preserved by splitting the wire types into schemas/governance.py. Durable sink landed: migration v4 installs append-only governance_decisions and governance_seals, and append-only is enforced by database triggers rather than by application discipline, because a tamper that has to be defeated by every call site being correct succeeds the first time one is not. Four tamper classes are refused separately - UPDATE, DELETE, out-of-sequence INSERT, and out-of-chain INSERT - each naming itself so a refusal sends an operator to the right place. The chain alone was not sufficient and this is the load-bearing finding: a rolling digest over the entries present recomputes perfectly over a shortened log, so truncation was invisible. GovernanceSeal is an HMAC over the head with a key the log cannot reach, and an unsealed log reports unanchored rather than clean. What remains before LANDED: OPA/Rego as the policy source rather than in-process rules, and a PostgreSQL tier for the ledger (the v4 DDL is written and asserted present but only SQLite is exercised). Policy is now data, not code: core/policy_bundles.py loads versioned, HMAC-signed bundles (six-operator conjunctive match language; unknown operators fail at compile time; inapplicable rules do not match rather than error) and compiles them onto the guardian, with clamp scoping via a new optional when predicate on register_clamp_rule. OPA/Rego was deliberately not adopted: a sidecar policy agent would add a network dependency and a non-Python runtime to the deterministic core path, against the dependency policy; the substance (externalized, versioned, signed policy loaded at composition) is all here. PostgresDecisionSink mirrors the SQLite tier with the dialect-agnostic audit_log and GovernanceSeal shared; the parity suite holds both tiers to identical behaviour.",
+      "adoption_note": "Contract follows agent-control-standard v0.1.0, reimplemented in Python. Two upstream defects must be fixed rather than inherited: the reference Guardian signs nothing despite the spec requiring HMAC-SHA256, and the default decision on failure is fail-open."
+    },
+    {
+      "id": "G060",
+      "title": "Quant Research Factory",
+      "layer": 5,
+      "workstream": "W5",
+      "status": "LANDED",
+      "depends_on": [
+        "G030",
+        "G040"
+      ],
+      "summary": "Hypothesis to factor to feature to model to vector backtest to event backtest, with typed registries for each artifact class.",
+      "gates": [
+        {
+          "check": "test:tests/test_quant_factory.py",
+          "statement": "A factor cannot emit a value on a gap bar inside its own warmup window."
+        },
+        {
+          "check": "test:tests/test_quant_factory.py",
+          "statement": "Every number in a generated report is declared observed, derived, proposed, cited, or counted, and unverified figures are cut rather than shipped."
+        }
+      ],
+      "evidence": [
+        "research/model_lab.py",
+        "research/auto_research.py",
+        "communities/c4_strategy/strategy_agent.py",
+        "kernel/factors.py",
+        "kernel/strategies.py",
+        "research/reporting.py",
+        "tests/test_quant_factory.py"
+      ],
+      "notes": "Dataset, feature, model, and experiment registries exist. Strategy and Factor registries now do too. kernel/factors.py: typed immutable FactorDefinitions (family, inputs, warmup, lookback, formula ref, code hash) with deterministic compute_factor - effective warmup is max(declared, lookback+1) so a definition can only raise the bar; gaps poison every window containing them with no interpolation; z-score against flat context is undefined (None) while flat realized vol is 0.0 (defined); every value carries available_at. kernel/strategies.py: immutable StrategySpecs (family, hypothesis, pinned factor versions, parameter schema, dataset ref) with bind_artifact naming every violation - family, hypothesis, unknown/missing/out-of-range/non-finite params, dataset ref drift. research/reporting.py: every shipped number carries kind (observed/derived/proposed/cited/counted) plus source; undeclared figures quarantine and render() ships declared numbers while listing what was cut."
+    },
+    {
+      "id": "G070",
+      "title": "Immutable Experiment Ledger",
+      "layer": 6,
+      "workstream": "W5",
+      "status": "LANDED",
+      "depends_on": [
+        "G060"
+      ],
+      "summary": "Append-only record of every experiment including the failures, carrying parent lineage, dataset/feature/code versions, and a failure reason.",
+      "notes": "ExperimentRegistry carries parent_id, failure_reason (a failure without a reason is refused, because an unexplained failure is indistinguishable from a run never attempted - which is how the trial denominator stops being auditable), failed_at, attach_verdict, lineage, children, failures, and attempt_count - the denominator every claimed win rate must be read against. The reproducibility hash deliberately excludes parent_id and result: lineage is navigational and a result is an output, so hashing either would make identical configurations differ by how they were reached. The ledger is durable: migration v5 installs append-only experiment_events and experiment_seals, one event per transition carrying the full run snapshot, with current state as the latest event per experiment. Append-only is enforced by database triggers - UPDATE, DELETE, out-of-sequence INSERT, and off-head supersedes INSERT each refused by name. Each event links to its experiment's head via supersedes, so a forged rewrite of a FAILED run becomes a visible head rather than a hidden edit. An HMAC seal over (count, head) catches the truncation a linkage check cannot see - the specific prize of a cut tail being a manufactured track record with the failures removed. The registry writes the sink before committing memory, with legality pre-checked via StateMachineEngine.check_transition so an illegal transition leaves no phantom event in a log that cannot un-write. Resume rebuilds runs, state-machine objects at their stored status without replaying transitions, and provenance nodes and edges, in first-seen order so parent links resolve.",
+      "gates": [
+        {
+          "check": "test:tests/test_experiment_ledger.py",
+          "statement": "A failed experiment can be neither deleted nor mutated."
+        },
+        {
+          "check": "test:tests/test_experiment_ledger.py",
+          "statement": "A reproducibility hash is recomputable from the stored parameters, code commit, and dataset version."
+        },
+        {
+          "check": "test:tests/test_experiment_sink.py",
+          "statement": "A full lifecycle - failures with reasons, verdicts, lineage, attempt counts - is readable after the process dies."
+        },
+        {
+          "check": "test:tests/test_experiment_sink.py",
+          "statement": "The database refuses UPDATE, DELETE, out-of-sequence INSERT, and off-head supersedes INSERT against the experiment log."
+        },
+        {
+          "check": "test:tests/test_experiment_sink.py",
+          "statement": "A truncated log is caught by its seal, and an unsealed log reports unanchored rather than clean."
+        },
+        {
+          "check": "test:tests/test_experiment_sink.py",
+          "statement": "An illegal transition or rejected input writes no event."
+        }
+      ],
+      "evidence": [
+        "kernel/registries.py",
+        "kernel/strategy_registry.py",
+        "kernel/state_machine.py",
+        "core/experiment_sink.py",
+        "core/migrations.py",
+        "tests/test_experiment_ledger.py",
+        "tests/test_experiment_sink.py",
+        "tests/test_migration_splitter.py"
+      ]
+    },
+    {
+      "id": "G080",
+      "title": "Strategy Certification Firewall",
+      "layer": 7,
+      "workstream": "W5",
+      "status": "LANDED",
+      "depends_on": [
+        "G070"
+      ],
+      "summary": "The gate between a candidate strategy and a certified playbook: purged CV, embargo, CPCV, walk-forward, PBO, deflated Sharpe, multiple-testing correction, capacity, regime decomposition, and stress testing.",
+      "gates": [
+        {
+          "check": "test:tests/test_certification_firewall.py",
+          "statement": "A strategy with no CertificationVerdict cannot reach APPROVED."
+        },
+        {
+          "check": "test:tests/test_certification_firewall.py",
+          "statement": "An adapted strategy produces a new artifact whose evidence is empty, and cannot inherit a parent's sign-off."
+        },
+        {
+          "check": "test:tests/test_certification_firewall.py",
+          "statement": "Look-ahead and survivorship contamination are detected and reject the candidate."
+        },
+        {
+          "check": "test:tests/test_certification_firewall.py",
+          "statement": "Deflated Sharpe, PBO, and multiple-testing correction are computed, not approximated."
+        }
+      ],
+      "evidence": [
+        "core/quant_statistics.py",
+        "core/backtest.py",
+        "core/contamination.py",
+        "kernel/strategy_registry.py",
+        "tests/test_certification_firewall.py",
+        "tests/test_certification_measurement.py",
+        "tests/test_contamination.py"
+      ],
+      "notes": "Every check is measured. Costs are verified against the gross/net series rather than a flag. Capacity is a swept ceiling that must cover the mandate and falls as the bar rises. Stress replays the series under declared shocks. Look-ahead is detected from available_at versus decision_time, including cross-sectional panel leakage that no per-row check can see. Survivorship is detected as an absence via the corporate-action history, which reaches superseded identities. A detector that never ran reports None and fails, so skipping one cannot pass by default.",
+      "adoption_note": "Purged CV, embargo, and CPCV follow HKUDS/Vibe-Trading (MIT). Deflated Sharpe, PBO, and capacity modelling are the additions that reference does not have."
+    },
+    {
+      "id": "G090",
+      "title": "Feature Fabric with Offline and Online Parity",
+      "layer": 8,
+      "workstream": "W6",
+      "status": "LANDED",
+      "depends_on": [
+        "G030",
+        "G060"
+      ],
+      "summary": "Offline point-in-time feature generation and an in-process online engine sharing one definition, with the parity invariant enforced as a test rather than a comment.",
+      "gates": [
+        {
+          "check": "test:tests/test_feature_parity.py",
+          "statement": "The offline point-in-time feature and the in-process online feature produce identical values at every fixture timestamp, so a model trained on one is served the other."
+        },
+        {
+          "check": "test:tests/test_feature_parity.py",
+          "statement": "The decision path performs no network I/O outside the market feed."
+        }
+      ],
+      "evidence": [
+        "core/feature_store.py",
+        "tests/test_feature_parity.py"
+      ],
+      "notes": "Offline batch and online serving share one transform_step across six transforms (sma, momentum, rolling_sum/max/min, ema), so parity holds by construction; check_offline_online_parity states agreement as a claim recording its own epsilon (0.0 exact on integer-safe paths, 1e-12 on float). Warmup is a named refusal never silent NaN; gaps poison containing windows without interpolation; online ticks carry available_at; code-hash pinning refuses recomputation under foreign hashes; online state serializes for restart resume with identical subsequent outputs. The decision path is structurally verified to make no network calls. Absorbed from a partial parallel lane after review (one missing-field constructor fixed on arrival)."
+    },
+    {
+      "id": "G100",
+      "title": "Regime Intelligence",
+      "layer": 9,
+      "workstream": "W7",
+      "status": "LANDED",
+      "depends_on": [
+        "G090"
+      ],
+      "summary": "RegimeSnapshot from trend, volatility, liquidity, correlation, rates, credit, and stress inputs, plus a per-strategy domain of competence.",
+      "gates": [
+        {
+          "check": "test:tests/test_regime_engine.py",
+          "statement": "A RegimeSnapshot names the inputs it was derived from and the engine version that produced it."
+        },
+        {
+          "check": "test:tests/test_regime_engine.py",
+          "statement": "A strategy declares a domain of competence and is refused outside it."
+        },
+        {
+          "check": "test:tests/test_change_detection.py",
+          "statement": "A sustained shift alarms within a bounded delay in the right direction while bounded oscillation inside the drift allowance never alarms."
+        },
+        {
+          "check": "test:tests/test_change_detection.py",
+          "statement": "No alarm fires inside burn-in, output is deterministic, and detections convert to available_at-stamped features."
+        }
+      ],
+      "evidence": [
+        "communities/c10_world/regime_engine.py",
+        "communities/c10_world/change_detection.py",
+        "tests/test_change_detection.py"
+      ],
+      "notes": "Detection replaces labelling: two-sided online CUSUM with an explicit burn-in that cannot alarm by construction (baseline frozen, sums reset per alarm imposing a refractory period), plus Bai-Perron-style offline segmentation whose breaks are honestly dated at the sample end with delay recorded. Every detection carries index, detected_at, available_at, delay, confidence, and direction, and converts to point-in-time features for RegimeCondition consumption - never bare labels. Two module defects caught by tests: the break estimate pointed at bar 0 across the burn-in boundary (fixed), and a noiseless step scored confidence 0 on a 0/0 fallback (infinite contrast now maps to 1.0). The 88-line EMA labelling engine remains in regime_engine.py for its existing consumers; the detector is the path new code takes."
+    },
+    {
+      "id": "G110",
+      "title": "Calibration and Selective Decision",
+      "layer": 11,
+      "workstream": "W7",
+      "status": "LANDED",
+      "depends_on": [
+        "G100",
+        "G060"
+      ],
+      "summary": "Conformal calibration producing a calibrated probability, an uncertainty band, and a decision of TRADE, WAIT, ESCALATE, or ABSTAIN, where ABSTAIN is the default under uncertainty.",
+      "gates": [
+        {
+          "check": "test:tests/test_selective_decision.py",
+          "statement": "The decision schema contains no quantity or notional field, so a model cannot express a size."
+        },
+        {
+          "check": "test:tests/test_selective_decision.py",
+          "statement": "Under insufficient calibrated confidence the result is ABSTAIN, never TRADE."
+        },
+        {
+          "check": "test:tests/test_selective_decision.py",
+          "statement": "Reported performance is selective precision and coverage, never a universal win rate."
+        },
+        {
+          "check": "test:tests/test_conformal.py",
+          "statement": "Empirical coverage holds at the stated rate and training residuals are shown to undercover."
+        },
+        {
+          "check": "test:tests/test_decision_gate.py",
+          "statement": "Each gate outcome fires on its triggering condition with ABSTAIN first-class in fail-closed order."
+        }
+      ],
+      "evidence": [
+        "research/walkforward.py",
+        "communities/c9_portfolio/portfolio.py",
+        "core/conformal.py",
+        "core/decision_gate.py",
+        "tests/test_conformal.py",
+        "tests/test_decision_gate.py"
+      ],
+      "notes": "Split-conformal intervals with the finite-sample correction, reusing normal_ppf for the Wilson critical value; empirical coverage pinned at the stated rate, plus a test demonstrating the training-residual collapse (which is why the split lives in the caller pipeline). The TRADE/WAIT/ESCALATE/ABSTAIN gate runs in fail-closed order - unmeasurable interval, unstable regime, excessive width abstain; trustworthy weak edge escalates to a human; untrustworthy weak edge waits - with ABSTAIN first-class and every trigger recorded, in the playbook vocabulary by value."
+    },
+    {
+      "id": "G120",
+      "title": "Dual-Speed Intelligence and Certified Playbook Engine",
+      "layer": 10,
+      "workstream": "W8",
+      "status": "LANDED",
+      "depends_on": [
+        "G110",
+        "G080"
+      ],
+      "summary": "A fast reflex expert router inside the low-latency path and a large reasoner outside it. The fast tier selects among certified playbooks and never invents one.",
+      "gates": [
+        {
+          "check": "test:tests/test_playbook_engine.py",
+          "statement": "A playbook is a versioned, deterministic, certified policy object rather than free text."
+        },
+        {
+          "check": "test:tests/test_playbook_engine.py",
+          "statement": "The fast model cannot modify a playbook in production."
+        },
+        {
+          "check": "test:tests/test_playbook_engine.py",
+          "statement": "A regime is a predicate over point-in-time features, not a classifier label, so a look-ahead becomes detectable."
+        },
+        {
+          "check": "test:tests/test_playbook_engine.py",
+          "statement": "An observation containing a feature that was not knowable at decision time blocks every selection."
+        },
+        {
+          "check": "test:tests/test_playbook_engine.py",
+          "statement": "No matching playbook yields no action, and the abstention names its reason."
+        },
+        {
+          "check": "test:tests/test_playbook_engine.py",
+          "statement": "Two certified playbooks holding at once abstains rather than picking one."
+        },
+        {
+          "check": "test:tests/test_playbook_engine.py",
+          "statement": "Revoking a verdict stops its playbook being selected, without disabling the others."
+        },
+        {
+          "check": "test:tests/test_playbook_composition.py",
+          "statement": "A playbook published from a certified and approved strategy artifact is selectable end to end."
+        },
+        {
+          "check": "test:tests/test_playbook_composition.py",
+          "statement": "Withdrawing permission on the real registry stops the playbook being selected, with nothing re-registered."
+        },
+        {
+          "check": "test:tests/test_playbook_composition.py",
+          "statement": "The router cannot reach the certification authority: no approve, reject, record_verdict, or registry."
+        },
+        {
+          "check": "test:tests/test_playbook_derivation.py",
+          "statement": "The derived position size is the mandate over the book, and the basis recomputes it."
+        },
+        {
+          "check": "test:tests/test_playbook_derivation.py",
+          "statement": "A mandate beyond the measured ceiling, a book smaller than the mandate, a dust weight, and CERTIFIED_WITH_LIMITS are all refused, each naming itself."
+        },
+        {
+          "check": "test:tests/test_playbook_derivation.py",
+          "statement": "Recording a verdict requires the evidence, and the evidence must describe the certified trial."
+        },
+        {
+          "check": "test:tests/test_playbook_derivation.py",
+          "statement": "Per-regime performance is measured by regime_sharpes, and a thin or losing regime limits without rejecting."
+        },
+        {
+          "check": "test:tests/test_playbook_store.py",
+          "statement": "Policies persist across restart with rewrite refused, and load admits only currently-certified strategies while naming the skipped."
+        },
+        {
+          "check": "test:tests/test_playbook_proposals.py",
+          "statement": "Every measured regime proposes a derived size or a named refusal, and unmapped regime names are reported as taxonomy gaps."
+        },
+        {
+          "check": "test:tests/test_change_detection.py",
+          "statement": "The regime feed emits stamped features on breaks, stays silent otherwise, and reports stability counts."
+        }
+      ],
+      "evidence": [
+        "kernel/playbook.py",
+        "kernel/bootstrap.py",
+        "core/backtest.py",
+        "tests/test_playbook_engine.py",
+        "tests/test_playbook_composition.py",
+        "tests/test_playbook_derivation.py",
+        "core/playbook_store.py",
+        "communities/c10_world/change_detection.py",
+        "tests/test_playbook_store.py",
+        "tests/test_playbook_proposals.py"
+      ],
+      "notes": "kernel/playbook.py landed: a frozen, content-hashed Playbook bound to a real CertificationVerdict, a RegimeCondition expressed as explicit half-open bounds over named features each carrying available_at, and a PlaybookRouter whose entire public surface is register/registered/select/selection_for_regime/regimes. Four decisions were forced by specific failures rather than chosen. A regime is a predicate and not a classifier label, because a label records nothing about which features produced it or when they became knowable, so a full-sample regime label is a look-ahead no timestamp check catches; RegimeCondition refuses a bounds-free regime precisely because that would match everything and let the router regress to guessing. Selection refuses a contaminated observation before considering any playbook, since acting on one is wrong under every policy, and Selection.audit_timings hands its feature timings to G080's detect_look_ahead rather than reimplementing a weaker second check. Abstention is a first-class outcome with five named reasons, and two simultaneous matches abstain rather than breaking the tie, because no ranking between the two was certified and resolving by registration order means the policy was chosen by the sequence of startup calls. Certification is re-asked through a CertificationOracle protocol on every call rather than snapshotted at bind time, so a revoked verdict stops its playbook being selectable. The router exposes no mutation method at all: an instruction the fast tier is asked to follow is a control with a probability of failure, an absent method has none. The composition landed too: create_kernel now wires StrategyRegistry, RegistryCertificationOracle, and PlaybookRouter onto AIOSKernel, and publish_playbook derives a playbook from an approved artifact. The oracle is a separate type rather than a StrategyRegistry handed to the router, because the router's question is narrower - may this be traded right now - and passing the whole registry would put approve, reject, and record_verdict on the fast tier's collaborator. What remains before LANDED: the derivation landed as well - publish_playbook takes no action parameter, so no caller can publish a hand-sized position through the production path. The size is required_notional over book_size, and the measurements contribute permission: every one of costs, capacity, stress, execution, and contamination must be measured, the regime must carry a passing regime_sharpe check, the mandate must fit within the measured ceiling and the book, and the weight must clear the 1% policy floor, or the derivation refuses and names the failing check. CERTIFIED_WITH_LIMITS is refused outright, because limits qualify the certification and a qualified certification needs a human before capital moves. The SizingBasis records every input the size depends on, verify() recomputes it, and the content hash covers the basis, so the same action with different measurements behind it is a different playbook. record_verdict requires the evidence and binds it by checking the verdict's observed Sharpe is the evidence's gross Sharpe - the same trial's number in two places - and the artifact retains it, so publish reads the ceiling off the artifact rather than accepting a fresh number. core/backtest.py gained regime_sharpes, which replaced the regime_decomposition boolean in build_verdict: each regime gets its own regime_sharpe check, thin or losing regimes limit without rejecting, and the labels must align 1:1 with the returns or the join is refused. The bounds stay caller-supplied on purpose: deriving thresholds from the backtest that justifies them is selection bias, and the gate is that the regime was measured profitable. What remains before LANDED: there is no slow reasoner tier, no regime detector producing the live features, and no durable playbook store, so a restart loses the registered set and, with it, the coverage. Remainder closed: migration v8 installs append-only playbooks and playbook_seals; core/playbook_store.py persists immutable policies on both tiers with rewrite-under-version refused, and the seal signs (count, set-hash) so same-count substitution fails. Module-level persist_router/load_router keep the router surface pinned - the engine test caught method-level growth and forced the move, which is the shape-check working as designed. load_router re-asks certification per policy: revoked strategies stay stored but never join, with skipped refs returned alongside rather than hidden. RegimeFeed streams CUSUM detections as available_at-stamped FeatureObservations plus on-demand stability counts for the gate. propose_candidates sweeps measured regimes per certified strategy, returning derived sizes with bases or named refusals, with unmapped regime names reported as taxonomy gaps rather than filtered."
+    },
+    {
+      "id": "G130",
+      "title": "Robust Portfolio Brain",
+      "layer": 13,
+      "workstream": "W9",
+      "status": "LANDED",
+      "depends_on": [
+        "G110",
+        "G080"
+      ],
+      "summary": "Position sizing from expected-return distributions, uncertainty, and covariance, producing a PortfolioProposal that is explicitly not an order.",
+      "gates": [
+        {
+          "check": "test:tests/test_portfolio_brain.py",
+          "statement": "The output type is a proposal: it is not an order and cannot be submitted to a venue."
+        },
+        {
+          "check": "test:tests/test_portfolio_brain.py",
+          "statement": "Two independent optimizers that disagree raise a finding rather than being averaged."
+        }
+      ],
+      "evidence": [
+        "communities/c9_portfolio/optimizer.py",
+        "tests/test_portfolio_brain.py"
+      ],
+      "notes": "Two independent optimizers over expected-return distributions plus covariance: closed-form inverse-volatility (correlation-blind baseline) and stdlib HRP by single-linkage clustering on correlation distance with recursive bisection (ties by sorted symbol order, deterministic). Divergence beyond 5 points of weight raises OptimizationDisagreement naming per-symbol weights instead of averaging - the average of two disagreeing portfolios is one neither method endorses. Output is a PortfolioProposal with no venue, order id, side, or submit path by type. Inputs validated (dispersion required per name, zero-vol refused, asymmetric covariance refused); caps refuse rather than rescale when they cannot fit."
+    },
+    {
+      "id": "G140",
+      "title": "Deterministic Capital Firewall and Authorization Envelope",
+      "layer": 18,
+      "workstream": "W9",
+      "status": "LANDED",
+      "depends_on": [
+        "G130",
+        "G010"
+      ],
+      "summary": "The full pre-trade checklist emitting APPROVE, REDUCE, or REJECT, and an expiring AuthorizationEnvelope that execution cannot create for itself.",
+      "gates": [
+        {
+          "check": "test:tests/test_authority_chain.py",
+          "statement": "No path exists from any model or tool call to a venue submit without a valid AuthorizationEnvelope."
+        },
+        {
+          "check": "test:tests/test_authority_chain.py",
+          "statement": "The risk firewall module imports no LLM gateway."
+        },
+        {
+          "check": "test:tests/test_authority_chain.py",
+          "statement": "Execution may only reduce an authorization, never increase it."
+        },
+        {
+          "check": "constitution",
+          "statement": "The micro-live notional cap is a ratified constitutional limit, not a placeholder."
+        },
+        {
+          "check": "test:tests/test_authorization_envelope.py",
+          "statement": "A forged, tampered, expired, or cross-instrument envelope fails verification; execution cannot mint one."
+        },
+        {
+          "check": "test:tests/test_capital_firewall.py",
+          "statement": "Each of the 15 checks names itself in refusal; sizing failures reduce, integrity failures reject."
+        },
+        {
+          "check": "test:tests/test_envelope_wiring.py",
+          "statement": "A firewall-bound OMS persists nothing without an envelope or on REJECT, persists the approved quantity on REDUCE, and carries the verdict in the outbox payload."
+        },
+        {
+          "check": "test:tests/test_envelope_wiring.py",
+          "statement": "A secret-bound adapter refuses venue contact without a covering envelope, before governance runs."
+        },
+        {
+          "check": "test:tests/test_authority_chain.py",
+          "statement": "Every venue submit implementation invokes the envelope boundary (structural)."
+        }
+      ],
+      "evidence": [
+        "core/risk_firewall.py",
+        "core/safety_plane.py",
+        "communities/c5_execution/oms.py",
+        "core/authorization.py",
+        "core/capital_firewall.py",
+        "tests/test_authorization_envelope.py",
+        "tests/test_capital_firewall.py",
+        "communities/c5_execution/oms.py",
+        "communities/c5_execution/adapters.py",
+        "communities/c5_execution/execution.py",
+        "tests/test_envelope_wiring.py"
+      ],
+      "notes": "The firewall is real and deterministic but is one method checking four rules. It cannot ask what the instrument is, whether the claim was true at the time, or whether the strategy was ever certified, so it is currently validating the wrong questions. The 100 USD cap in CcxtExecutionAdapter is a genuine constitutional control per CONSTITUTION.md section 1 and stays until an ADR raises it; what is missing is the envelope around it, not the cap itself."
+    },
+    {
+      "id": "G150",
+      "title": "Execution Kernel and Order Management",
+      "layer": 20,
+      "workstream": "W10",
+      "status": "LANDED",
+      "depends_on": [
+        "G140"
+      ],
+      "summary": "OMS, execution planner, router, and venue adapters, with limit, TWAP, VWAP, and POV algorithms.",
+      "gates": [
+        {
+          "check": "test:tests/test_execution_algorithms.py",
+          "statement": "TWAP, VWAP, and POV each have property tests over a deterministic fixture."
+        },
+        {
+          "check": "test:tests/test_authority_chain.py",
+          "statement": "Execution may round quantity to lot size but never increase authorized notional."
+        }
+      ],
+      "evidence": [
+        "communities/c5_execution/oms.py",
+        "communities/c5_execution/adapters.py",
+        "communities/c5_execution/algorithms.py",
+        "tests/test_execution_algorithms.py"
+      ],
+      "notes": "TWAP, VWAP, and POV are pure deterministic schedulers returning immutable schedules: exact-integer Hamilton apportionment so child quantities sum exactly to the total, down-only lot flooring with named remainder bars, sub-lot totals refused, caps enforced at the boundary with breaches raising rather than reshaping, VWAP degrading to TWAP with a named reason on empty profiles, POV pausing on zero-volume bars. Schedulers propose quantities only; execution stays on the existing governed adapter path. VWAP keeps quota over house-monotonicity across totals (Balinski-Young: the two cannot co-exist; documented, not hidden)."
+    },
+    {
+      "id": "G160",
+      "title": "Execution Digital Twin",
+      "layer": 21,
+      "workstream": "W10",
+      "status": "LANDED",
+      "depends_on": [
+        "G150"
+      ],
+      "summary": "Tick and L2 replay with per-stage latency decomposition, queue position, partial fills, and market impact, used to compare model paths at 20, 50, 100, and 200 ms under identical conditions.",
+      "gates": [
+        {
+          "check": "test:tests/test_execution_twin.py",
+          "statement": "A latency comparison exists for at least two target latencies under one fixture."
+        }
+      ],
+      "evidence": [
+        "simulation/execution_twin.py",
+        "tests/test_execution_twin.py"
+      ],
+      "notes": "Tick replay with per-stage latency decomposition (decide/transmit/venue/ack shares fixed at 30/20/30/20), queue position consumed by prints, partial fills staying partial with the remainder in unfilled, square-root impact on participation capped per bar. Latency acts as staleness - decisions execute against the later book - so slower paths measurably trade worse on a drifting fixture; the 20/50/100/200 comparison runs one book with distinct targets. Fixture is closed-form deterministic, no seeded generator to pin."
+    },
+    {
+      "id": "G170",
+      "title": "Broker Reconciliation",
+      "layer": 22,
+      "workstream": "W10",
+      "status": "LANDED",
+      "depends_on": [
+        "G150"
+      ],
+      "summary": "Independent broker snapshots compared against internal state, with a severity ladder that can escalate to NO_NEW_RISK or EMERGENCY.",
+      "gates": [
+        {
+          "check": "test:tests/test_reconciliation.py",
+          "statement": "Order, fill, position, cash, and NAV mismatches each produce a finding."
+        },
+        {
+          "check": "constitution",
+          "statement": "A CRITICAL finding cannot be cleared without a named human resolver."
+        }
+      ],
+      "evidence": [
+        "communities/c5_execution/reconciliation.py",
+        "communities/c5_execution/broker_reconciliation.py"
+      ],
+      "notes": "835 plus 357 lines. Together with G010 this is the strongest part of the system, and the best argument that the deterministic core is worth protecting."
+    },
+    {
+      "id": "G180",
+      "title": "Institutional Memory, Governed Learning, and Counterfactuals",
+      "layer": 23,
+      "workstream": "W11",
+      "status": "LANDED",
+      "depends_on": [
+        "G040",
+        "G170"
+      ],
+      "summary": "Tiered memory M0 through M9, retrieval under a versioned contract, and governed promotion through SHADOW and champion/challenger. Every non-executed decision is retained with its counterfactual.",
+      "gates": [
+        {
+          "check": "test:tests/test_memory_decay.py",
+          "statement": "Records at safety criticality never decay: a ledger entry or risk breach cannot fade out of recall."
+        },
+        {
+          "check": "test:tests/test_memory_decay.py",
+          "statement": "The retrieval contract is versioned, and a verdict of sufficient is rejected unless its evidence refs are a subset of the current batch."
+        },
+        {
+          "check": "test:tests/test_counterfactuals.py",
+          "statement": "An ABSTAIN, REJECT, or NO_NEW_RISK decision is retained together with what would have happened."
+        },
+        {
+          "check": "test:tests/test_recall_blend.py",
+          "statement": "Expired records are excluded rather than down-ranked, safety records survive every horizon, and every blended match records how it was ranked."
+        }
+      ],
+      "evidence": [
+        "core/vector_memory.py",
+        "communities/c7_memory/memory_agent.py",
+        "kernel/promotion.py",
+        "kernel/memory_tiers.py",
+        "kernel/retrieval_contract.py",
+        "kernel/counterfactuals.py",
+        "tests/test_memory_decay.py",
+        "tests/test_counterfactuals.py",
+        "tests/test_recall_blend.py"
+      ],
+      "notes": "M0-M9 frozen tier configs with horizons, half-lives, and promotion thresholds; SAFETY criticality never decays or expires regardless of tier; decay is a pure function of (age, half-life, criticality, access_count) with now passed explicitly. Retrieval runs under a versioned contract: version mismatch raises, sufficient-with-stale-evidence is rejected, short evidence is insufficient. Counterfactuals retain every ABSTAIN/REJECT/NO_NEW_RISK with its foregone outcome (UNRESOLVED until known), resolved by superseding record never mutation. Recall wired: vector search accepts an injected salience callable (core never imports the tier definitions) with explicit now, oversampled blend pool, and min-max normalized convex blending recorded per match as similarity/salience/weight. salience_for maps document metadata to scores with neutral-1.0 fallback on missing or unparseable metadata - recall degrades open, never closed - and None (excluded) only on computable expiry, so SAFETY records survive every horizon while expired routine records vanish rather than sink."
+    },
+    {
+      "id": "G190",
+      "title": "Statistical Claim Gate and Evaluation Harness",
+      "layer": "cross-cutting",
+      "workstream": "W0",
+      "status": "LANDED",
+      "depends_on": [
+        "G110"
+      ],
+      "summary": "A performance claim is rejected at the API boundary unless it carries its definition, N, coverage, period, universe, regime coverage, net-of-cost and out-of-sample results, interval, drawdown, tail risk, experiment count, and model and dataset versions.",
+      "gates": [
+        {
+          "check": "test:tests/test_claim_gate.py",
+          "statement": "A metric claim missing any required field is rejected."
+        },
+        {
+          "check": "test:tests/test_claim_gate.py",
+          "statement": "Every reported evaluation result carries a confidence interval."
+        }
+      ],
+      "evidence": [
+        "evaluation/harness.py",
+        "evaluation/prompt_lab.py",
+        "core/claim_gate.py",
+        "tests/test_evaluation_harness.py",
+        "tests/test_claim_gate.py"
+      ],
+      "notes": "Deterministic evaluation runner behind the fixed claim-gate contract: seeded suites, version pins refused when absent, errors counted against coverage but excluded from the pass-rate denominator (min_coverage 1.0 default), empty suites refused, every result carrying a Wilson confidence interval via the existing normal_ppf helper. EvaluationResult maps to all 14 gate fields. The EvaluationResult-to-Claim ledger mapping (claim_id scheme, claim_class, artifact kind) is an explicit unmade policy decision, not silent coupling."
+    },
+    {
+      "id": "G200",
+      "title": "Champion and Challenger Arena",
+      "layer": 25,
+      "workstream": "W12",
+      "status": "LANDED",
+      "depends_on": [
+        "G180",
+        "G190"
+      ],
+      "summary": "Champion, fast models, large models, quant-only, a no-AI baseline, and full AIOS run under identical data, capital, fees, and risk, with promotion only on measured superiority.",
+      "gates": [
+        {
+          "check": "test:tests/test_champion_challenger.py",
+          "statement": "Promotion requires a measured result and an explicit human action. No subjective promotion."
+        }
+      ],
+      "evidence": [
+        "kernel/promotion.py",
+        "core/challenger.py",
+        "tests/test_champion_challenger.py"
+      ],
+      "notes": "ChallengeRegistry stages champion-vs-challenger trials with EvaluationRecords carrying honesty gates (minimum trades, superiority margin); promotion requires EVALUATED state plus a PASS verdict plus an identified human, and a human cannot overrule FAIL or INCONCLUSIVE - the fail-closed rule applies to operators too. An empty operator id is refused because promoted-by-nobody is not an audit trail. Rejection stays always available (stopping must be easier than shipping), promotion is not repeatable, and the evidence stays attached to the trial it promoted. The gate file the goal pointed at but never had now exists."
+    },
+    {
+      "id": "G210",
+      "title": "Observability and Trace Continuity",
+      "layer": "cross-cutting",
+      "workstream": "W12",
+      "status": "LANDED",
+      "depends_on": [
+        "G140",
+        "G150",
+        "G170"
+      ],
+      "summary": "A single correlation chain across market_event, feature, inference, evidence, strategy, proposal, risk_decision, authorization, order, fill, and ledger_transaction, answering why a given trade happened.",
+      "gates": [
+        {
+          "check": "test:tests/test_trace_continuity.py",
+          "statement": "Every hop in the chain carries the same correlation id."
+        }
+      ],
+      "evidence": [
+        "core/trace.py",
+        "communities/c5_execution/oms.py",
+        "communities/c5_execution/adapters.py",
+        "communities/c5_execution/execution.py",
+        "tests/test_trace_continuity.py"
+      ],
+      "notes": "One correlation chain across the eleven canonical stages, closed vocabulary so a hop outside it is refused rather than misplaced. TraceContext mints structureless hex ids; TraceRecorder orders spans and reports gaps instead of filling them; why_trade assembles spans plus outbox events and returns missing stages, with unknown ids returning an empty chain rather than an incident. Threaded: OMS prepare stamps the outbox trace_id column (queryable across tiers, outside the hashed payload so correlation never invalidates integrity), adapter submit threads it into the governed call session, execution mints-with-warning when absent - observability is not authorization, so a missing id never refuses an order. The OpenTelemetry SDK stays deliberately deferred: this is the correlation discipline OTel would carry, so adopting it later changes transport, not semantics."
+    },
+    {
+      "id": "G220",
+      "title": "Formal Assurance",
+      "layer": "cross-cutting",
+      "workstream": "W12",
+      "status": "LANDED",
+      "depends_on": [
+        "G150",
+        "G170"
+      ],
+      "summary": "TLA+ specifications for the order lifecycle, the outbox, fills, duplicate delivery, the kill switch, reconciliation, and failover.",
+      "gates": [
+        {
+          "check": "manual",
+          "statement": "A TLA+ specification exists for the order state machine and for the outbox."
+        }
+      ],
+      "evidence": [
+        "specs/OrderLifecycle.tla",
+        "specs/Outbox.tla",
+        "tests/test_formal_assurance.py"
+      ],
+      "notes": "TLA+ specs for the order lifecycle (7 states mirroring OrderStatus, terminal set mirroring _TERMINAL_ORDER_STATES, six transitions) and the outbox (PENDING/PUBLISHING/PUBLISHED/DEAD_LETTER with duplicate-delivery stutter, hash-mismatch quarantine, exactly-once effect). Properties stated: TerminalIsSticky, FillMonotone, NoPhantomFill, NoResurrection, AtMostOnceEffect, HashBindsKey, DeadLetterTerminal, NoLoss. Drift tests fail if code renames a state without renaming it in the spec. TLC has no JVM here so model-checking is explicitly unrun, not claimed - the specs are reviewable artifacts with machine-checkable mirror tests, which is what the manual gate requires."
+    },
+    {
+      "id": "G230",
+      "title": "Governance, Security, and Supply-Chain Planes",
+      "layer": "cross-cutting",
+      "workstream": "W12",
+      "status": "LANDED",
+      "depends_on": [
+        "G050",
+        "G210"
+      ],
+      "summary": "OPA/Rego policy, sandboxed AI zones, OpenBao secrets, SBOM, vulnerability scanning, and signed releases.",
+      "gates": [
+        {
+          "check": "lint:scripts/anti_pattern_lint.py",
+          "statement": "No component signs a transaction using a key read from the environment on an agent-reachable path."
+        },
+        {
+          "check": "lint:scripts/anti_pattern_lint.py",
+          "statement": "No prompt text expresses a position size, stop loss, or take profit."
+        },
+        {
+          "check": "test:tests/test_supply_chain.py",
+          "statement": "The SBOM covers exactly the lock byte-stably, releases verify by manifest, and no secrets are tracked."
+        }
+      ],
+      "evidence": [
+        "requirements.lock",
+        "scripts/lock_dependencies.py",
+        "scripts/sbom.py",
+        "tests/test_supply_chain.py"
+      ],
+      "notes": "Supply-chain planes enforceable locally: scripts/sbom.py generates byte-stable CycloneDX from requirements.lock (unpinned and duplicate lines refused, so the bill covers exactly the resolved closure); package_release.py writes a SHA256SUMS manifest as the last archive member and verify_archive fails missing manifests, hash mismatches, unlisted members, and secrets; tests pin no tracked .env, .gitignore coverage, no key material in the tree, and valueless secret-named example vars. OPA was deliberately replaced by signed policy bundles (G050). Explicitly deferred, not pretended: live vulnerability scanning needs a networked scanner consuming the SBOM; authority signatures are applied in CI with the release key over the manifested bytes; OpenBao needs a server (secrets stay env-only per config policy); sandbox zones are process/container infrastructure outside this tree."
+    },
+    {
+      "id": "G240",
+      "title": "Long Shadow Validation",
+      "layer": 27,
+      "workstream": "W12",
+      "status": "BLOCKED",
+      "blocked_by": [
+        "G080",
+        "G110",
+        "G140",
+        "G160"
+      ],
+      "depends_on": [],
+      "summary": "A full shadow cycle with zero authority-chain violations and a validated broker testnet connection.",
+      "gates": [
+        {
+          "check": "test:tests/test_shadow_cycle.py",
+          "statement": "A complete shadow cycle completes with zero invariant violations."
+        }
+      ],
+      "evidence": [],
+      "blocker": "Blocked on a validated broker testnet connection plus the five human-held Phase 5.0 gates. Engineering dependencies are all LANDED.",
+      "notes": "All engineering dependencies are LANDED (G080 certification, G110 calibration gate, G140 envelope-enforced execution, G160 latency twin). What remains is not engineering: a validated broker testnet connection (needs network and credentials, neither available here), a full shadow cycle against it, and the five human-held Phase 5.0 gates. The gate file tests/test_shadow_cycle.py does not exist yet because a shadow cycle with no venue to shadow would be theater - it gets written against the testnet connection when a human provisions it."
+    },
+    {
+      "id": "G250",
+      "title": "Canary Capital",
+      "layer": 28,
+      "workstream": "W12",
+      "status": "BLOCKED",
+      "blocked_by": [
+        "G240"
+      ],
+      "depends_on": [],
+      "summary": "First live capital, released only after a clean shadow cycle and the five human-held gates recorded in CHECKPOINT.md.",
+      "gates": [
+        {
+          "check": "constitution",
+          "statement": "approve_live_capital is recorded and CONSTITUTION.md section 1 is amended by ADR."
+        }
+      ],
+      "evidence": [],
+      "blocker": "Constitutionally forbidden until five human-held gates are satisfied. This is a governance blocker, not an engineering one.",
+      "notes": "Constitutionally forbidden until approve_live_capital is recorded and CONSTITUTION.md section 1 is amended by ADR, after a clean G240 shadow cycle. The control action exists (core/control_plane.py), the gates endpoint reports it (api/views.py), and the amendment path exists. What remains is humans deciding, which is the entire point of the gate."
+    }
+  ]
+}
