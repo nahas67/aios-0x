@@ -28,8 +28,18 @@ jobs:
           python scripts/lock_dependencies.py --check
       - name: Lint (ruff)
         run: ruff check .
-      - name: Types (mypy)
-        run: mypy --python-version 3.12 --follow-imports=silent core api communities schemas
+      # Architecture boundary, anti-pattern, goal-registry, and authority-chain
+      # checks run as tests in the suite below. The lint is separate because it
+      # is a build gate, not a test of behaviour.
+      - name: Anti-pattern lint (build gate)
+        run: python scripts/anti_pattern_lint.py
+      # W0: mypy previously covered only 80 of 123 project files, so the wider
+      # sweep was manual and could regress silently (CHECKPOINT.md). Widen it to
+      # every first-party package.
+      - name: Types (mypy, all first-party packages)
+        run: >-
+          mypy --python-version 3.12 --follow-imports=silent
+          core api communities schemas kernel simulation aios research
       - name: Tests (SQLite + in-memory bus)
         run: PYTHONPATH=. pytest --disable-warnings -q -m "not integration" --timeout=120
 
@@ -121,12 +131,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check for secrets in source
+        # The key pattern requires a provider prefix and a long base62 body.
+        # The previous "sk-[a-zA-Z0-9]" matched any word ending in "risk-"
+        # ("risk-bot", "risk-governor") or "task-tier", so the gate failed on
+        # ordinary source and had to be read past rather than obeyed. A gate
+        # that cries wolf on a hundred false hits is a gate nobody runs.
+        # Real OpenAI keys are sk- plus 48 chars (or sk-proj- plus longer);
+        # Anthropic's carry sk-ant-. 32 chars is below every real key and above
+        # every English word that ends in "sk-". tests/test_supply_chain.py
+        # pins both halves of this claim: it must miss the decoys and catch
+        # realistic key shapes, so the pattern cannot silently rot again.
         run: |
-          if grep -rn "sk-[a-zA-Z0-9]" --include="*.py" --include="*.ts" --include="*.tsx" --include="*.js" .; then
-            echo "ERROR: Potential API key found in source"
+          if grep -rEn "sk-(proj-|ant-)?[A-Za-z0-9_-]{32,}" --include="*.py" --include="*.ts" --include="*.tsx" --include="*.js" .; then
+            echo "ERROR: API key pattern found in source"
             exit 1
           fi
-          if grep -rn "figd_" --include="*.md" --include="*.json" --include="*.ts" .; then
+          if grep -rn "figd_[A-Za-z0-9]" --include="*.md" --include="*.json" --include="*.ts" .; then
             echo "ERROR: Figma token found in distributable files"
             exit 1
           fi
@@ -138,6 +158,28 @@ jobs:
             exit 1
           fi
           echo ".env is properly excluded"
+      # Strong copyleft is inadmissible as a runtime dependency (docs/LICENSES.md).
+      # Checked at the license level rather than the package name so a future
+      # dependency cannot slip in under a different name.
+      - name: Reject strong-copyleft and unlicensed dependencies
+        run: |
+          python - <<'PY'
+          import sys, tomllib, pathlib
+          data = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+          runtime = set()
+          for group in ("dependencies", *(f"optional-dependencies.{k}" for k in data.get("optional-dependencies", {}))):
+              node = data.get("project", {})
+              if group == "dependencies":
+                  runtime.update(node.get("dependencies", []))
+              else:
+                  runtime.update(data["project"]["optional-dependencies"][group.split(".", 1)[1]])
+          banned = ("agpl", "gpl-3", "gpl3")
+          offenders = [d for d in sorted(runtime) if any(b in d.lower() for b in banned)]
+          if offenders:
+              print("ERROR: strong copyleft admitted as a dependency:", offenders)
+              sys.exit(1)
+          print(f"{len(runtime)} declared dependencies, none strong copyleft")
+          PY
 
   # ── Docker build ────────────────────────────────────────────────────────
   docker:
