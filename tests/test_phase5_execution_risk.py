@@ -54,11 +54,15 @@ def _plan(size: float = 5.0, entry: float = 100.0) -> PortfolioAllocationPlan:
 
 
 def _engine_and_manager(balance: float = 100000.0):
+    from kernel.tool_governance import ToolGuardian
     from simulation.paper_engine import PaperEngine
 
     bus = InMemoryEventBus()
     engine = PaperEngine(bus, initial_balance=balance)
-    adapter = PaperExecutionAdapter(engine)
+    # Governance is not optional on an adapter; these suites exercise the
+    # execution lifecycle, so they bind an unopinionated Guardian and leave the
+    # clamping behaviour to test_execution_governance.py.
+    adapter = PaperExecutionAdapter(engine, guardian=ToolGuardian(b"phase5-test-key"))
     manager = OrderManager(
         event_bus=bus,
         adapter=adapter,
@@ -122,7 +126,9 @@ def test_kill_switch_flatten_lockout_and_human_reset(tmp_path: Path) -> None:
         await bus.start()
         governor = RiskGovernor(bus)
         engine = PaperEngine(bus, initial_balance=100000.0)
-        adapter = PaperExecutionAdapter(engine)
+        from kernel.tool_governance import ToolGuardian
+
+        adapter = PaperExecutionAdapter(engine, guardian=ToolGuardian(b"phase5-killsw-key"))
         manager = OrderManager(
             event_bus=bus,
             adapter=adapter,
@@ -374,7 +380,9 @@ def test_shadow_mode_never_mutates_cash() -> None:
         bus = InMemoryEventBus()
         await bus.start()
         shadow = PaperEngine(bus, initial_balance=100000.0, shadow_mode=True)
-        adapter = PaperExecutionAdapter(shadow)
+        from kernel.tool_governance import ToolGuardian
+
+        adapter = PaperExecutionAdapter(shadow, guardian=ToolGuardian(b"phase5-shadow-key"))
         manager = OrderManager(
             event_bus=bus,
             adapter=adapter,
@@ -397,8 +405,13 @@ def test_shadow_mode_never_mutates_cash() -> None:
 
 
 def test_ccxt_execution_adapter_refuses_without_explicit_optin() -> None:
+    from kernel.tool_governance import ToolGuardian
+
+    guard = ToolGuardian(b"phase5-ccxt-key")
     with pytest.raises(ExecutionUnavailableError, match="AIOS_ALLOW_LIVE_EXECUTION"):
-        CcxtExecutionAdapter("binance", api_key_env="K", secret_env="S", env={})
+        CcxtExecutionAdapter(
+            "binance", api_key_env="K", secret_env="S", env={}, guardian=guard
+        )
 
     with pytest.raises(ExecutionUnavailableError, match="credentials"):
         CcxtExecutionAdapter(
@@ -406,10 +419,13 @@ def test_ccxt_execution_adapter_refuses_without_explicit_optin() -> None:
             api_key_env="K",
             secret_env="S",
             env={"AIOS_ALLOW_LIVE_EXECUTION": "1"},
+            guardian=guard,
         )
 
 
 def test_ccxt_execution_adapter_caps_notional_when_fully_enabled() -> None:
+    from kernel.tool_governance import ToolGuardian
+
     adapter = CcxtExecutionAdapter(
         "binance",
         api_key_env="AIOS_TEST_KEY",
@@ -420,6 +436,7 @@ def test_ccxt_execution_adapter_caps_notional_when_fully_enabled() -> None:
             "AIOS_TEST_KEY": "k",
             "AIOS_TEST_SECRET": "s",
         },
+        guardian=ToolGuardian(b"phase5-ccxt-key"),
     )
     assert adapter.testnet is True
     big_plan = _plan(size=50.0, entry=100000.0)

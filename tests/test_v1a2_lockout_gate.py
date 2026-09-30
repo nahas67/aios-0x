@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -86,7 +87,7 @@ class RecordingAdapter(BaseExecutionAdapter):
         self.submissions: list[tuple[str, float]] = []
 
     async def submit(
-        self, plan: PortfolioAllocationPlan, quantity: float
+        self, plan: PortfolioAllocationPlan, quantity: float, **kwargs: Any
     ) -> TradeExecutionReceipt | None:
         self.submissions.append((plan.strategy.symbol, quantity))
         return TradeExecutionReceipt(

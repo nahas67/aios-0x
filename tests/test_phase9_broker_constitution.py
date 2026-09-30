@@ -76,6 +76,8 @@ class FakeCcxtClient:
 
 @pytest.fixture()
 def fake_adapter(monkeypatch: pytest.MonkeyPatch) -> tuple[CcxtExecutionAdapter, FakeCcxtClient]:
+    from kernel.tool_governance import ToolGuardian
+
     client = FakeCcxtClient()
     monkeypatch.setattr(
         "communities.c5_execution.adapters._build_exchange",
@@ -92,6 +94,9 @@ def fake_adapter(monkeypatch: pytest.MonkeyPatch) -> tuple[CcxtExecutionAdapter,
             "AIOS_T_SECRET": "s",
         },
         symbol_map={"BTC/USD": "BTC/USDT"},
+        # Unopinionated: the constitutional cap is the control under test here,
+        # and clamping behaviour is covered in test_execution_governance.py.
+        guardian=ToolGuardian(b"phase9-test-key"),
     )
     return adapter, client
 
@@ -157,6 +162,8 @@ def test_positions_snapshot_maps_symbols_back(fake_adapter) -> None:
 
 
 def test_real_money_blocked_without_constitution_gate(fake_adapter) -> None:
+    from kernel.tool_governance import ToolGuardian
+
     # Same env but requesting LIVE venue: must refuse without approval flag
     with pytest.raises(ExecutionUnavailableError, match="CONSTITUTION"):
         CcxtExecutionAdapter(
@@ -169,6 +176,7 @@ def test_real_money_blocked_without_constitution_gate(fake_adapter) -> None:
                 "K": "k",
                 "S": "s",
             },
+            guardian=ToolGuardian(b"phase9-test-key"),
         )
 
 

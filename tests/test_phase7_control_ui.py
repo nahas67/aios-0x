@@ -20,12 +20,13 @@ def wired(tmp_path: Path):
     from communities.c5_execution.adapters import PaperExecutionAdapter
     from communities.c5_execution.execution import OrderManager
     from core.risk_firewall import RiskConfig, RiskFirewall
+    from kernel.tool_governance import ToolGuardian
     from simulation.paper_engine import PaperEngine
 
     store = SqliteMemoryStore(tmp_path / "cp.db")
     bus = InMemoryEventBus()
     engine = PaperEngine(bus, initial_balance=100000.0)
-    adapter = PaperExecutionAdapter(engine)
+    adapter = PaperExecutionAdapter(engine, guardian=ToolGuardian(b"phase7-test-key"))
     manager = OrderManager(
         event_bus=bus,
         adapter=adapter,
