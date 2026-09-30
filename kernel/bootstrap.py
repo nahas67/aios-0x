@@ -13,6 +13,7 @@ from typing import Any
 from kernel.authority import AuthorityGateway
 from kernel.capability import CapabilityRouter
 from kernel.identity import ActorType, IdentityRegistry, Role
+from kernel.playbook import CertificationOracle, PlaybookRouter
 from kernel.promotion import PromotionController, RollbackController
 from kernel.provenance import NodeType, ProvenanceGraph
 from kernel.receipts import ReceiptStore
@@ -23,6 +24,117 @@ from kernel.registries import (
     ModelRegistry,
 )
 from kernel.state_machine import StateMachineDefinition, StateMachineEngine
+from kernel.strategy_registry import CertificationVerdict, StrategyArtifact, StrategyRegistry
+
+# ══════════════════════════════════════════════════════════════════════════
+# Certification, connected
+# ══════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True)
+class RegistryCertificationOracle:
+    """Answers the playbook router's question from the strategy registry.
+
+    Exists as a separate type rather than adding a method to
+    ``StrategyRegistry`` because the router's question is narrower than the
+    registry's responsibility: the router needs "may this be traded right now",
+    and giving the router a reference to the whole registry would let it reach
+    ``approve``, ``reject``, or ``record_verdict`` — the certification authority
+    would then be reachable from the fast tier's own collaborator. The narrower
+    surface is the control.
+
+    Delegates to :meth:`StrategyArtifact.is_playable`, which requires both an
+    ``APPROVED`` status and a certified verdict. Two conditions rather than one
+    because each is individually reachable by a bug: a verdict with no approval
+    means nobody signed off, and an approval with no verdict means nobody
+    measured.
+    """
+
+    registry: StrategyRegistry
+
+    def verdict_for(self, strategy_id: str, strategy_version: str) -> CertificationVerdict | None:
+        try:
+            artifact = self.registry.get(strategy_id, strategy_version)
+        except KeyError:
+            return None
+        return artifact.verdict
+
+    def is_certified(self, strategy_id: str, strategy_version: str) -> bool:
+        try:
+            artifact = self.registry.get(strategy_id, strategy_version)
+        except KeyError:
+            # An unknown strategy is not a certified one. Returning False rather
+            # than raising keeps a typo in a playbook binding from taking the
+            # fast tier down, while still refusing to trade it.
+            return False
+        return artifact.is_playable()
+
+
+def build_playbook_router(registry: StrategyRegistry) -> PlaybookRouter:
+    """A router whose certification answers come from the real registry.
+
+    The alternative — letting a caller pass any ``CertificationOracle`` — would
+    allow a permissive stub into production, and a stub that always says yes is
+    indistinguishable from a working one until it matters. This constructor
+    takes the registry specifically so the production path has no seam.
+    """
+    return PlaybookRouter(RegistryCertificationOracle(registry))
+
+
+def publish_playbook(
+    router: PlaybookRouter,
+    artifact: StrategyArtifact,
+    *,
+    playbook_id: str,
+    version: str,
+    title: str,
+    regime: Any,
+    bounds: Any,
+    book_size_usd: float,
+    evidence: tuple[str, ...] = (),
+) -> Any:
+    """Derive and register a playbook from a certified strategy artifact.
+
+    Requires the artifact itself rather than identifiers, so the verdict — and
+    the measurements behind it — are read off the artifact rather than
+    re-looked-up or re-supplied by a caller that might hold different ones.
+    The action is derived from the retained evidence, not accepted: there is
+    no parameter for it, so no caller can publish a hand-sized position
+    through this path.
+
+    An artifact with no retained evidence is refused even when its verdict is
+    certified. The verdict says the measurements passed; without the
+    measurements themselves there is nothing to derive a size from, and
+    accepting a size from elsewhere would be the human-supplied position this
+    path exists to eliminate.
+    """
+    from kernel.playbook import build_measured_playbook
+
+    if artifact.verdict is None:
+        raise ValueError(
+            f"{artifact.ref} carries no CertificationVerdict, so there is nothing to "
+            "bind a playbook to. Certify the strategy first."
+        )
+    if artifact.evidence is None:
+        raise ValueError(
+            f"{artifact.ref} carries a verdict but no retained measurements. A "
+            "position cannot be derived from a conclusion without its premises; "
+            "record the verdict with its evidence."
+        )
+    playbook = build_measured_playbook(
+        playbook_id=playbook_id,
+        version=version,
+        title=title,
+        regime=regime,
+        bounds=bounds,
+        strategy_id=artifact.strategy_id,
+        strategy_version=artifact.version,
+        verdict=artifact.verdict,
+        evidence=artifact.evidence,
+        book_size_usd=book_size_usd,
+        sources=evidence,
+    )
+    return router.register(playbook)
 
 # ------------------------------------------------------- lifecycle definitions
 
@@ -95,6 +207,15 @@ class AIOSKernel:
     features: FeatureRegistry | None = None
     models: ModelRegistry | None = None
     experiments: ExperimentRegistry | None = None
+    #: The certification firewall. Present on the kernel rather than constructed
+    #: ad hoc so that a playbook can only be published against a verdict this
+    #: kernel holds — a router wired to a throwaway registry would certify
+    #: against nothing.
+    strategies: StrategyRegistry | None = None
+    #: The fast tier's policy selector. Reads certification live from
+    #: ``strategies``; see :class:`RegistryCertificationOracle`.
+    playbook_router: PlaybookRouter | None = None
+    certification: CertificationOracle | None = None
     _plugin_state: dict[str, str] = field(default_factory=dict)
 
     def register_plugin(self, plugin_id: str, plugin_type: str, version: str = "v1") -> None:
@@ -197,6 +318,9 @@ def create_kernel(
     features = FeatureRegistry(provenance)
     models = ModelRegistry(provenance, promotions)
     experiments = ExperimentRegistry(sm, provenance)
+    strategies = StrategyRegistry(provenance=provenance)
+    certification: CertificationOracle = RegistryCertificationOracle(strategies)
+    playbook_router = PlaybookRouter(certification)
 
     # Register standard lifecycles
     for lifecycle in (STRATEGY_LIFECYCLE, HYPOTHESIS_LIFECYCLE, EXPERIMENT_LIFECYCLE):
@@ -249,4 +373,7 @@ def create_kernel(
         features=features,
         models=models,
         experiments=experiments,
+        strategies=strategies,
+        playbook_router=playbook_router,
+        certification=certification,
     )
