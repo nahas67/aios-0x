@@ -1,0 +1,6 @@
+{
+  "name": "AIOS-0X — Autonomous Investment Command Center",
+  "description": "AI-native institutional investment operating system combining real-time capital trajectory, multi-agent debate, deterministic risk firewalls, and decision provenance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

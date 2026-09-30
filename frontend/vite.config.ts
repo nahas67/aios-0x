@@ -1,11 +1,13 @@
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// Dev: Vite serves localhost:3000 and proxies /api + /metrics to the AIOS
-// backend on :8787 (same-origin, no CORS). SSE streams pass through cleanly.
-// Prod: `npm run build` emits static assets consumed by the Python server.
+// Dev: Vite serves :3000 and proxies /api + /metrics to the AIOS backend on
+// :8787 (same-origin, no CORS). SSE streams pass through without buffering.
+// Prod: `npm run build` emits ../ui/dist, served by the Python server
+// (api/server.py resolves _UI_INDEX from ui/dist/index.html).
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   server: {
     port: 3000,
     strictPort: true,

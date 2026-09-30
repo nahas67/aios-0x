@@ -7,6 +7,12 @@
  *
  * The server resolves identity via /api/v1/session/me. The role and
  * operator_id come from the SERVER, never from the client.
+ *
+ * AUTH-OPTIONAL: API_AUTH_TOKEN is unset in the default deployment, so the
+ * server answers auth_required=false and every route serves anonymous VIEWER.
+ * resolveSession() branches on that flag and skips the login screen instead
+ * of demanding a junk token. ROLE_LEVEL is declared once here and imported
+ * by consumers (e.g. lib/control).
  */
 import { useSyncExternalStore } from "react";
 import { setAuthToken } from "../api/client";
@@ -26,6 +32,8 @@ export interface Identity {
   role: Role;
   token: string;
   authenticated: boolean;
+  /** False when the server runs open (auth_required=false): no login needed. */
+  authRequired: boolean;
 }
 
 const DEFAULTS: Identity = {
@@ -33,6 +41,7 @@ const DEFAULTS: Identity = {
   role: "VIEWER",
   token: "",
   authenticated: false,
+  authRequired: true,
 };
 
 let identity: Identity = { ...DEFAULTS };
@@ -72,6 +81,46 @@ export function useIdentity(): Identity {
   );
 }
 
+interface SessionMe {
+  operator_id?: string;
+  role?: string;
+  authenticated?: boolean;
+  auth_required?: boolean;
+}
+
+/**
+ * Resolve the session against GET /api/v1/session/me with no credentials.
+ * Open server (auth_required=false) → operate as anonymous VIEWER, no login.
+ * Locked server → stay logged out until authenticateWithToken succeeds.
+ * Any failure fails closed (authRequired=true, authenticated=false).
+ * Never clobbers an existing token session.
+ */
+export async function resolveSession(): Promise<Identity> {
+  if (getIdentity().token) return getIdentity();
+  try {
+    const res = await fetch("/api/v1/session/me");
+    if (!res.ok) {
+      setIdentity({ authenticated: false, authRequired: true });
+      return getIdentity();
+    }
+    const data = (await res.json()) as SessionMe;
+    if (data.auth_required === false) {
+      setIdentity({
+        token: "",
+        operatorId: data.operator_id || "anonymous",
+        role: "VIEWER",
+        authenticated: true,
+        authRequired: false,
+      });
+    } else {
+      setIdentity({ authenticated: false, authRequired: true });
+    }
+  } catch {
+    setIdentity({ authenticated: false, authRequired: true });
+  }
+  return getIdentity();
+}
+
 /**
  * Authenticate: call /api/v1/session/me to get server-resolved identity.
  * Returns true if authentication succeeded.
@@ -87,12 +136,13 @@ export async function authenticateWithToken(token: string): Promise<boolean> {
       setIdentity({ token: "", authenticated: false, operatorId: "", role: "VIEWER" });
       return false;
     }
-    const data = await res.json();
+    const data = (await res.json()) as SessionMe;
     setIdentity({
       token,
       authenticated: true,
       operatorId: data.operator_id || "",
       role: (data.role || "VIEWER") as Role,
+      authRequired: true,
     });
     return true;
   } catch {

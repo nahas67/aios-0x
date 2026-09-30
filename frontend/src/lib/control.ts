@@ -1,20 +1,17 @@
 /**
  * Control-plane action catalog + runner. The backend remains the sole RBAC
- * authority; these metadata exist for UX (confirmations, role hints, danger
+ * authority; this metadata exists for UX (confirmations, role hints, danger
  * styling). Every execution goes through POST /api/v1/control/{action} and is
  * audited server-side as a CONTROL_ACTION event.
+ *
+ * Rebuilt from the real ControlAction enum in core/control_plane.py (19
+ * actions, including resolve_reconciliation_finding). minRole mirrors the
+ * ROLE_MATRIX tiers: OPERATOR set, RISK_ADMIN additions, sole ADMIN action.
+ * ROLE_LEVEL is declared once in stores/identity.
  */
-import { controlApi, type ControlBody } from "../api/endpoints";
+import { controlApi, type ControlBody } from "../api/backend";
 import type { ControlResult } from "../api/types";
 import { getIdentity, type Role } from "../stores/identity";
-import { pushToast } from "../stores/toasts";
-
-export const ROLE_LEVEL: Record<Role, number> = {
-  VIEWER: 0,
-  OPERATOR: 1,
-  RISK_ADMIN: 2,
-  ADMIN: 3,
-};
 
 export interface ActionMeta {
   label: string;
@@ -135,6 +132,13 @@ export const ACTIONS: Record<string, ActionMeta> = {
     confirm: "Apply",
     minRole: "RISK_ADMIN",
   },
+  resolve_reconciliation_finding: {
+    label: "Resolve reconciliation finding",
+    describe:
+      "Clears a non-critical reconciliation finding after operational review. CRITICAL findings additionally require a lockout reset.",
+    confirm: "Resolve finding",
+    minRole: "OPERATOR",
+  },
 };
 
 export class ControlFailure extends Error {
@@ -145,12 +149,15 @@ export class ControlFailure extends Error {
   }
 }
 
-/** Execute one audited control action as the current operator identity. */
+/**
+ * Execute one audited control action as the current operator identity.
+ * The server resolves identity from the bearer token and is the sole RBAC
+ * authority; a 403 surfaces as kind "denied". Callers own user feedback.
+ */
 export async function runControl(
   action: string,
   params: Record<string, string | number> = {},
 ): Promise<ControlResult> {
-  const meta = ACTIONS[action];
   const identity = getIdentity();
   const body: ControlBody = {
     operator_id: identity.operatorId || "console",
@@ -158,32 +165,12 @@ export async function runControl(
     params,
   };
   try {
-    const result = await controlApi.execute(action, body);
-    pushToast(
-      "ok",
-      `${meta?.label ?? action} — OK (audited)`,
-      summarizeResult(result.result),
-    );
-    return result;
+    return await controlApi.execute(action, body);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("403") || msg.toLowerCase().includes("may not perform")) {
-      pushToast(
-        "bad",
-        "Action denied",
-        `Role ${identity.role} is not authorized for ${meta?.label ?? action}. The attempt is recorded in the audit trail.`,
-      );
       throw new ControlFailure(msg, "denied");
     }
-    pushToast("bad", `${meta?.label ?? action} failed`, msg);
     throw new ControlFailure(msg, "failed");
   }
-}
-
-function summarizeResult(result: Record<string, unknown> | undefined): string | undefined {
-  if (!result) return undefined;
-  return Object.entries(result)
-    .slice(0, 3)
-    .map(([k, v]) => `${k}=${typeof v === "object" ? "…" : String(v)}`)
-    .join("  ");
 }

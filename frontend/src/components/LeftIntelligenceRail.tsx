@@ -1,0 +1,175 @@
+import React, { useState } from 'react';
+import { 
+  LayoutDashboard, 
+  PieChart, 
+  TrendingUp, 
+  CandlestickChart,
+  BrainCircuit, 
+  Users2, 
+  GitFork, 
+  Zap, 
+  ShieldAlert, 
+  Binary, 
+  Network, 
+  ReceiptText, 
+  Landmark, 
+  FileCheck2, 
+  Server, 
+  Palette,
+  Settings as SettingsIcon,
+  ChevronRight,
+  ChevronLeft
+} from 'lucide-react';
+import { WorkspaceTab } from '../types';
+
+interface LeftIntelligenceRailProps {
+  activeTab: WorkspaceTab;
+  onSelectTab: (tab: WorkspaceTab) => void;
+  pendingApprovalsCount?: number;
+  activeRiskWarnings?: number;
+}
+
+interface NavItemConfig {
+  id: WorkspaceTab;
+  label: string;
+  icon: React.ElementType;
+  badge?: string | number;
+  badgeColor?: string;
+  category?: string;
+}
+
+export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
+  activeTab,
+  onSelectTab,
+  pendingApprovalsCount = 1,
+  activeRiskWarnings = 0,
+}) => {
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
+
+  const navItems: NavItemConfig[] = [
+    { id: 'overview', label: 'Command Canvas', icon: LayoutDashboard },
+    { id: 'trading', label: 'Live Trading', icon: CandlestickChart, badge: 'PRO', badgeColor: 'cyan' },
+    { id: 'portfolio', label: 'Portfolio', icon: PieChart },
+    { id: 'markets', label: 'Markets', icon: TrendingUp },
+    { id: 'research', label: 'Research', icon: BrainCircuit, badge: '5' },
+    { id: 'agents', label: 'Agents', icon: Users2, badge: '8', badgeColor: 'cyan' },
+    { id: 'strategies', label: 'Strategies', icon: GitFork },
+    { id: 'execution', label: 'Execution', icon: Zap },
+    { 
+      id: 'risk', 
+      label: 'Risk', 
+      icon: ShieldAlert, 
+      badge: activeRiskWarnings > 0 ? activeRiskWarnings : undefined, 
+      badgeColor: 'amber' 
+    },
+    { id: 'models', label: 'Models', icon: Binary },
+    { id: 'provenance', label: 'Provenance', icon: Network },
+    { 
+      id: 'accounting', 
+      label: 'Accounting', 
+      icon: ReceiptText, 
+      badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined, 
+      badgeColor: 'violet' 
+    },
+    { id: 'financial', label: 'Financial Kernel', icon: Landmark },
+    { id: 'audit', label: 'Audit', icon: FileCheck2 },
+    { id: 'system', label: 'System', icon: Server, badge: '38/38' },
+    { id: 'design_system', label: 'Design System', icon: Palette },
+    { id: 'settings', label: 'Settings', icon: SettingsIcon, badge: 'Config' }
+  ];
+
+  return (
+    <aside
+      onMouseEnter={() => setIsExpanded(true)}
+      onMouseLeave={() => setIsExpanded(false)}
+      className={`fixed left-0 top-11 bottom-0 z-30 bg-[#090a0f] border-r border-white/[0.07] flex flex-col justify-between transition-all duration-200 select-none ${
+        isExpanded ? 'w-48 shadow-[8px_0_24px_rgba(0,0,0,0.6)]' : 'w-14'
+      }`}
+    >
+      {/* Top Nav List */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden py-2.5 px-1.5 space-y-1">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+
+          return (
+            <button
+              key={item.id}
+              onClick={() => onSelectTab(item.id)}
+              className={`group w-full flex items-center gap-2.5 px-2 py-2 rounded transition-all text-left relative ${
+                isActive
+                  ? 'bg-cyan-950/40 text-cyan-300 font-medium border border-cyan-700/40 shadow-[0_0_12px_rgba(0,240,255,0.12)]'
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.04] border border-transparent'
+              }`}
+              title={!isExpanded ? item.label : undefined}
+            >
+              {/* Active bar */}
+              {isActive && (
+                <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-cyan-400 rounded-r shadow-[0_0_6px_#00f0ff]" />
+              )}
+
+              <div className="flex items-center justify-center shrink-0 w-6 h-6">
+                <Icon
+                  className={`w-4 h-4 transition-transform group-hover:scale-105 ${
+                    isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-slate-200'
+                  }`}
+                />
+              </div>
+
+              {/* Label (Visible on hover expansion) */}
+              <span
+                className={`text-[12px] whitespace-nowrap overflow-hidden transition-all duration-150 ${
+                  isExpanded ? 'opacity-100 translate-x-0 w-auto' : 'opacity-0 -translate-x-2 w-0 hidden'
+                }`}
+              >
+                {item.label}
+              </span>
+
+              {/* Badges */}
+              {item.badge && (
+                <span
+                  className={`ml-auto text-[9px] font-mono px-1 rounded border leading-tight ${
+                    item.badgeColor === 'amber'
+                      ? 'bg-amber-950/80 text-amber-300 border-amber-800/60'
+                      : item.badgeColor === 'cyan'
+                      ? 'bg-cyan-950/80 text-cyan-300 border-cyan-800/60'
+                      : item.badgeColor === 'violet'
+                      ? 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60'
+                      : 'bg-white/[0.04] text-slate-400 border-white/[0.06]'
+                  } ${!isExpanded ? 'absolute top-1 right-1 px-0.5 text-[8px]' : ''}`}
+                >
+                  {item.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Rail Footer Toggle */}
+      <div className="p-2 border-t border-white/[0.06] text-slate-500 flex items-center justify-between text-[11px]">
+        {isExpanded ? (
+          <div className="flex items-center justify-between w-full px-1">
+            <span className="font-mono text-[10px] text-slate-500 uppercase tracking-wider">EXPANDED</span>
+            <button 
+              onClick={() => setIsExpanded(false)}
+              className="text-slate-400 hover:text-slate-200"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="w-full flex justify-center py-1">
+            <button 
+              onClick={() => setIsExpanded(true)}
+              className="text-slate-500 hover:text-slate-300"
+              title="Expand rail"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+};
