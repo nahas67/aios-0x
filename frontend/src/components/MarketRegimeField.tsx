@@ -28,8 +28,11 @@ export const MarketRegimeField: React.FC<MarketRegimeFieldProps> = ({
     }
   };
 
-  // Micro SVG Sparkline
+  // Micro SVG Sparkline — empty when the backend publishes no price series.
   const renderSparkline = (points: number[], isPositive: boolean) => {
+    if (points.length < 2) {
+      return <span className="text-[9px] font-mono text-slate-600">NO PRICE FEED</span>;
+    }
     const min = Math.min(...points);
     const max = Math.max(...points);
     const range = max - min || 1;
@@ -73,7 +76,7 @@ export const MarketRegimeField: React.FC<MarketRegimeFieldProps> = ({
         </div>
 
         <div className="text-[10px] font-mono text-slate-500">
-          GLOBAL REGIME: <span className="text-cyan-300 font-bold">EXPANSIONARY MOMENTUM</span>
+          SOURCE: <span className="text-cyan-300 font-bold">/api/v1/regimes (LABELS ONLY)</span>
         </div>
       </div>
 
@@ -99,7 +102,9 @@ export const MarketRegimeField: React.FC<MarketRegimeFieldProps> = ({
                 </div>
 
                 <div className="text-[11px] font-mono-num text-slate-300 mt-0.5">
-                  ${inst.price >= 100 ? inst.price.toLocaleString(undefined, { minimumFractionDigits: 2 }) : inst.price.toFixed(2)}
+                  {inst.price > 0
+                    ? `$${inst.price >= 100 ? inst.price.toLocaleString(undefined, { minimumFractionDigits: 2 }) : inst.price.toFixed(2)}`
+                    : <span className="text-slate-600">— no price feed</span>}
                 </div>
               </div>
 
@@ -135,8 +140,8 @@ export const MarketRegimeField: React.FC<MarketRegimeFieldProps> = ({
 
       {/* Footer */}
       <div className="pt-2 border-t border-white/[0.06] text-[10px] font-mono text-slate-500 flex items-center justify-between">
-        <span>TIMESCALEDB CONTINUOUS DOWNSAMPLING (5m → 1h → 1d)</span>
-        <span className="text-slate-400">7/7 INSTRUMENTS SYNCHRONIZED</span>
+        <span>SOURCE: /api/v1/regimes</span>
+        <span className="text-slate-400">{instruments.length} INSTRUMENTS LABELED</span>
       </div>
     </div>
   );

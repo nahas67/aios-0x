@@ -1,46 +1,35 @@
 import React, { useState } from 'react';
-import { Position, AllocationSegment } from '../../types';
-import { 
-  PieChart, 
-  TrendingUp, 
-   
-   
-   
-   
-   
-  Search, 
-  
-  
-  
-  
-  
-  Flame,
+import { Position } from '../../types';
+import {
+  PieChart,
+  TrendingUp,
+  Search,
   Plus,
-  
   X
 } from 'lucide-react';
 import { CapitalAllocationMap } from '../CapitalAllocationMap';
 import { PortfolioConcentrationHeatmap } from '../PortfolioConcentrationHeatmap';
+import { portfolioApi } from '../../api/backend';
+import { useApi } from '../../hooks/useApi';
+import { adaptPositions } from '../../adapters/positions';
+import { adaptPortfolio } from '../../adapters/portfolio';
+import { Unavailable } from '../Unavailable';
 
 interface PortfolioWorkspaceProps {
-  positions: Position[];
-  allocationSegments: AllocationSegment[];
   onSelectPosition: (position: Position) => void;
-  onAddPosition?: (position: Position) => void;
 }
 
+/**
+ * Portfolio workspace wired to GET /api/v1/positions + /api/v1/portfolio.
+ * The client-computed shock-preset simulator is deleted: no stress engine
+ * exists server-side, so any number it showed would be invented.
+ */
 export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
-  positions,
-  allocationSegments,
   onSelectPosition,
-  onAddPosition,
 }) => {
   const [filterClass, setFilterClass] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-
-  // Stress Shock Simulation State
-  const [activeShockPreset, setActiveShockPreset] = useState<string>('NONE');
-  const [customShockPct, setCustomShockPct] = useState<number>(0);
+  const [localPositions, setLocalPositions] = useState<Position[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
 
   // New Position Form State
@@ -51,59 +40,43 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
   const [newPrice, setNewPrice] = useState<string>('148.20');
   const [newStrategy, setNewStrategy] = useState<string>('Crypto Momentum & Funding Arbitrage');
 
+  const positionsQuery = useApi(() => portfolioApi.positions());
+  const portfolioQuery = useApi(() => portfolioApi.portfolio());
+
+  if (positionsQuery.loading || portfolioQuery.loading) {
+    return <div className="text-xs text-slate-400 font-mono p-8">Loading portfolio from /api/v1/positions + /portfolio…</div>;
+  }
+  if (positionsQuery.error || !positionsQuery.data) {
+    return <Unavailable title="Portfolio unavailable" reason={positionsQuery.error ?? "no positions payload"} />;
+  }
+  if (portfolioQuery.error || !portfolioQuery.data) {
+    return <Unavailable title="Portfolio unavailable" reason={portfolioQuery.error ?? "no portfolio payload"} />;
+  }
+
+  const adaptedPositions = adaptPositions(positionsQuery.data);
+  if ("unavailable" in adaptedPositions) {
+    return <Unavailable title="Portfolio unavailable" reason={adaptedPositions.unavailable} />;
+  }
+  const adaptedAllocation = adaptPortfolio(portfolioQuery.data);
+  if ("unavailable" in adaptedAllocation) {
+    return <Unavailable title="Portfolio unavailable" reason={adaptedAllocation.unavailable} />;
+  }
+
+  const positions = [...localPositions, ...adaptedPositions];
   const totalNotional = positions.reduce((acc, p) => acc + p.notionalUsd, 0);
   const totalUnrealizedPnl = positions.reduce((acc, p) => acc + p.unrealizedPnlUsd, 0);
 
-  const shockPresets = [
-    { id: 'NONE', label: 'Baseline (0% Shock)', cryptoPct: 0, equityPct: 0, ratesBps: 0 },
-    { id: 'CRYPTO_CRASH', label: 'Crypto Shock (-15%)', cryptoPct: -15, equityPct: -2, ratesBps: 10 },
-    { id: 'TECH_SELLOFF', label: 'Tech Selloff (-8%)', cryptoPct: -6, equityPct: -8, ratesBps: -15 },
-    { id: 'STAGFLATION', label: 'Stagflation (+300bps, -5% Eq)', cryptoPct: -10, equityPct: -5, ratesBps: 300 },
-    { id: 'LIQUIDITY_SURGE', label: 'Risk-On Surge (+12% Cr, +6% Eq)', cryptoPct: 12, equityPct: 6, ratesBps: -25 },
-  ];
-
-  const currentShock = shockPresets.find(s => s.id === activeShockPreset) || shockPresets[0];
-
-  // Calculate estimated shock impact
-  const calculateShockImpact = () => {
-    if (activeShockPreset === 'NONE' && customShockPct === 0) {
-      return { pnlDeltaUsd: 0, pnlDeltaPct: 0, newVarUsd: 1220000 };
-    }
-
-    let deltaUsd = 0;
-    positions.forEach(p => {
-      let pct = customShockPct;
-      if (activeShockPreset !== 'NONE') {
-        if (p.assetClass === 'CRYPTO') pct = currentShock.cryptoPct;
-        else if (p.assetClass === 'EQUITY') pct = currentShock.equityPct;
-        else if (p.assetClass === 'COMMODITY') pct = currentShock.cryptoPct * 0.4;
-        else pct = -(currentShock.ratesBps / 100) * 1.5;
-      }
-      const positionDelta = p.notionalUsd * (pct / 100) * (p.side === 'LONG' ? 1 : -1);
-      deltaUsd += positionDelta;
-    });
-
-    const pnlDeltaPct = (deltaUsd / totalNotional) * 100;
-    const newVarUsd = Math.round(1220000 * (1 + Math.abs(pnlDeltaPct) / 10));
-
-    return { pnlDeltaUsd: Math.round(deltaUsd), pnlDeltaPct, newVarUsd };
-  };
-
-  const shockImpact = calculateShockImpact();
-
   const handleAddNewPosition = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!onAddPosition) return;
-
     const size = parseFloat(newSize) || 0;
     const price = parseFloat(newPrice) || 0;
     const notional = size * price;
 
     const newPos: Position = {
-      id: `pos-${Date.now().toString().slice(-4)}`,
+      id: `local-${Date.now().toString().slice(-4)}`,
       symbol: newSymbol,
-      name: `${newSymbol} Asset Position`,
-      assetClass: newClass as any,
+      name: `${newSymbol} Asset Position (local only — not sent to backend)`,
+      assetClass: newClass as unknown as Position['assetClass'],
       side: newSide,
       size: size,
       entryPrice: price,
@@ -111,12 +84,12 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
       notionalUsd: notional,
       unrealizedPnlUsd: 0,
       unrealizedPnlPct: 0,
-      exposurePct: (notional / (totalNotional + notional)) * 100,
+      exposurePct: 0,
       strategy: newStrategy,
-      originatingAgent: 'Portfolio Allocator Node',
+      originatingAgent: 'Local operator entry',
     };
 
-    onAddPosition(newPos);
+    setLocalPositions(prev => [newPos, ...prev]);
     setIsAddModalOpen(false);
   };
 
@@ -143,7 +116,7 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
             </span>
           </div>
           <div className="text-xs text-slate-400 mt-0.5">
-            Active Holdings: <strong className="text-white">{positions.length} Positions</strong> • Fractional Kelly Budgeting (0.50x Max)
+            Active Holdings: <strong className="text-white">{positions.length} Positions</strong> • NAV ${(portfolioQuery.data.nav / 1000000).toFixed(2)}M • Source: /api/v1/portfolio
           </div>
         </div>
 
@@ -154,78 +127,33 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
           </div>
           <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded">
             <div className="text-[10px] text-slate-400">NET UNREALIZED P&amp;L</div>
-            <div className="text-sm font-mono-num font-bold text-emerald-400 flex items-center gap-1">
+            <div className={`text-sm font-mono-num font-bold flex items-center gap-1 ${totalUnrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               <TrendingUp className="w-3.5 h-3.5" />
-              +${(totalUnrealizedPnl / 1000).toFixed(1)}k (+6.53%)
+              {totalUnrealizedPnl >= 0 ? '+' : ''}${(totalUnrealizedPnl / 1000).toFixed(1)}k
             </div>
           </div>
           <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded">
-            <div className="text-[10px] text-slate-400">PORTFOLIO VAR (99% 1D)</div>
-            <div className="text-sm font-mono-num font-bold text-amber-300">$1.22M (0.84%)</div>
+            <div className="text-[10px] text-slate-400">REALIZED P&amp;L (CLOSED)</div>
+            <div className="text-sm font-mono-num font-bold text-slate-200">${portfolioQuery.data.realized_pnl.toLocaleString()}</div>
           </div>
-          {onAddPosition && (
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="px-3 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs flex items-center gap-1 shadow-[0_0_12px_rgba(0,240,255,0.4)]"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>ADD HOLDING</span>
-            </button>
-          )}
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="px-3 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs flex items-center gap-1 shadow-[0_0_12px_rgba(0,240,255,0.4)]"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>ADD HOLDING</span>
+          </button>
         </div>
       </div>
 
       {/* Allocation Map Engine */}
-      <CapitalAllocationMap segments={allocationSegments} />
+      <CapitalAllocationMap segments={adaptedAllocation} />
 
       {/* Global Multi-Asset Concentration & Geographic Regime Heatmap */}
-      <PortfolioConcentrationHeatmap 
-        positions={positions} 
-        onSelectPosition={onSelectPosition} 
+      <PortfolioConcentrationHeatmap
+        positions={positions}
+        onSelectPosition={onSelectPosition}
       />
-
-      {/* NEW FEATURE: Instant Macro Shock & Scenario Stress Tester */}
-      <div className="bg-[#0d0f17] border border-cyan-500/30 rounded-md p-4 shadow-2xl space-y-3">
-        <div className="flex flex-wrap items-center justify-between pb-2 border-b border-white/[0.06] gap-2">
-          <div className="flex items-center gap-2">
-            <Flame className="w-4 h-4 text-amber-400" />
-            <h3 className="text-xs font-bold uppercase text-white tracking-wider">
-              REAL-TIME PORTFOLIO STRESS SHOCK &amp; SCENARIO SIMULATOR
-            </h3>
-          </div>
-          <div className="flex items-center gap-3 text-xs">
-            <span className="text-slate-400">ESTIMATED SHOCK IMPACT:</span>
-            <span className={`font-bold font-mono text-sm ${
-              shockImpact.pnlDeltaUsd >= 0 ? 'text-emerald-400' : 'text-rose-400'
-            }`}>
-              {shockImpact.pnlDeltaUsd >= 0 ? '+' : ''}${shockImpact.pnlDeltaUsd.toLocaleString()} ({shockImpact.pnlDeltaPct >= 0 ? '+' : ''}{shockImpact.pnlDeltaPct.toFixed(2)}%)
-            </span>
-          </div>
-        </div>
-
-        {/* Presets Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-          {shockPresets.map((preset) => {
-            const isSelected = activeShockPreset === preset.id;
-            return (
-              <button
-                key={preset.id}
-                onClick={() => {
-                  setActiveShockPreset(preset.id);
-                  setCustomShockPct(0);
-                }}
-                className={`p-2 rounded text-left transition-all border text-xs ${
-                  isSelected
-                    ? 'bg-cyan-950/70 border-cyan-500 text-cyan-200 font-bold shadow-[0_0_10px_rgba(0,240,255,0.2)]'
-                    : 'bg-white/[0.02] border-white/[0.06] text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <div className="truncate">{preset.label}</div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       {/* Positions Table Filter Bar */}
       <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-3.5 shadow-2xl">
@@ -274,7 +202,6 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
                 <th className="py-2 px-2 text-right">NOTIONAL</th>
                 <th className="py-2 px-2 text-right">UNREALIZED P&amp;L</th>
                 <th className="py-2 px-2 text-right">WEIGHT</th>
-                <th className="py-2 px-2 text-right">RISK CONTRIB</th>
                 <th className="py-2 px-2">STRATEGY</th>
                 <th className="py-2 px-2">AGENT</th>
                 <th className="py-2 px-2 text-center">ACTION</th>
@@ -296,8 +223,8 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
                     <td className="py-2.5 px-2 text-slate-400 text-[10px]">{pos.assetClass}</td>
                     <td className="py-2.5 px-2">
                       <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                        pos.side === 'LONG' 
-                          ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/50' 
+                        pos.side === 'LONG'
+                          ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/50'
                           : 'bg-rose-950/40 text-rose-400 border border-rose-800/50'
                       }`}>
                         {pos.side}
@@ -321,14 +248,11 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
                     <td className="py-2.5 px-2 text-right font-mono-num text-slate-300">
                       {(pos.exposurePct || 0).toFixed(2)}%
                     </td>
-                    <td className="py-2.5 px-2 text-right font-mono-num text-amber-300">
-                      ${((pos.varContributionUsd || 100000) / 1000).toFixed(0)}k
-                    </td>
                     <td className="py-2.5 px-2 text-slate-300 text-[11px] truncate max-w-[120px]">
-                      {pos.strategy || 'Systematic Core'}
+                      {pos.strategy || '—'}
                     </td>
                     <td className="py-2.5 px-2 text-cyan-400 text-[11px] truncate max-w-[100px]">
-                      {pos.originatingAgent || 'ALLOCATOR-NODE'}
+                      {pos.originatingAgent || '—'}
                     </td>
                     <td className="py-2.5 px-2 text-center">
                       <span className="text-[10px] text-cyan-400 px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800/60 group-hover:bg-cyan-900">
@@ -341,34 +265,11 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
             </tbody>
           </table>
         </div>
-
-        {/* Factor Exposure Matrix */}
-        <div className="mt-4 pt-3 border-t border-white/[0.06] grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="bg-black/30 p-2 rounded border border-white/[0.04] text-center">
-            <div className="text-[9px] text-slate-500 uppercase">MOMENTUM EXPOSURE</div>
-            <div className="text-sm font-mono-num font-bold text-emerald-400">+1.42 σ</div>
+        {filteredPositions.length === 0 && (
+          <div className="p-6 text-center text-slate-500 text-xs">
+            No open positions. The paper engine holds no positions yet.
           </div>
-          <div className="bg-black/30 p-2 rounded border border-white/[0.04] text-center">
-            <div className="text-[9px] text-slate-500 uppercase">VALUE TILT</div>
-            <div className="text-sm font-mono-num font-bold text-slate-300">-0.18 σ</div>
-          </div>
-          <div className="bg-black/30 p-2 rounded border border-white/[0.04] text-center">
-            <div className="text-[9px] text-slate-500 uppercase">QUALITY SPREAD</div>
-            <div className="text-sm font-mono-num font-bold text-cyan-300">+0.88 σ</div>
-          </div>
-          <div className="bg-black/30 p-2 rounded border border-white/[0.04] text-center">
-            <div className="text-[9px] text-slate-500 uppercase">GROWTH BETA</div>
-            <div className="text-sm font-mono-num font-bold text-emerald-300">+1.12 σ</div>
-          </div>
-          <div className="bg-black/30 p-2 rounded border border-white/[0.04] text-center">
-            <div className="text-[9px] text-slate-500 uppercase">VOLATILITY SENSITIVITY</div>
-            <div className="text-sm font-mono-num font-bold text-amber-300">-0.34 σ</div>
-          </div>
-          <div className="bg-black/30 p-2 rounded border border-white/[0.04] text-center">
-            <div className="text-[9px] text-slate-500 uppercase">LIQUIDITY ABSORPTION</div>
-            <div className="text-sm font-mono-num font-bold text-slate-200">HIGH</div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Add Holding Modal */}
@@ -406,7 +307,7 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
                   <label className="text-[10px] text-slate-400 block mb-1">Asset Class</label>
                   <select
                     value={newClass}
-                    onChange={(e) => setNewClass(e.target.value as any)}
+                    onChange={(e) => setNewClass(e.target.value as typeof newClass)}
                     className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono"
                   >
                     <option value="POLYMARKET">POLYMARKET PREDICTION</option>
@@ -425,7 +326,7 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
                   <label className="text-[10px] text-slate-400 block mb-1">Side</label>
                   <select
                     value={newSide}
-                    onChange={(e) => setNewSide(e.target.value as any)}
+                    onChange={(e) => setNewSide(e.target.value as typeof newSide)}
                     className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono"
                   >
                     <option value="LONG">LONG</option>

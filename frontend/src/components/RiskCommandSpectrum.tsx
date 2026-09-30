@@ -1,22 +1,23 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { RiskSpectrum } from '../types';
-import { ShieldAlert,      Zap } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 
 interface RiskCommandSpectrumProps {
   risk: RiskSpectrum;
+  /** Spectrum fields the backend does not compute; rendered as "—". */
+  notComputed?: string[];
   onOpenRiskDrawer?: () => void;
   className?: string;
 }
 
 export const RiskCommandSpectrum: React.FC<RiskCommandSpectrumProps> = ({
   risk,
+  notComputed = [],
   onOpenRiskDrawer,
   className = '',
 }) => {
-  const [stressDelta, setStressDelta] = useState<number>(0);
-
-  // Compute stressed values if simulator slider is engaged
-  const effectiveDd = Math.max(0, risk.currentDrawdownPct + stressDelta);
+  const unknown = (field: string) => notComputed.includes(field);
+  const effectiveDd = Math.max(0, risk.currentDrawdownPct);
 
   const getStatusLevel = (dd: number) => {
     if (dd >= risk.emergencyHaltPct) return { text: 'EMERGENCY HALT (KILL SWITCH)', color: 'text-red-400 bg-red-950/80 border-red-700' };
@@ -117,23 +118,23 @@ export const RiskCommandSpectrum: React.FC<RiskCommandSpectrumProps> = ({
         {/* Milestone Threshold Labels below bar */}
         <div className="relative w-full h-4 mt-1 text-[10px] font-mono text-slate-500">
           <span className="absolute left-0">0.0%</span>
-          <span 
+          <span
             className="absolute -translate-x-1/2 text-amber-400"
             style={{ left: `${warningPosPct}%` }}
           >
-            1.50% Warn
+            {risk.warningThresholdPct.toFixed(2)}% Warn
           </span>
-          <span 
+          <span
             className="absolute -translate-x-1/2 text-orange-400"
             style={{ left: `${reductionPosPct}%` }}
           >
-            2.50% Reduce
+            {risk.reductionThresholdPct.toFixed(2)}% Reduce
           </span>
-          <span 
+          <span
             className="absolute -translate-x-1/2 text-red-400 font-semibold"
             style={{ left: `${haltPosPct}%` }}
           >
-            3.00% Halt
+            {risk.emergencyHaltPct.toFixed(2)}% Halt
           </span>
         </div>
       </div>
@@ -148,9 +149,11 @@ export const RiskCommandSpectrum: React.FC<RiskCommandSpectrumProps> = ({
           </div>
           <div className="mt-1 flex items-baseline justify-between">
             <span className="text-sm font-mono-num font-bold text-white">
-              {risk.positionConcentrationPct.toFixed(1)}%
+              {unknown('positionConcentrationPct') ? '—' : `${risk.positionConcentrationPct.toFixed(1)}%`}
             </span>
-            <span className="text-[10px] font-mono text-emerald-400">PASSED</span>
+            <span className={`text-[10px] font-mono ${unknown('positionConcentrationPct') ? 'text-slate-500' : 'text-emerald-400'}`}>
+              {unknown('positionConcentrationPct') ? 'NOT COMPUTED' : 'PASSED'}
+            </span>
           </div>
           <div className="w-full h-1 bg-black/40 rounded-full mt-1 overflow-hidden">
             <div 
@@ -188,9 +191,11 @@ export const RiskCommandSpectrum: React.FC<RiskCommandSpectrumProps> = ({
           </div>
           <div className="mt-1 flex items-baseline justify-between">
             <span className="text-sm font-mono-num font-bold text-white">
-              {risk.correlationExposure.toFixed(2)}
+              {unknown('correlationExposure') ? '—' : risk.correlationExposure.toFixed(2)}
             </span>
-            <span className="text-[10px] font-mono text-emerald-400">PASSED</span>
+            <span className={`text-[10px] font-mono ${unknown('correlationExposure') ? 'text-slate-500' : 'text-emerald-400'}`}>
+              {unknown('correlationExposure') ? 'NOT COMPUTED' : 'PASSED'}
+            </span>
           </div>
           <div className="w-full h-1 bg-black/40 rounded-full mt-1 overflow-hidden">
             <div 
@@ -201,36 +206,6 @@ export const RiskCommandSpectrum: React.FC<RiskCommandSpectrumProps> = ({
         </div>
       </div>
 
-      {/* Interactive Stress-Test Simulator Strip */}
-      <div className="mt-2.5 pt-2 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-mono bg-black/20 p-2 rounded">
-        <div className="flex items-center gap-2">
-          <Zap className="w-3.5 h-3.5 text-amber-400" />
-          <span className="text-slate-400">STRESS-TEST SHOCK SIMULATOR:</span>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <input
-            type="range"
-            min="0"
-            max="2.5"
-            step="0.1"
-            value={stressDelta}
-            onChange={(e) => setStressDelta(parseFloat(e.target.value))}
-            className="w-32 accent-amber-400 cursor-pointer"
-          />
-          <span className="text-amber-300 font-mono-num w-16 text-right">
-            +{stressDelta.toFixed(1)}% DD
-          </span>
-          {stressDelta > 0 && (
-            <button
-              onClick={() => setStressDelta(0)}
-              className="text-[10px] text-slate-400 hover:text-white px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.08]"
-            >
-              RESET
-            </button>
-          )}
-        </div>
-      </div>
     </div>
   );
 };

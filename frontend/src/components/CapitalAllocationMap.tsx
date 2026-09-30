@@ -71,7 +71,7 @@ export const CapitalAllocationMap: React.FC<CapitalAllocationMapProps> = ({
         </div>
 
         <div className="text-[11px] font-mono text-slate-400">
-          TOTAL EXPOSURE: <span className="text-cyan-300 font-bold">100.0%</span>
+          TOTAL EXPOSURE: <span className="text-cyan-300 font-bold">{segments.reduce((acc, s) => acc + s.currentExposurePct, 0).toFixed(1)}%</span>
         </div>
       </div>
 

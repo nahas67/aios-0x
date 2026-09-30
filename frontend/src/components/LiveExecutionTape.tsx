@@ -120,8 +120,8 @@ export const LiveExecutionTape: React.FC<LiveExecutionTapeProps> = ({
 
       {/* Footer Tape Stats */}
       <div className="pt-2 border-t border-white/[0.06] text-[10px] font-mono text-slate-500 flex items-center justify-between">
-        <span>AVG INTRADAY SLIPPAGE: <strong className="text-cyan-300">0.78 bps</strong> (BENCHMARK &lt; 2.5 bps)</span>
-        <span className="text-emerald-400">STATUS: ZERO REJECTIONS</span>
+        <span>{orders.length} ORDERS • SOURCE: /api/v1/orders</span>
+        <span className="text-slate-400">SLIPPAGE: NOT REPORTED BY BACKEND</span>
       </div>
     </div>
   );

@@ -59,10 +59,10 @@ export const CapitalTrajectoryChart: React.FC<CapitalTrajectoryChartProps> = ({
   const getY = (nav: number) => padding.top + chartHeight - ((nav - minNav) / navRange) * chartHeight;
 
   // Benchmark scale (normalized to start with NAV)
-  const firstNav = data[0]?.nav || 142450000;
-  const firstBm = data[0]?.benchmark || 100;
+  const firstNav = data[0]?.nav ?? 0;
+  const firstBm = data[0]?.benchmark ?? 0;
   const getBenchmarkY = (bm: number) => {
-    const scaledNav = firstNav * (bm / firstBm);
+    const scaledNav = firstBm !== 0 ? firstNav * (bm / firstBm) : firstNav;
     return getY(scaledNav);
   };
 
@@ -74,11 +74,12 @@ export const CapitalTrajectoryChart: React.FC<CapitalTrajectoryChartProps> = ({
   const bmPoints = data.map((d, i) => `${getX(i)},${getBenchmarkY(d.benchmark)}`);
   const bmPath = `M ${bmPoints.join(' L ')}`;
 
-  const currentNav = data[data.length - 1]?.nav || 144280000;
-  const currentPnl = data[data.length - 1]?.intradayPnl || 1830000;
-  const pnlPct = ((currentPnl / (currentNav - currentPnl)) * 100).toFixed(2);
-  const currentDd = data[data.length - 1]?.drawdownPct || 0.02;
-  const currentUtil = data[data.length - 1]?.capitalUtilizationPct || 72.1;
+  const currentNav = data[data.length - 1]?.nav ?? 0;
+  const currentPnl = data[data.length - 1]?.intradayPnl ?? 0;
+  const pnlDenom = currentNav - currentPnl;
+  const pnlPct = pnlDenom !== 0 ? ((currentPnl / pnlDenom) * 100).toFixed(2) : "0.00";
+  const currentDd = data[data.length - 1]?.drawdownPct ?? 0;
+  const currentUtil = data[data.length - 1]?.capitalUtilizationPct ?? 0;
 
   const getEventIcon = (type: TimelineEventType) => {
     switch (type) {

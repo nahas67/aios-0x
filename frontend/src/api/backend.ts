@@ -138,11 +138,19 @@ export const modelsApi = {
   evaluations: () => http.get<{ evaluations: EvaluationRecord[] }>(`${v1}/evaluations`),
 };
 
+export interface AuditVerify {
+  valid: boolean;
+  blocks_checked: number;
+  head_hash: string;
+  breaks: { seq: number; reason: string }[];
+}
+
 export const auditApi = {
   audit: (query = "", limit = 50) =>
     http.get<{ audit: AuditRow[] }>(
       `${v1}/audit?limit=${limit}${query ? `&q=${encodeURIComponent(query)}` : ""}`,
     ),
+  verify: () => http.get<AuditVerify>(`${v1}/audit/verify`),
 };
 
 export const settingsApi = {

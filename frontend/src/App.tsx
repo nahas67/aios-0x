@@ -10,16 +10,10 @@ import {
   ExecutionOrder,
   SystemSettings
 } from './types';
-import { 
-  mockTrajectoryData, 
-  mockIntelligenceItems, 
-  mockAllocationSegments, 
-  mockRiskSpectrum, 
-  mockAgents, 
-  mockProvenanceTraces, 
-  mockExecutionOrders, 
-  mockMarketRegimes, 
-  mockPositions 
+import {
+  mockRiskSpectrum,
+  mockAgents,
+  mockPositions
 } from './data/mockData';
 import { DEFAULT_SYSTEM_SETTINGS } from './data/mockSettings';
 import { TopSystemBar } from './components/TopSystemBar';
@@ -66,10 +60,10 @@ export default function App() {
   const [autonomy, setAutonomy] = useState<AutonomyLevel>(settings.autonomyLevel);
   const [executionMode, setExecutionMode] = useState<ExecutionMode>(settings.defaultExecutionMode);
 
-  // Interactive Data States
+  // Interactive Data States (trading tab + drawers; wired tabs fetch their own)
   const [positions, setPositions] = useState<Position[]>(mockPositions);
-  const [agents, setAgents] = useState<AgentNode[]>(mockAgents);
-  const [executionOrders, setExecutionOrders] = useState<ExecutionOrder[]>(mockExecutionOrders);
+  const [, setAgents] = useState<AgentNode[]>(mockAgents);
+  const [, setExecutionOrders] = useState<ExecutionOrder[]>([]);
   const [riskSpectrum, setRiskSpectrum] = useState(mockRiskSpectrum);
 
   // Modals & Drawers
@@ -215,14 +209,6 @@ export default function App() {
         <main className="flex-1 ml-14 p-4 sm:p-5 overflow-x-hidden min-h-[calc(100vh-44px)] min-w-0">
           {activeTab === 'overview' && (
             <CommandCanvas
-              trajectoryData={mockTrajectoryData}
-              intelligenceItems={mockIntelligenceItems}
-              allocationSegments={mockAllocationSegments}
-              riskSpectrum={riskSpectrum}
-              agents={agents}
-              provenanceTraces={mockProvenanceTraces}
-              executionOrders={executionOrders}
-              marketRegimes={mockMarketRegimes}
               onSelectEvent={(evt) => triggerToast(`Inspecting event: ${evt.title}`)}
               onSelectIntelligence={(item) => triggerToast(`Focusing intelligence: ${item.headline}`)}
               onSelectAgent={(agent) => setSelectedAgent(agent)}
@@ -246,43 +232,33 @@ export default function App() {
 
           {activeTab === 'portfolio' && (
             <PortfolioWorkspace
-              positions={positions}
-              allocationSegments={mockAllocationSegments}
               onSelectPosition={(pos) => setSelectedPosition(pos)}
-              onAddPosition={handleAddPosition}
             />
           )}
 
           {activeTab === 'markets' && (
-            <MarketIntelligenceWorkspace
-              instruments={mockMarketRegimes}
-            />
+            <MarketIntelligenceWorkspace />
           )}
 
           {activeTab === 'agents' && (
             <AgentNetworkWorkspace
-              agents={agents}
               onSelectAgent={(agent) => setSelectedAgent(agent)}
             />
           )}
 
           {activeTab === 'provenance' && (
             <DecisionWorkspace
-              traces={mockProvenanceTraces}
               onSelectTrace={() => {}}
               onDispatchRatifiedOrder={(msg) => triggerToast(msg)}
             />
           )}
 
           {activeTab === 'risk' && (
-            <RiskCommandCenterWorkspace
-              risk={riskSpectrum}
-            />
+            <RiskCommandCenterWorkspace />
           )}
 
           {activeTab === 'execution' && (
             <ExecutionWorkspace
-              orders={executionOrders}
               onSelectOrder={() => {}}
               onAddOrder={handleAddExecutionOrder}
             />

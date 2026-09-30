@@ -1,92 +1,60 @@
 import React, { useState } from 'react';
 import { ExecutionOrder } from '../../types';
-import { 
-  Zap, 
-   
-   
-   
-  Activity, 
-   
-  Layers, 
-  
+import {
+  Zap,
+  Activity,
+  Layers,
   Clock,
   Plus,
-  Pause,
-  Play,
-  XCircle,
   BarChart2,
-  
-
 } from 'lucide-react';
 import { LiveExecutionTape } from '../LiveExecutionTape';
 import { CreateOrderModal } from '../CreateOrderModal';
+import { portfolioApi } from '../../api/backend';
+import { useApi } from '../../hooks/useApi';
+import { adaptOrders } from '../../adapters/orders';
+import { Unavailable } from '../Unavailable';
 
 interface ExecutionWorkspaceProps {
-  orders: ExecutionOrder[];
   onSelectOrder?: (order: ExecutionOrder) => void;
   onAddOrder?: (order: ExecutionOrder) => void;
 }
 
-interface SlicerJob {
-  id: string;
-  symbol: string;
-  type: string;
-  totalQty: number;
-  filledQty: number;
-  avgFillPrice: number;
-  slippageBps: number;
-  timeRemaining: string;
-  status: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
-  color: string;
-}
-
+/**
+ * Execution workspace wired to GET /api/v1/orders.
+ * The hardcoded algorithmic slicer jobs are deleted: no slicing engine
+ * state is published by the backend, so progress bars it showed were theater.
+ * (L2 depth book + venue grid untouched — separate backend gaps.)
+ */
 export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
-  orders,
   onSelectOrder,
   onAddOrder,
 }) => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [selectedAssetDepth, setSelectedAssetDepth] = useState<string>('BTC/USD');
   const [activeTab, setActiveTab] = useState<'tape' | 'depth' | 'analytics'>('tape');
+  const [localOrders, setLocalOrders] = useState<ExecutionOrder[]>([]);
 
-  const [slicerJobs, setSlicerJobs] = useState<SlicerJob[]>([
-    {
-      id: 'job-01',
-      symbol: 'BTC/USD',
-      type: 'TWAP SLICER (30m window)',
-      totalQty: 35.0,
-      filledQty: 24.5,
-      avgFillPrice: 64180.00,
-      slippageBps: 0.42,
-      timeRemaining: '8m 40s',
-      status: 'ACTIVE',
-      color: 'from-cyan-500 to-cyan-300'
-    },
-    {
-      id: 'job-02',
-      symbol: 'NVDA',
-      type: 'VWAP PARTICIPATION SLICER',
-      totalQty: 25000,
-      filledQty: 18000,
-      avgFillPrice: 128.40,
-      slippageBps: 0.88,
-      timeRemaining: '14m 12s',
-      status: 'ACTIVE',
-      color: 'from-indigo-500 to-indigo-300'
-    },
-    {
-      id: 'job-03',
-      symbol: 'SOL/USD',
-      type: 'POV 12% VOLUME PARTICIPATION',
-      totalQty: 8000,
-      filledQty: 4800,
-      avgFillPrice: 148.10,
-      slippageBps: 0.65,
-      timeRemaining: '22m 05s',
-      status: 'ACTIVE',
-      color: 'from-purple-500 to-purple-300'
+  const ordersQ = useApi(() => portfolioApi.orders());
+
+  const handleDispatchNewOrder = (newOrder: ExecutionOrder) => {
+    setLocalOrders(prev => [newOrder, ...prev]);
+    if (onAddOrder) {
+      onAddOrder(newOrder);
     }
-  ]);
+  };
+
+  if (ordersQ.loading) {
+    return <div className="text-xs text-slate-400 font-mono p-8">Loading orders from /api/v1/orders…</div>;
+  }
+  if (ordersQ.error || !ordersQ.data) {
+    return <Unavailable title="Execution unavailable" reason={ordersQ.error ?? "no orders payload"} />;
+  }
+  const adapted = adaptOrders(ordersQ.data);
+  if ("unavailable" in adapted) {
+    return <Unavailable title="Execution unavailable" reason={adapted.unavailable} />;
+  }
+  const orders = [...localOrders, ...adapted];
 
   const venues = [
     { name: 'Binance Institutional', volume: '$42.8M', fillRate: '99.98%', latency: '1.2ms', status: 'OPTIMAL' },
@@ -95,42 +63,6 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
     { name: 'Coinbase Prime', volume: '$18.9M', fillRate: '100.0%', latency: '3.4ms', status: 'OPTIMAL' },
     { name: 'Interactive Brokers', volume: '$15.9M', fillRate: '99.99%', latency: '4.1ms', status: 'OPTIMAL' },
   ];
-
-  const handleToggleSlicer = (jobId: string) => {
-    setSlicerJobs(prev => prev.map(j => {
-      if (j.id === jobId) {
-        const nextStatus = j.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
-        return { ...j, status: nextStatus };
-      }
-      return j;
-    }));
-  };
-
-  const handleCancelSlicer = (jobId: string) => {
-    setSlicerJobs(prev => prev.filter(j => j.id !== jobId));
-  };
-
-  const handleDispatchNewOrder = (newOrder: ExecutionOrder) => {
-    if (onAddOrder) {
-      onAddOrder(newOrder);
-    }
-    
-    // Add to active slicers if it's an algorithmic order
-    const newJob: SlicerJob = {
-      id: `job-${Date.now().toString().slice(-4)}`,
-      symbol: newOrder.symbol,
-      type: `TWAP Slicer (${newOrder.side})`,
-      totalQty: newOrder.quantity,
-      filledQty: Math.round(newOrder.quantity * 0.25 * 100) / 100,
-      avgFillPrice: newOrder.fillPrice,
-      slippageBps: newOrder.slippageBps,
-      timeRemaining: '28m 10s',
-      status: 'ACTIVE',
-      color: newOrder.side === 'BUY' ? 'from-emerald-500 to-emerald-300' : 'from-rose-500 to-rose-300'
-    };
-
-    setSlicerJobs(prev => [newJob, ...prev]);
-  };
 
   // Mock Depth Book Data
   const depthData = {
@@ -191,19 +123,11 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
             </span>
           </div>
           <div className="text-xs text-slate-400 mt-0.5">
-            Smart Order Routing (SOR) • TWAP / VWAP Slicing Engines • Sub-millisecond Execution Fabric
+            {orders.length} orders • Source: /api/v1/orders
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-xs">
-          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded">
-            <span className="text-slate-400">INTRADAY VOLUME:</span>{' '}
-            <span className="text-white font-bold">$144.2M</span>
-          </div>
-          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded">
-            <span className="text-slate-400">AVG SLIPPAGE:</span>{' '}
-            <span className="text-emerald-400 font-bold">0.78 BPS (TARGET &lt; 2.5)</span>
-          </div>
           <button
             onClick={() => setIsCreateModalOpen(true)}
             className="px-3 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.4)] flex items-center gap-1.5"
@@ -214,76 +138,35 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* Active Algorithmic Slicing Orders */}
+      {/* Order state summary from the live payload */}
       <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl">
         <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
           <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-cyan-400" />
             <h3 className="text-xs font-bold uppercase text-white tracking-wider">
-              ACTIVE ALGORITHMIC SLICERS IN PROGRESS
+              ORDER STATES (BACKEND-REPORTED)
             </h3>
           </div>
           <span className="text-[10px] text-cyan-300 font-bold">
-            {slicerJobs.filter(j => j.status === 'ACTIVE').length} ACTIVE EXECUTION JOBS
+            {orders.length} ORDERS TRACKED
           </span>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 my-3">
-          {slicerJobs.map((job) => {
-            const fillPct = Math.min(100, Math.round((job.filledQty / job.totalQty) * 100));
-            const isPaused = job.status === 'PAUSED';
-
-            return (
-              <div key={job.id} className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-bold text-white">
-                    <span className={`w-2 h-2 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-cyan-400 animate-pulse'}`}></span>
-                    <span className="truncate">{job.symbol} {job.type}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className={`text-[9px] px-1.5 py-0.2 rounded border font-bold ${
-                      isPaused ? 'bg-amber-950 text-amber-300 border-amber-800' : 'bg-emerald-950 text-emerald-400 border-emerald-800'
-                    }`}>
-                      {job.status}
-                    </span>
-                    <button
-                      onClick={() => handleToggleSlicer(job.id)}
-                      className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors"
-                      title={isPaused ? 'Resume Slicer' : 'Pause Slicer'}
-                    >
-                      {isPaused ? <Play className="w-3 h-3 text-emerald-400" /> : <Pause className="w-3 h-3 text-amber-400" />}
-                    </button>
-                    <button
-                      onClick={() => handleCancelSlicer(job.id)}
-                      className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-white/[0.06] transition-colors"
-                      title="Cancel Slicer"
-                    >
-                      <XCircle className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex justify-between text-slate-400 text-[11px]">
-                  <span>Progress: {job.filledQty.toLocaleString()} / {job.totalQty.toLocaleString()}</span>
-                  <span className="text-cyan-300 font-mono-num font-bold">{fillPct}% Filled</span>
-                </div>
-
-                <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full bg-gradient-to-r ${job.color}`}
-                    style={{ width: `${fillPct}%` }}
-                  ></div>
-                </div>
-
-                <div className="flex justify-between text-[10px] text-slate-400 pt-1">
-                  <span>Avg: ${job.avgFillPrice.toLocaleString()}</span>
-                  <span className="text-emerald-400 font-mono">+{job.slippageBps} bps</span>
-                  <span>{job.timeRemaining}</span>
+        {orders.length === 0 ? (
+          <div className="p-6 text-center text-slate-500 text-xs">
+            No orders in the order manager yet. Dispatched orders will appear here.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-3 text-xs">
+            {(['FILLED', 'ROUTING', 'PARTIAL', 'CANCELLED'] as const).map((s) => (
+              <div key={s} className="p-2.5 rounded bg-white/[0.02] border border-white/[0.06] text-center">
+                <div className="text-[9px] text-slate-500 uppercase">{s}</div>
+                <div className="text-base font-mono-num font-bold text-white">
+                  {orders.filter((o) => o.orderState === s).length}
                 </div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Sub-view switcher: Tape vs Order Book Liquidity Depth */}
@@ -366,7 +249,7 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
               </div>
               {currentDepth.bids.map((b, i) => (
                 <div key={i} className="relative flex justify-between items-center text-xs py-1 px-1">
-                  <div 
+                  <div
                     className="absolute right-0 top-0 bottom-0 bg-emerald-950/40 rounded pointer-events-none"
                     style={{ width: `${b.pct}%` }}
                   />
@@ -386,7 +269,7 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
               </div>
               {currentDepth.asks.map((a, i) => (
                 <div key={i} className="relative flex justify-between items-center text-xs py-1 px-1">
-                  <div 
+                  <div
                     className="absolute left-0 top-0 bottom-0 bg-rose-950/40 rounded pointer-events-none"
                     style={{ width: `${a.pct}%` }}
                   />
