@@ -193,6 +193,12 @@ class ChallengeRegistry:
         the §21 rule "no self-promotion" applied to operators too.
         """
         trial = self._get(name)
+        if not operator_id or not operator_id.strip():
+            raise PermissionError(
+                f"trial {name} promotion refused: no operator named. An explicit "
+                "human action means an identified human; 'promoted by nobody' "
+                "is not an audit trail."
+            )
         if trial.state != TrialState.EVALUATED:
             raise PermissionError(
                 f"trial {name} is {trial.state.value}; promotion requires EVALUATED evidence"
