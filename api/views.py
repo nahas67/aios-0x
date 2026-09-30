@@ -4,20 +4,67 @@ Pure functions returning JSON-able dicts - the contract any UI (web, TUI,
 export) consumes. No framework, no I/O; the HTTP server is a thin shell.
 """
 
+import asyncio
 import hashlib
 import json
+import math
 import os
 from collections import defaultdict
+from datetime import UTC, datetime
 from typing import Any
 
 from communities.c11_finance.audit_graph import decision_provenance
+from core.indicators import bollinger, ema, macd, rsi
 from core.persistence import BaseMemoryStore
-from research.walkforward import calibration_report
+from research.walkforward import WindowSlicer, _max_dd_pct, _sharpe, calibration_report
 
 
 def _env_enabled(value: object) -> bool:
     """Interpret an opt-in environment flag without treating ``0`` as true."""
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _positive_int(name: str, value: object) -> int:
+    """Coerce a JSON number to a positive int; anything else is a client error."""
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a positive integer")
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    if not isinstance(value, int) or value <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return value
+
+
+def _normalise_debate_session(raw: dict[str, Any]) -> dict[str, Any]:
+    """Reshape a stored session (or raw debate transcript) to DebateSession.
+
+    Transcript turns carry ``role``/``content``; already-shaped sessions carry
+    ``agentId``/``stance``/``thesis`` — both are accepted, nothing is invented
+    beyond key renames and documented defaults.
+    """
+    turns: list[dict[str, Any]] = []
+    raw_turns = raw.get("turns", [])
+    if isinstance(raw_turns, list):
+        for turn in raw_turns:
+            if not isinstance(turn, dict):
+                continue
+            agent = str(turn.get("agentId") or turn.get("role") or "UNKNOWN")
+            turns.append(
+                {
+                    "agentId": agent,
+                    "stance": str(turn.get("stance") or turn.get("role") or agent),
+                    "thesis": str(turn.get("thesis") or turn.get("content") or ""),
+                    "confidencePct": turn.get("confidencePct"),
+                }
+            )
+    return {
+        "id": str(raw.get("id") or raw.get("transcript_id") or "unknown"),
+        "symbol": raw.get("symbol"),
+        "side": raw.get("side", "NEUTRAL"),
+        "status": raw.get("status", "UNKNOWN"),
+        "consensusScorePct": raw.get("consensusScorePct"),
+        "turns": turns,
+    }
 
 
 class SystemSnapshotBuilder:
@@ -46,6 +93,9 @@ class SystemSnapshotBuilder:
         reconciliation_engine: Any = None,
         event_bus: Any = None,
         consumer_lag_provider: Any = None,
+        market_fetcher: Any = None,
+        debate_sessions: list[dict[str, Any]] | None = None,
+        settings_plane: Any = None,
     ) -> None:
         self.store = store
         self.ledger = ledger
@@ -72,6 +122,16 @@ class SystemSnapshotBuilder:
         # rather than report a reassuring zero.
         self.event_bus = event_bus
         self.consumer_lag_provider = consumer_lag_provider
+        # Market fetcher (plan §4 A5): a BaseDataFetcher whose latest OHLCV bar
+        # backs GET /api/v1/market/candles. None means honest absence.
+        self.market_fetcher = market_fetcher
+        # Recorded debate sessions (plan §4 A1): debates only live in memory
+        # during replay, so an empty list is the honest "nothing recorded" state.
+        self.debate_sessions: list[dict[str, Any]] = (
+            list(debate_sessions) if debate_sessions else []
+        )
+        # Versioned settings store (plan §4 B1); None means the plane is unwired.
+        self.settings_plane = settings_plane
 
     # ------------------------------------------------- durable financial kernel
 
@@ -704,6 +764,28 @@ class SystemSnapshotBuilder:
         }
         return view
 
+    def settings_plane_view(self) -> dict[str, Any]:
+        """Versioned SystemSettings blob with version metadata (plan §4 B1).
+
+        Distinct from :meth:`settings_view` (effective system config): this is
+        the operator-owned 96-field blob. Unwired plane or empty store is
+        reported, never fabricated.
+        """
+        plane = self.settings_plane
+        if plane is None:
+            return {"available": False, "reason": "settings plane not wired"}
+        return {"available": True, **plane.latest()}
+
+    def settings_plane_put(
+        self, payload: dict[str, Any], actor: str
+    ) -> dict[str, Any]:
+        """Store a new settings version; the plane audits into the hash chain."""
+        plane = self.settings_plane
+        if plane is None:
+            raise RuntimeError("settings plane unavailable")
+        version = plane.put_settings(payload, actor)
+        return {"version": version, "settings": payload}
+
     def approvals_view(self) -> list[dict[str, Any]]:
         pending = getattr(self.control_plane, "pending_approvals", {}) or {}
         out = []
@@ -1151,6 +1233,165 @@ class SystemSnapshotBuilder:
         for order in self.orders():
             _add(order.get("symbol"))
         return {"instruments": sorted(symbols.values(), key=lambda r: str(r["symbol"]))}
+
+    # --------------------------------------------- market chart (Phase: A5)
+
+    def market_candles(self, symbol: str, timeframe: str) -> dict[str, Any]:
+        """Latest real OHLCV bar + server-side indicators over the real series.
+
+        The fetcher interface yields the latest bar only, so ``candles`` holds
+        that one honest bar while the indicator series is regime history (when
+        a regime engine is wired) plus the fresh close. Indicators that lack
+        enough history are ``None``, never fabricated.
+        """
+        sym = (symbol or "").strip()
+        tf = (timeframe or "").strip()
+        if not sym or not tf:
+            raise ValueError("symbol and tf query params are required")
+        fetcher = self.market_fetcher
+        if fetcher is None:
+            return {
+                "available": False,
+                "reason": "no market fetcher wired into this process",
+            }
+        try:
+            point = self._fetch_latest_bar(fetcher, sym, tf)
+            close = float(point["close"])
+            candle = {
+                "time": datetime.now(UTC).isoformat(),
+                "open": float(point["open"]),
+                "high": float(point["high"]),
+                "low": float(point["low"]),
+                "close": close,
+                "volume": float(point["volume"]),
+            }
+        except (KeyError, TypeError, ValueError) as exc:
+            return {
+                "available": False,
+                "reason": f"fetcher returned malformed OHLCV: {exc}",
+            }
+        except Exception as exc:  # noqa: BLE001 - report, never invent
+            return {"available": False, "reason": f"market fetch failed: {exc}"}
+        history = self._close_history(sym)
+        closes = history[-200:] + [close]
+        source: str | None = None
+        try:
+            provenance = fetcher.provenance()
+            source = (
+                provenance.model_dump_json()
+                if hasattr(provenance, "model_dump_json")
+                else (str(provenance) if provenance is not None else None)
+            )
+        except Exception:  # noqa: BLE001 - source label is best-effort
+            source = None
+        return {
+            "available": True,
+            "symbol": sym,
+            "tf": tf,
+            "candles": [candle],
+            "indicators": {
+                "ema20": ema(closes, 20),
+                "ema50": ema(closes, 50),
+                "rsi14": rsi(closes, 14),
+                "macd": macd(closes),
+                "bollinger": bollinger(closes, 20),
+            },
+            "source": source,
+        }
+
+    def _fetch_latest_bar(
+        self, fetcher: Any, symbol: str, timeframe: str
+    ) -> dict[str, Any]:
+        """Bridge the async fetcher onto the sync ThreadingHTTPServer (~10s cap)."""
+        coro = fetcher.fetch_price_data(symbol, timeframe)
+        loop = asyncio.new_event_loop()
+        try:
+            point = loop.run_until_complete(asyncio.wait_for(coro, 10.0))
+        finally:
+            loop.close()
+        if not isinstance(point, dict):
+            raise ValueError(f"expected OHLCV mapping, got {type(point).__name__}")
+        return dict(point)
+
+    def _close_history(self, symbol: str) -> list[float]:
+        """Recent closes from the regime engine when one is wired (best-effort)."""
+        try:
+            engine = self.regime_engine
+            if engine is None:
+                return []
+            raw = getattr(engine, "_closes", {}).get(symbol) or []
+            return [float(v) for v in list(raw)]
+        except Exception:  # noqa: BLE001 - history is best-effort
+            return []
+
+    # ------------------------------------------------- debates (Phase: A1)
+
+    def debates_view(self) -> dict[str, Any]:
+        """Recorded adversarial debate sessions, else honest absence.
+
+        Debate transcripts only live in memory during replay, so a process
+        with no recorded sessions says so — including the model-provider
+        reason an operator needs to interpret the emptiness.
+        """
+        sessions = list(self.debate_sessions or [])
+        if not sessions:
+            provider = getattr(self.settings, "model_provider", "none")
+            return {
+                "available": False,
+                "reason": f"no debates recorded (MODEL_PROVIDER={provider})",
+            }
+        return {
+            "available": True,
+            "debates": [
+                _normalise_debate_session(s) for s in sessions if isinstance(s, dict)
+            ],
+        }
+
+    # ------------------------------------------------- backtest (Phase: B4)
+
+    def research_backtest(
+        self, closes: Any, train_bars: object = 90, test_bars: object = 30
+    ) -> dict[str, Any]:
+        """Walk-forward Sharpe / max-drawdown over a caller-supplied series.
+
+        Pure computation over ``closes`` (capped at 5000 points): each slicer
+        window's test segment is scored with the same ``_sharpe`` /
+        ``_max_dd_pct`` used by the research harness. No network, no state.
+        """
+        if not isinstance(closes, list) or len(closes) < 3:
+            raise ValueError("closes must be a list with at least 3 points")
+        if len(closes) > 5000:
+            raise ValueError("closes capped at 5000 points")
+        series: list[float] = []
+        for value in closes:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError("closes must contain only numbers")
+            if not math.isfinite(value):
+                raise ValueError("closes must contain only finite numbers")
+            series.append(float(value))
+        train = _positive_int("train_bars", train_bars)
+        test = _positive_int("test_bars", test_bars)
+        slicer = WindowSlicer(len(series), train_bars=train, test_bars=test)
+        windows: list[dict[str, Any]] = []
+        for index, (start, end) in enumerate(slicer.windows()):
+            segment = series[max(start, end - test) : end]
+            windows.append(
+                {
+                    "window_index": index,
+                    "start": start,
+                    "end": end,
+                    "test_sharpe": _sharpe(segment),
+                    "test_max_dd_pct": _max_dd_pct(segment),
+                }
+            )
+        return {
+            "sharpe": _sharpe(series),
+            "max_dd_pct": _max_dd_pct(series),
+            "points": len(series),
+            "train_bars": train,
+            "test_bars": test,
+            "windows": windows,
+        }
 
     # ------------------------------------------------------------- human gates
 

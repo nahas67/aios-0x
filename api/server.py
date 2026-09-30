@@ -592,6 +592,18 @@ def make_handler(
                     self._json(builder.models_registry_view())
                 elif path == "/api/v1/market/instruments":
                     self._json(builder.instruments_view())
+                elif path == "/api/v1/market/candles":
+                    qs = parse_qs(urlparse(self.path).query)
+                    symbol = (qs.get("symbol") or [""])[0]
+                    tf = (qs.get("tf") or [""])[0]
+                    try:
+                        self._json(builder.market_candles(symbol, tf))
+                    except ValueError as exc:
+                        self._json({"error": str(exc)}, status=400)
+                elif path == "/api/v1/debates":
+                    self._json(builder.debates_view())
+                elif path == "/api/v1/settings/v1":
+                    self._json(builder.settings_plane_view())
                 elif path == "/api/v1/evaluations":
                     qs = parse_qs(urlparse(self.path).query)
                     try:
@@ -642,6 +654,25 @@ def make_handler(
                 except Exception:  # noqa: BLE001 - server boundary
                     logger.exception("chat failed")
                     self._json({"error": "chat request failed"}, status=500)
+                return
+
+            # --- research backtest (plan §4 B4): pure walk-forward math over a
+            # caller-supplied closes array. Stateless and side-effect free, so
+            # it lives beside chat rather than behind the control plane.
+            if path == "/api/v1/research/backtest":
+                try:
+                    body = self._json_body()
+                    result = builder.research_backtest(
+                        body.get("closes", []),
+                        train_bars=body.get("train_bars", 90),
+                        test_bars=body.get("test_bars", 30),
+                    )
+                    self._json(result)
+                except (ValueError, TypeError) as exc:
+                    self._json({"error": str(exc)}, status=400)
+                except Exception:  # noqa: BLE001 - server boundary
+                    logger.exception("backtest failed")
+                    self._json({"error": "backtest failed"}, status=500)
                 return
 
             # --- durable safety-plane release (the only financial mutation here).
@@ -714,6 +745,39 @@ def make_handler(
             except Exception:  # noqa: BLE001 - server boundary
                 logger.exception("control action failed")
                 self._json({"error": "control action failed"}, status=500)
+
+        # --- PUT routes (plan §4 B1: the server's only write verb beyond POST) ---
+
+        def do_PUT(self) -> None:  # noqa: N802 - stdlib API
+            """Versioned settings write; every other path is a 404 on PUT."""
+            path = self.path.split("?")[0]
+            if not self._require_auth(path):
+                return
+
+            # Fail-closed like POST mutations: a resolved identity is required
+            # even when the dev server leaves reads unauthenticated.
+            identity = self._resolve_request_identity()
+            if identity is None:
+                self._json({"error": "authentication required"}, status=401)
+                return
+
+            if path != "/api/v1/settings/v1":
+                self._json({"error": "not found"}, status=404)
+                return
+
+            try:
+                body = self._json_body()
+                result = builder.settings_plane_put(body, identity.operator_id)
+                self._json(result)
+            except RuntimeError as exc:
+                self._json({"error": str(exc)}, status=503)
+            except ValueError as exc:
+                message = str(exc)
+                status = 413 if "exceed" in message else 400
+                self._json({"error": message}, status=status)
+            except Exception:  # noqa: BLE001 - server boundary
+                logger.exception("settings PUT failed")
+                self._json({"error": "settings update failed"}, status=500)
 
     def run_control(
         plane: ControlPlane,
