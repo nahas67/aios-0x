@@ -187,3 +187,35 @@ def test_legacy_settings_route_untouched(settings_port: int) -> None:
     status, payload = _get(settings_port, "/api/v1/settings")
     assert status == 200
     assert "system" in payload
+
+
+# ------------------------------------------------- serve wiring (plan §6)
+
+
+def _serve_runner(tmp_path: Path) -> Any:
+    """Minimal serve-composition runner: golden CSV + file store, no network."""
+    from simulation.generate_golden_data import write_dataset
+    from simulation.replay_runner import ReplayRunner
+
+    write_dataset(tmp_path / "golden", symbols=["BTC/USD"], total_bars=40)
+    return ReplayRunner(
+        csv_path_by_symbol={"BTC/USD": tmp_path / "golden" / "BTC_USD_1d.csv"},
+        store_path=tmp_path / "serve.db",
+    )
+
+
+def test_serve_builder_wires_settings_plane(tmp_path: Path) -> None:
+    runner = _serve_runner(tmp_path)
+    builder = runner.build_snapshot_builder()
+    assert builder.settings_plane is not None
+    payload = builder.settings_plane_view()
+    assert payload["available"] is True
+    out = builder.settings_plane_put({"theme": "dark"}, "op-1")
+    assert out["version"] >= 1
+    assert builder.settings_plane_view()["settings"] == {"theme": "dark"}
+
+
+def test_serve_settings_db_is_store_sibling(tmp_path: Path) -> None:
+    runner = _serve_runner(tmp_path)
+    runner.build_snapshot_builder()
+    assert (tmp_path / "serve.settings.db").exists()

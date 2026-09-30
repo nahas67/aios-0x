@@ -4,8 +4,10 @@ import { defineConfig } from "vite";
 
 // Dev: Vite serves :3000 and proxies /api + /metrics to the AIOS backend on
 // :8787 (same-origin, no CORS). SSE streams pass through without buffering.
-// Prod: `npm run build` emits ../ui/dist, served by the Python server
-// (api/server.py resolves _UI_INDEX from ui/dist/index.html).
+// Prod: `npm run build` emits ../ui/dist, served live at request time by the
+// Python server (api/server.py resolves ui/dist/index.html per request via
+// _serve_static — never snapshotted at import, so a fresh build is picked up
+// without restarting the process).
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {

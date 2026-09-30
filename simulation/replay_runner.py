@@ -75,6 +75,7 @@ if TYPE_CHECKING:
     from api.views import SystemSnapshotBuilder
     from core.challenger import ChallengeRegistry
     from core.control_plane import ControlPlane
+    from core.settings_plane import SettingsPlane
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +201,9 @@ class ReplayRunner:
         self.symbols = sorted(self.csv_path_by_symbol)
         self.initial_balance = initial_balance
         self.slippage_pct = slippage_pct
+        # Retained so serve-time builders can derive sibling state files
+        # (settings plane) from the same base path without new arguments.
+        self.store_path = Path(store_path)
 
         # ---- Constitution gate (Directive 48): refuse to operate on mismatch
         from core.constitution import enforce_at_boot
@@ -737,6 +741,9 @@ class ReplayRunner:
             positions_view=self._positions_view,
             trial_evaluator=self.evaluate_challenger,
             kernel_bridge=self.kernel_bridge,
+            # Same engine instance the per-bar pass uses (B2): findings the
+            # UI resolves are verdicts from the reconciliation that ran.
+            reconciliation_engine=self.reconciliation,
         )
             # SUPERVISED approvals must reach the real execution path:
             plane._execute_bridge(  # noqa: SLF001 - composition-root wiring
@@ -786,7 +793,77 @@ class ReplayRunner:
             # The same engine instance the per-bar pass uses, so the UI reports
             # on the reconciliation that actually ran rather than a second one.
             reconciliation_engine=self.reconciliation,
+            # Serve-time read model: versioned operator settings (B1),
+            # latest-bar market fetcher (A5) and recorded debates (A1).
+            settings_plane=self.build_settings_plane(),
+            market_fetcher=self.build_market_fetcher(),
+            debate_sessions=self.build_debate_sessions(),
         )
+
+    def build_market_fetcher(self) -> BaseDataFetcher:
+        """Read-only price fetcher backing GET /api/v1/market/candles.
+
+        Mirrors the execution-adapter honesty rule: a live exchange fetcher is
+        only constructed on explicit opt-in (``settings.live_market_data`` with
+        a real venue id); otherwise the network-free simulated fetcher answers
+        so the endpoint reports labelled simulation instead of absence. The
+        replay cursor itself is never exposed here — this fetcher answers the
+        latest-bar question only and starts no polling.
+        """
+        if getattr(self.settings, "live_market_data", False):
+            exchange_id = str(
+                getattr(self.settings, "exchange_id", "") or ""
+            ).strip() or "binance"
+            try:
+                from communities.c1_data.ccxt_fetcher import CcxtDataFetcher
+
+                return CcxtDataFetcher(exchange_id=exchange_id)
+            except Exception as exc:  # noqa: BLE001 - live venue unreadable
+                logger.warning("live market fetcher unavailable (%s); using simulated", exc)
+        from communities.c1_data.data_agent import SimulatedDataFetcher
+
+        return SimulatedDataFetcher()
+
+    def build_settings_plane(self) -> "SettingsPlane":
+        """Versioned operator-settings store backing GET/PUT /settings/v1.
+
+        Lives in a sibling of the run store (``<stem>.settings.db`` next to
+        ``<stem>.db`` — ``data/aios.settings.db`` for the default serve DB),
+        audited into the run's hash chain on every write (256KB cap enforced
+        by the plane itself).
+        """
+        from core.settings_plane import SettingsPlane
+
+        if not hasattr(self, "_settings_plane"):
+            sibling = self.store_path.parent / (self.store_path.stem + ".settings.db")
+            self._settings_plane = SettingsPlane(sibling, store=self.store)
+        return self._settings_plane
+
+    def build_debate_sessions(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Recorded debate transcripts backing GET /api/v1/debates.
+
+        The debate engine keeps no session registry — transcripts reach durable
+        storage only via the TRANSCRIPT audit events (and only for real LLM
+        debates; ``used_llm=false`` fallbacks are never sunk). With
+        ``MODEL_PROVIDER=none`` this is empty and the view stays honestly
+        absent; with live debates recorded, the view surfaces them.
+        """
+        sessions: list[dict[str, Any]] = []
+        try:
+            payloads = self.store.iter_event_payloads("TRANSCRIPT")
+        except Exception:  # noqa: BLE001 - debates are best-effort read model
+            return sessions
+        for payload in payloads[-limit:]:
+            raw = payload.get("json")
+            if not isinstance(raw, str):
+                continue
+            try:
+                doc = json.loads(raw)
+            except (ValueError, TypeError):
+                continue
+            if isinstance(doc, dict):
+                sessions.append(doc)
+        return sessions
 
     def serve(self, port: int = 8787) -> Any:
         """Start the command-center HTTP server on a daemon thread."""

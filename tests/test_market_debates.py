@@ -350,3 +350,60 @@ def test_backtest_routed_bad_input_is_400(market_port: int) -> None:
     status, payload = _post(market_port, "/api/v1/research/backtest", {"closes": [1.0]})
     assert status == 400
     assert "error" in payload
+
+
+# ------------------------------------------------- serve wiring (plan §6)
+
+
+def _serve_runner(tmp_path: Path) -> Any:
+    """Minimal serve-composition runner: golden CSV + file store, no network."""
+    from simulation.generate_golden_data import write_dataset
+    from simulation.replay_runner import ReplayRunner
+
+    write_dataset(tmp_path / "golden", symbols=["BTC/USD"], total_bars=40)
+    return ReplayRunner(
+        csv_path_by_symbol={"BTC/USD": tmp_path / "golden" / "BTC_USD_1d.csv"},
+        store_path=tmp_path / "serve.db",
+    )
+
+
+def test_serve_builder_wires_market_fetcher(tmp_path: Path) -> None:
+    builder = _serve_runner(tmp_path).build_snapshot_builder()
+    assert builder.market_fetcher is not None
+    payload = builder.market_candles("BTC/USD", "1h")
+    assert payload["available"] is True
+    assert payload["candles"][0]["close"] > 0
+
+
+def test_serve_debates_honest_absence_without_llm(tmp_path: Path) -> None:
+    builder = _serve_runner(tmp_path).build_snapshot_builder()
+    payload = builder.debates_view()
+    assert payload["available"] is False
+    assert "MODEL_PROVIDER=none" in payload["reason"]
+
+
+def test_serve_builder_surfaces_recorded_transcripts(tmp_path: Path) -> None:
+    runner = _serve_runner(tmp_path)
+    runner.store.append_event(
+        "TRANSCRIPT",
+        None,
+        {
+            "json": json.dumps(
+                {
+                    "transcript_id": "t-serve-1",
+                    "symbol": "BTC/USD",
+                    "timeframe": "1d",
+                    "turns": [{"role": "BULL", "content": "momentum positive"}],
+                }
+            )
+        },
+    )
+    payload = runner.build_snapshot_builder().debates_view()
+    assert payload["available"] is True
+    assert payload["debates"][0]["turns"][0]["agentId"] == "BULL"
+
+
+def test_serve_control_plane_receives_reconciliation_engine(tmp_path: Path) -> None:
+    runner = _serve_runner(tmp_path)
+    plane = runner.build_control_plane()
+    assert plane.reconciliation_engine is runner.reconciliation
