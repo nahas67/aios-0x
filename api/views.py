@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from communities.c11_finance.audit_graph import decision_provenance
+from core.claim_gate import gate_criteria
 from core.indicators import bollinger, ema, macd, rsi
 from core.persistence import BaseMemoryStore
 from research.walkforward import WindowSlicer, _max_dd_pct, _sharpe, calibration_report
@@ -1623,11 +1624,30 @@ class SystemSnapshotBuilder:
             },
         ]
         all_pass = all(c["pass"] for c in criteria)
+        # The statistical claim gate (core/claim_gate.py, goal G190). These
+        # figures are computed over whatever the live paper run happened to
+        # accumulate, so almost none of the required provenance is available
+        # here: no defined universe, no regime split, no out-of-sample window,
+        # no confidence interval. The gate says so in the response instead of
+        # letting a Sharpe of 1.6 read as a qualification.
+        gated = gate_criteria(
+            criteria,
+            metric_definition="annualised Sharpe over the accumulated paper equity curve",
+            accepted_n=trades,
+            time_period="since process start; no fixed evaluation window",
+            net_of_cost=False,
+            out_of_sample=False,
+        )
         return {
             "ready_for_live": False,
             "paper_criteria_pass": all_pass,
-            "criteria": criteria,
-            "note": "Paper metrics are informational only; live routing is constitutionally disabled in this release.",
+            **gated,
+            "note": (
+                "Paper metrics are informational only; live routing is "
+                "constitutionally disabled in this release. Criteria marked "
+                "NOT_REPORTABLE carry a measured value without full provenance "
+                "and must not be quoted as a result."
+            ),
         }
 
     def _family_join(self) -> dict[str, dict[str, Any]]:

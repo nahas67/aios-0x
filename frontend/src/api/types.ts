@@ -148,10 +148,35 @@ export interface RiskState {
   emergency_events: Record<string, unknown>[];
 }
 
+/**
+ * Provenance state of one reported figure, produced by the statistical claim
+ * gate (`core/claim_gate.py`, goal G190). A criterion whose claim is not
+ * `REPORTABLE` carries a measured value that must not be quoted as a result:
+ * it is missing a defined universe, an out-of-sample window, a confidence
+ * interval, or one of the other required fields.
+ */
+export interface ClaimGateState {
+  status: "REPORTABLE" | "NOT_REPORTABLE" | "NO_CLAIM";
+  reportable: boolean;
+  present: string[];
+  missing: string[];
+}
+
+export interface GraduationCriterion {
+  name: string;
+  current: number;
+  threshold: number;
+  op: string;
+  pass: boolean;
+  claim: ClaimGateState;
+}
+
 export interface Graduation {
   ready_for_live: false;
   paper_criteria_pass: boolean;
-  criteria: { name: string; current: number; threshold: number; op: string; pass: boolean }[];
+  criteria: GraduationCriterion[];
+  claim_status: ClaimGateState["status"];
+  required_fields: string[];
   note: string;
 }
 
