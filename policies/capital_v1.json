@@ -1,0 +1,41 @@
+{
+  "bundle_id": "capital-example-v1",
+  "version": "v1",
+  "issued_at": "2024-01-15T00:00:00+00:00",
+  "rules": [
+    {
+      "kind": "clamp",
+      "reason_code": "notional_cap_exceeded",
+      "policy_id": "risk.capital",
+      "rule_id": "clamp_notional",
+      "argument": "notional",
+      "maximum": 100.0,
+      "matches": [
+        {"field": "tool", "op": "eq", "value": "broker.submit"},
+        {"field": "operation", "op": "eq", "value": "place"}
+      ]
+    },
+    {
+      "kind": "clamp",
+      "reason_code": "quantity_cap_exceeded",
+      "policy_id": "risk.capital",
+      "rule_id": "clamp_quantity",
+      "argument": "quantity",
+      "maximum": 10000.0,
+      "matches": [
+        {"field": "tool", "op": "eq", "value": "broker.submit"},
+        {"field": "operation", "op": "eq", "value": "place"}
+      ]
+    },
+    {
+      "kind": "deny",
+      "reason_code": "SANCTIONS",
+      "policy_id": "policy.sanctions",
+      "rule_id": "deny_sanctioned_symbol",
+      "matches": [
+        {"field": "symbol", "op": "in", "value": ["BANNED"]}
+      ]
+    }
+  ],
+  "signature": ""
+}
