@@ -21,9 +21,27 @@ htmlcov/
 !.env.example
 
 # Local data & databases (raw market data, SQLite files)
-data/
+#
+# data/ is ignored because it holds downloaded market data and local databases,
+# which are inputs and byproducts, not source. One thing under it IS source: the
+# versioned seed bundle that core/seed_ingest.py loads and tests/test_seed_ingest.py
+# asserts against. Git cannot re-include a file whose parent directory is
+# excluded, so the rule ignores data's *children* and re-includes the seed dir
+# explicitly. Without this, a fresh clone ships a seeder that cannot load its
+# own data and a test that fails on a missing file.
+data/*
+!data/seed/
+data/seed/*
+!data/seed/*.json
 *.db
 *.sqlite3
+
+# Local runtime logs (serve/frontend transcripts; machine noise, never evidence.
+# Durable evidence belongs under .evidence/, which is ignored on purpose too —
+# a log is not a record, and shipping one invites reading it as one.)
+logs/
+*.log
+*.err.log
 
 # Local tooling and verification artifacts (nats-server binary, junit/xml evidence)
 .tools/
