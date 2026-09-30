@@ -27,10 +27,25 @@ Run: python scripts/package_release.py [--version VERSION]
 """
 
 import argparse
+import hashlib
+import io
 import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+#: Manifest member name. The manifest lists every other member's SHA-256 so
+#: the archive is self-verifying: authority signatures (applied in CI with
+#: the release key, never here) sign bytes whose contents anyone can recheck.
+MANIFEST_NAME = "SHA256SUMS"
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 # Patterns to ALWAYS exclude (forbidden in release)
 FORBIDDEN_PATTERNS = [
@@ -129,6 +144,14 @@ def build_archive(version: str = "latest") -> Path:
 
     included_count = 0
 
+    manifest: list[str] = []
+
+    def _add(file: Path, arcname: str) -> None:
+        nonlocal included_count
+        tar.add(file, arcname=arcname)
+        manifest.append(f"{_sha256_file(file)}  {arcname}")
+        included_count += 1
+
     with tarfile.open(archive_path, "w:gz") as tar:
         # Add directories
         for dir_name in INCLUDE_DIRS:
@@ -138,15 +161,13 @@ def build_archive(version: str = "latest") -> Path:
                 continue
             for file in sorted(dir_path.rglob("*")):
                 if file.is_file() and not should_exclude(file, str(file.relative_to(ROOT))):
-                    tar.add(file, arcname=str(file.relative_to(ROOT)))
-                    included_count += 1
+                    _add(file, str(file.relative_to(ROOT)))
 
         # Add root files
         for file_name in INCLUDE_FILES:
             file_path = ROOT / file_name
             if file_path.exists() and not should_exclude(file_path, file_name):
-                tar.add(file_path, arcname=file_name)
-                included_count += 1
+                _add(file_path, file_name)
 
         # Add ui/dist if it exists (compiled frontend)
         ui_dist = ROOT / "ui" / "dist"
@@ -154,8 +175,14 @@ def build_archive(version: str = "latest") -> Path:
             for file in ui_dist.rglob("*"):
                 if file.is_file():
                     rel = str(file.relative_to(ROOT))
-                    tar.add(file, arcname=rel)
-                    included_count += 1
+                    _add(file, rel)
+
+        # The manifest is the last member, covering everything above it.
+        manifest_bytes = ("\n".join(sorted(manifest)) + "\n").encode()
+        info = tarfile.TarInfo(MANIFEST_NAME)
+        info.size = len(manifest_bytes)
+        tar.addfile(info, io.BytesIO(manifest_bytes))
+        included_count += 1
 
     print(f"  Included: {included_count} files")
     print(f"  Archive: {archive_path} ({archive_path.stat().st_size / 1024:.1f} KB)")
@@ -192,6 +219,38 @@ def verify_archive(archive_path: Path) -> bool:
                 violations.append(f"STATE: {name}")
             if name.endswith(".pid"):
                 violations.append(f"STATE: {name}")
+
+        # Manifest completeness: every member except the manifest itself must
+        # be listed with a matching hash. A member missing from the manifest is
+        # unaudited payload; a hash mismatch is tampering after manifesting.
+        # Inside the with-block: extraction needs the archive open.
+        try:
+            manifest_member = tar.getmember(MANIFEST_NAME)
+        except KeyError:
+            violations.append(f"MANIFEST: {MANIFEST_NAME} missing from archive")
+            manifest_member = None
+        if manifest_member is not None:
+            listed: dict[str, str] = {}
+            raw = tar.extractfile(manifest_member)
+            if raw is None:
+                violations.append(f"MANIFEST: {MANIFEST_NAME} unreadable")
+            else:
+                for line in raw.read().decode().splitlines():
+                    digest, _, name = line.partition("  ")
+                    if digest and name:
+                        listed[name] = digest
+                for member in tar.getmembers():
+                    if member.name == MANIFEST_NAME or not member.isfile():
+                        continue
+                    payload = tar.extractfile(member)
+                    if payload is None:
+                        violations.append(f"MANIFEST: {member.name} unreadable")
+                        continue
+                    actual = hashlib.sha256(payload.read()).hexdigest()
+                    if member.name not in listed:
+                        violations.append(f"MANIFEST: {member.name} not listed")
+                    elif listed[member.name] != actual:
+                        violations.append(f"MANIFEST: {member.name} hash mismatch")
 
     if violations:
         print("  VIOLATIONS FOUND:")
