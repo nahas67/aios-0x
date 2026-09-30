@@ -133,15 +133,15 @@ export const PositionDrawer: React.FC<PositionDrawerProps> = ({
             <div className="text-[10px] text-slate-400 uppercase tracking-wider">STRATEGY ALLOCATION &amp; MULTI-ASSET METADATA</div>
             <div className="flex justify-between">
               <span className="text-slate-400">STRATEGY:</span>
-              <span className="text-slate-200 font-semibold">{position.strategy}</span>
+              <span className="text-slate-200 font-semibold">{position.strategy ?? '—'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">PROPOSING AGENT:</span>
-              <span className="text-cyan-300">{position.originatingAgent || (position as any).proposingAgent || 'MULTI-ASSET-ALLOCATOR'}</span>
+              <span className="text-cyan-300">{position.originatingAgent || (position as any).proposingAgent || '—'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">EXECUTION VENUE / CLOB:</span>
-              <span className="text-slate-300">{position.exchange || (position as any).venue || 'Institutional Primary CLOB'}</span>
+              <span className="text-slate-300">{position.exchange || (position as any).venue || '—'}</span>
             </div>
             {position.country && (
               <div className="flex justify-between">
@@ -157,17 +157,17 @@ export const PositionDrawer: React.FC<PositionDrawerProps> = ({
             )}
             <div className="flex justify-between">
               <span className="text-slate-400">HOLDING DURATION:</span>
-              <span className="text-slate-300">3d 14h 22m</span>
+              <span className="text-slate-500">— (not published)</span>
             </div>
           </div>
 
           {/* Constitutional Compliance Status */}
-          <div className="mt-4 p-3 rounded bg-emerald-950/20 border border-emerald-800/40 text-xs flex items-center justify-between">
-            <div className="flex items-center gap-2 text-emerald-400">
+          <div className="mt-4 p-3 rounded bg-white/[0.02] border border-white/[0.06] text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2 text-slate-400">
               <ShieldCheck className="w-4 h-4" />
-              <span>CONSTITUTIONAL FIREWALL VALIDATED</span>
+              <span>FIREWALL STATUS: NOT EVALUATED CLIENT-SIDE</span>
             </div>
-            <span className="text-[10px] text-emerald-500 font-mono">HASH #9a2b8...</span>
+            <span className="text-[10px] text-slate-500 font-mono">—</span>
           </div>
         </div>
 

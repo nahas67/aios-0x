@@ -1,19 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  Zap, 
-  ShieldCheck, 
-   
-  Sparkles, 
-   
-   
-  ArrowUpRight, 
-  ArrowDownRight, 
-  Clock, 
-   
-  
-
+import {
+  Zap,
+  ShieldCheck,
+  Sparkles,
+  ArrowUpRight,
+  ArrowDownRight,
+  Clock,
 } from 'lucide-react';
-import { ExecutionOrder, Position, SystemSettings } from '../../types';
+import { SystemSettings } from '../../types';
 
 interface OrderTicketProps {
   symbol: string;
@@ -21,22 +15,23 @@ interface OrderTicketProps {
   category: string;
   markPrice: number;
   settings: SystemSettings;
-  onDispatchOrder: (order: ExecutionOrder) => void;
-  onAddPosition: (pos: Position) => void;
   onTriggerToast: (msg: string) => void;
 }
 
 export type OrderSide = 'BUY' | 'SELL';
 export type OrderType = 'MARKET' | 'LIMIT' | 'STOP_LIMIT' | 'TWAP' | 'VWAP' | 'POV';
 
+/**
+ * Algorithmic order ticket. The backend exposes no order-submission endpoint
+ * (orders are read-only over HTTP), so dispatch is an honest disabled path:
+ * parameters can be staged and reviewed, but nothing is sent and no fill,
+ * slippage, or order id is fabricated.
+ */
 export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
   symbol,
-  name,
   category,
   markPrice,
   settings,
-  onDispatchOrder,
-  onAddPosition,
   onTriggerToast,
 }) => {
   const [side, setSide] = useState<OrderSide>('BUY');
@@ -62,87 +57,39 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
     return 'Interactive Brokers Global FIX';
   });
 
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-
-  // Derived Calculations
+  // Derived staging calculations (pure arithmetic on user inputs only)
   const notionalUsd = quantity * (orderType === 'LIMIT' ? limitPrice : markPrice);
-  const maxEquityPool = 142000000;
-  const portfolioExposurePct = +((notionalUsd / maxEquityPool) * 100).toFixed(2);
-  
+
   const slLossUsd = Math.abs(markPrice - stopLossPrice) * quantity;
   const tpGainUsd = Math.abs(takeProfitPrice - markPrice) * quantity;
   const riskRewardRatio = slLossUsd > 0 ? +(tpGainUsd / slLossUsd).toFixed(2) : 2.5;
 
   // Quick percent of capital handler
   const handleQuickPercent = (pct: number) => {
-    const targetNotional = maxEquityPool * (pct / 100) * 0.05; // 5% base allocation cap
+    // No live NAV is available in this ticket, so allocation presets stage a
+    // fixed reference notional instead of claiming a portfolio percentage.
+    const referenceNotional = 1000000;
+    const targetNotional = referenceNotional * (pct / 100);
     const units = Math.max(1, Math.round(targetNotional / markPrice));
     setQuantity(units);
   };
 
-  // One-click AI Consensus Pre-Fill
-  const handleApplyAgentConsensus = () => {
+  // Preset staging helper (local form defaults only — not agent advice)
+  const handleApplyPreset = () => {
     setOrderType('TWAP');
     setTwapMinutes(20);
     setTwapSlices(10);
     setStopLossPrice(+(markPrice * 0.955).toFixed(2));
     setTakeProfitPrice(+(markPrice * 1.125).toFixed(2));
-    const targetNotional = 7500000;
-    setQuantity(Math.max(1, Math.round(targetNotional / markPrice)));
-    onTriggerToast(`Applied multi-agent consensus trade setup for ${symbol}`);
+    onTriggerToast(`Staged default TWAP preset for ${symbol} (local form defaults, not agent advice)`);
   };
 
-  // Submit Order Execution
+  // Honest dispatch: no order-submission endpoint exists server-side.
   const handleExecuteTrade = () => {
-    setIsSubmitting(true);
-
-    setTimeout(() => {
-      const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-      const executionTime = new Date().toTimeString().substring(0, 8);
-
-      const newOrder: ExecutionOrder = {
-        id: orderId,
-        time: executionTime,
-        symbol,
-        side: side === 'BUY' ? 'BUY' : 'SELL',
-        quantity,
-        notionalUsd,
-        orderState: 'FILLED',
-        fillPrice: markPrice,
-        slippageBps: +(0.4 + Math.random() * 0.6).toFixed(1),
-        strategy: `${orderType}-SmartRoute-0x`,
-        agent: 'EXECUTION_GATEWAY',
-        riskState: 'COMPLIANT',
-        venue: selectedVenue
-      };
-
-      const newPos: Position = {
-        id: `POS-${symbol.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now()}`,
-        symbol,
-        name,
-        assetClass: (category as any) || 'EQUITY',
-        side: side === 'BUY' ? 'LONG' : 'SHORT',
-        size: quantity,
-        entryPrice: markPrice,
-        markPrice,
-        notionalUsd,
-        unrealizedPnlUsd: 0,
-        unrealizedPnlPct: 0,
-        exposurePct: portfolioExposurePct,
-        stopLossPrice,
-        takeProfitPrice,
-        strategy: `${orderType} Execution Alpha Slicer`,
-        originatingAgent: 'agent-exec',
-        varContributionUsd: Math.round(notionalUsd * 0.015),
-        liquidityTier: 'TIER-1 (SOR DIRECT)',
-        exchange: selectedVenue
-      };
-
-      onDispatchOrder(newOrder);
-      onAddPosition(newPos);
-      setIsSubmitting(false);
-      onTriggerToast(`✓ Order #${orderId} Dispatched & Filled: ${side} ${quantity.toLocaleString()} ${symbol} via ${selectedVenue.split(' ')[0]}`);
-    }, 600);
+    onTriggerToast(
+      `Order NOT sent: the backend exposes no order-submission endpoint for ${symbol}. ` +
+      `Staged ${side} ${quantity.toLocaleString()} via ${selectedVenue} was discarded, no fill fabricated.`,
+    );
   };
 
   return (
@@ -154,18 +101,24 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
           <span className="font-bold text-slate-100 text-[11px] uppercase tracking-wider">Algorithmic Order Ticket</span>
         </div>
 
-        {/* AI Co-Pilot One-Click Pre-fill */}
+        {/* Preset staging helper */}
         <button
-          onClick={handleApplyAgentConsensus}
-          className="px-2 py-1 rounded bg-rose-950/70 hover:bg-rose-900/80 border border-rose-600/50 text-[10px] text-rose-200 font-semibold flex items-center gap-1 transition-all shadow-[0_0_10px_rgba(244,63,94,0.15)]"
-          title="Pre-populate with Multi-Agent Ratified Debate Parameters"
+          onClick={handleApplyPreset}
+          className="px-2 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[10px] text-slate-300 font-semibold flex items-center gap-1 transition-all"
+          title="Fill the form with default TWAP parameters"
         >
-          <Sparkles className="w-3 h-3 text-rose-400" />
-          AI Consensus Setup
+          <Sparkles className="w-3 h-3 text-slate-400" />
+          Stage TWAP preset
         </button>
       </div>
 
       <div className="p-3.5 space-y-3">
+        {/* Not-wired notice */}
+        <div className="rounded-lg border border-amber-800/50 bg-amber-950/20 px-2.5 py-2 text-[10px] leading-relaxed text-amber-200">
+          Order routing is not wired: the backend publishes orders read-only and accepts no
+          submissions over HTTP. This ticket stages parameters for review only.
+        </div>
+
         {/* BUY / SELL SIDE TOGGLE */}
         <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/50 border border-white/10 rounded-lg">
           <button
@@ -354,16 +307,16 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
           </select>
         </div>
 
-        {/* PRE-TRADE RISK FIREWALL METRICS */}
+        {/* STAGED PARAMS SUMMARY */}
         <div className="bg-[#050608] border border-white/[0.06] rounded-lg p-2.5 space-y-1.5 text-[10px]">
           <div className="flex items-center justify-between text-slate-400">
-            <span>Estimated Notional:</span>
+            <span>Staged Notional:</span>
             <span className="text-slate-100 font-bold font-mono-num">${notionalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
 
           <div className="flex items-center justify-between text-slate-400">
             <span>Portfolio Exposure:</span>
-            <span className="text-cyan-300 font-bold font-mono-num">{portfolioExposurePct}% (Cap: {settings.maxPositionConcentrationPct || 15}%)</span>
+            <span className="text-slate-500 font-mono-num">— (no live NAV in this ticket)</span>
           </div>
 
           <div className="flex items-center justify-between text-slate-400">
@@ -372,36 +325,25 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
           </div>
 
           <div className="pt-1 border-t border-white/[0.06] flex items-center justify-between text-[9px]">
-            <span className="text-emerald-400 flex items-center gap-1 font-bold">
-              <ShieldCheck className="w-3 h-3 text-emerald-400" />
-              15/15 Deterministic Firewall Checks Passed
+            <span className="text-slate-500 flex items-center gap-1 font-bold">
+              <ShieldCheck className="w-3 h-3 text-slate-500" />
+              Pre-trade firewall: not evaluated client-side
             </span>
-            <span className="text-slate-400">SHA-256 Valid</span>
+            <span className="text-slate-500">NOT SENT</span>
           </div>
         </div>
 
-        {/* DISPATCH ORDER BUTTON */}
+        {/* STAGE BUTTON (dispatch unwired) */}
         <button
           onClick={handleExecuteTrade}
-          disabled={isSubmitting}
-          className={`w-full py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            side === 'BUY'
-              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_16px_rgba(16,185,129,0.4)] active:scale-[0.99]'
-              : 'bg-rose-600 hover:bg-rose-500 text-white shadow-[0_0_16px_rgba(244,63,94,0.4)] active:scale-[0.99]'
-          } ${isSubmitting ? 'opacity-70 cursor-wait' : ''}`}
+          className="w-full py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.1] text-slate-300"
         >
-          {isSubmitting ? (
-            <>
-              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Routing via SOR Slicer...
-            </>
-          ) : (
-            <>
-              <Zap className="w-3.5 h-3.5" />
-              DISPATCH {side} ORDER • ${notionalUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-            </>
-          )}
+          <Zap className="w-3.5 h-3.5" />
+          STAGE {side} ORDER • ${notionalUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })} (NOT SENT)
         </button>
+        <div className="text-[9px] text-slate-500 text-center -mt-1">
+          Category: {category} • Venue preference recorded locally only
+        </div>
       </div>
     </div>
   );

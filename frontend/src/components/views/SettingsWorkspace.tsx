@@ -1,55 +1,36 @@
-import React, { useState } from 'react';
-import { 
-  Sliders, 
-  ShieldCheck, 
-  AlertTriangle, 
-  BrainCircuit, 
-  Zap, 
+import React, { useState, useEffect } from 'react';
+import {
+  Sliders,
+  ShieldCheck,
+  AlertTriangle,
+  BrainCircuit,
+  Zap,
   BarChart2,
-  ReceiptText, 
-  Bell, 
-  Monitor, 
-  Key, 
-  Download, 
-  Upload, 
-  RotateCcw, 
-  Save, 
-  CheckCircle2, 
-  Lock, 
-   
-   
-   
-  Radio, 
-
-
-
-  Check, 
+  ReceiptText,
+  Bell,
+  Monitor,
+  Key,
+  Check,
   Copy,
-
-
-  RefreshCw,
-
-
-
+  Download,
+  Upload,
+  RotateCcw,
+  Save,
+  Lock,
+  Radio,
   Fingerprint,
-
   LineChart,
-  Eye,
-  EyeOff,
-  Plus,
-  Trash2,
-  Send,
-
-
-
-
-
 } from 'lucide-react';
-import { SystemSettings, AutonomyLevel,  VenueConfig } from '../../types';
+import { SystemSettings, AutonomyLevel } from '../../types';
 
 interface SettingsWorkspaceProps {
   settings: SystemSettings;
-  onUpdateSettings: (newSettings: SystemSettings) => void;
+  serverVersion: number | null;
+  serverAvailable: boolean;
+  serverReason: string | null;
+  onSaveSettings: (
+    next: SystemSettings,
+  ) => Promise<{ ok: true; version: number } | { ok: false; reason: string; authRequired: boolean }>;
   onResetDefaults: () => void;
   onTriggerToast: (msg: string) => void;
 }
@@ -69,157 +50,32 @@ type SettingsSection =
   | 'security'
   | 'backup';
 
-interface ApiKeyItem {
-  id: string;
-  service: string;
-  name: string;
-  keyMasked: string;
-  fullKey: string;
-  permissions: 'READ_ONLY' | 'TRADE_ONLY' | 'FULL_ACCESS';
-  status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
-  expiresAt: string;
-  lastUsed: string;
-}
-
 export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
   settings,
-  onUpdateSettings,
+  serverVersion,
+  serverAvailable,
+  serverReason,
+  onSaveSettings,
   onResetDefaults,
   onTriggerToast,
 }) => {
   const [activeSection, setActiveSection] = useState<SettingsSection>('autonomy');
   const [formState, setFormState] = useState<SystemSettings>(settings);
   const [isDirty, setIsDirty] = useState<boolean>(false);
-  const [testingVenueId, setTestingVenueId] = useState<string | null>(null);
-  const [testingTradingView, setTestingTradingView] = useState<boolean>(false);
-  const [testingWebhook, setTestingWebhook] = useState<boolean>(false);
-  const [testingTelegram, setTestingTelegram] = useState<boolean>(false);
-  const [testingOracle, setTestingOracle] = useState<boolean>(false);
-  const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
-  const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, boolean>>({});
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [authBlocked, setAuthBlocked] = useState<boolean>(false);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
-  const [showAddKeyModal, setShowAddKeyModal] = useState<boolean>(false);
-  const [lastSavedHash, setLastSavedHash] = useState<string>('0x8f92a14e92b847c0');
-  
-  // Backtest / Stress Test Simulation State
-  const [isRunningBacktest, setIsRunningBacktest] = useState<boolean>(false);
-  const [backtestResult, setBacktestResult] = useState<{
-    simulatedMaxDd: number;
-    simulatedCVar99: number;
-    sharpeRatio: number;
-    worstPeriodDays: number;
-    status: 'PASSED_GUARDRAILS' | 'BREACHED_GUARDRAILS';
-  } | null>(null);
 
-  // Initial API Key Vault Records
-  const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([
-    {
-      id: 'key-polymarket',
-      service: 'Polymarket CLOB Gateway',
-      name: 'Polygon L2 CTF Exchange & Prediction Settlement API',
-      keyMasked: '0x94A...33c9E••••••••••••881a',
-      fullKey: '0x94A920148fB233c9E881a029384719028471881a',
-      permissions: 'FULL_ACCESS',
-      status: 'ACTIVE',
-      expiresAt: 'PERMANENT',
-      lastUsed: '6 seconds ago'
-    },
-    {
-      id: 'key-ibkr',
-      service: 'Interactive Brokers FIX Gateway',
-      name: 'Global Equities Direct (TSE Tokyo, Euronext, HKEX, NSE)',
-      keyMasked: 'ibkr_fix_live_829••••••••••••994a',
-      fullKey: 'ibkr_fix_live_829104882910481902847104994a',
-      permissions: 'TRADE_ONLY',
-      status: 'ACTIVE',
-      expiresAt: '2028-06-30',
-      lastUsed: '8 seconds ago'
-    },
-    {
-      id: 'key-ebs-fx',
-      service: 'EBS & 360T Interbank Forex',
-      name: 'G10 & Emerging Market Foreign Exchange FIX Stream',
-      keyMasked: 'ebs_fx_feed_441••••••••••••721b',
-      fullKey: 'ebs_fx_feed_4410293847192038471920384721b',
-      permissions: 'TRADE_ONLY',
-      status: 'ACTIVE',
-      expiresAt: '2027-12-31',
-      lastUsed: '3 seconds ago'
-    },
-    {
-      id: 'key-ice-commodities',
-      service: 'ICE Europe & LME Direct',
-      name: 'Commodities Bullion, Crude & Industrial Metals FIX 4.4',
-      keyMasked: 'ice_lme_feed_773••••••••••••109f',
-      fullKey: 'ice_lme_feed_7730192837491028374910283109f',
-      permissions: 'TRADE_ONLY',
-      status: 'ACTIVE',
-      expiresAt: '2028-01-31',
-      lastUsed: '14 seconds ago'
-    },
-    {
-      id: 'key-binance',
-      service: 'Binance Institutional',
-      name: 'Primary Spot & Futures Gateway FIX 4.4',
-      keyMasked: 'bin_inst_84a92••••••••••••b92c',
-      fullKey: 'bin_inst_84a929f028ab77104b2c991e089a8b92c',
-      permissions: 'TRADE_ONLY',
-      status: 'ACTIVE',
-      expiresAt: '2027-12-31',
-      lastUsed: '12 seconds ago'
-    },
-    {
-      id: 'key-cme',
-      service: 'CME Group Direct',
-      name: 'Aurora Co-location iLink3 FIX Port',
-      keyMasked: 'cme_ilink3_7391••••••••••••f182',
-      fullKey: 'cme_ilink3_7391004819aa018274bb92019ff182',
-      permissions: 'TRADE_ONLY',
-      status: 'ACTIVE',
-      expiresAt: '2027-06-30',
-      lastUsed: '4 seconds ago'
-    },
-    {
-      id: 'key-hyperliquid',
-      service: 'Hyperliquid L1',
-      name: 'Arbitrum/L1 Signing Master Sub-Account',
-      keyMasked: '0x71C...98A2eB••••••••••••01Fa',
-      fullKey: '0x71C82901458A2eB990145899201948820101Fa',
-      permissions: 'TRADE_ONLY',
-      status: 'ACTIVE',
-      expiresAt: 'PERMANENT',
-      lastUsed: '1 second ago'
-    },
-    {
-      id: 'key-gemini',
-      service: 'Google Gemini AI Engine',
-      name: 'Gemini 2.5 Pro LangGraph Orchestrator',
-      keyMasked: 'AIzaSyD89••••••••••••94f2A',
-      fullKey: 'AIzaSyD8902847194019284710492817494f2A',
-      permissions: 'FULL_ACCESS',
-      status: 'ACTIVE',
-      expiresAt: 'PERMANENT',
-      lastUsed: '2 seconds ago'
-    },
-    {
-      id: 'key-sec',
-      service: 'SEC EDGAR Direct Feed',
-      name: 'Continuous 13F & 8-K Real-Time XBRL Ingestion',
-      keyMasked: 'sec_edgar_user_991••••••••••••72b',
-      fullKey: 'sec_edgar_user_9918274019283749102872b',
-      permissions: 'READ_ONLY',
-      status: 'ACTIVE',
-      expiresAt: '2028-01-01',
-      lastUsed: '18 minutes ago'
+  // The server blob wins whenever it arrives (initial GET resolves after
+  // mount); local edits are applied on top and never clobbered by renders.
+  const syncedRef = React.useRef(settings);
+  useEffect(() => {
+    if (syncedRef.current !== settings) {
+      syncedRef.current = settings;
+      setFormState(settings);
+      setIsDirty(false);
     }
-  ]);
-
-  // New Key Form State
-  const [newKeyForm, setNewKeyForm] = useState({
-    service: 'Binance Institutional',
-    name: '',
-    key: '',
-    permissions: 'TRADE_ONLY' as const
   });
 
   const handleChange = <K extends keyof SystemSettings>(key: K, value: SystemSettings[K]) => {
@@ -238,73 +94,32 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
     });
   };
 
-  const handleSave = () => {
-    onUpdateSettings(formState);
-    setIsDirty(false);
-    const newHash = '0x' + Array.from({length: 16}, () => Math.floor(Math.random() * 16).toString(16)).join('');
-    setLastSavedHash(newHash);
-    onTriggerToast(`System configuration saved & ratified in Merkle Block #${Math.floor(4830 + Math.random() * 50)}`);
+  const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setSaveError(null);
+    setAuthBlocked(false);
+    const result = await onSaveSettings(formState);
+    setIsSaving(false);
+    if (result.ok) {
+      setIsDirty(false);
+      onTriggerToast(`System configuration persisted server-side (settings v${result.version}).`);
+    } else {
+      setSaveError(result.reason);
+      setAuthBlocked(result.authRequired);
+      onTriggerToast(
+        result.authRequired
+          ? 'Save blocked: operator token required (PUT /api/v1/settings/v1 answered 401).'
+          : `Save failed: ${result.reason}`,
+      );
+    }
   };
 
   const handleRevert = () => {
     setFormState(settings);
     setIsDirty(false);
-    onTriggerToast('Settings reverted to active memory state.');
-  };
-
-  const handleTestTradingView = () => {
-    setTestingTradingView(true);
-    setTimeout(() => {
-      setTestingTradingView(false);
-      onTriggerToast('TradingView Pro API Ping: 200 OK • Datafeed Gateway Latency 14ms • WebSocket Heartbeat Verified');
-    }, 800);
-  };
-
-  const handleTestVenue = (venue: VenueConfig) => {
-    setTestingVenueId(venue.id);
-    setTimeout(() => {
-      setTestingVenueId(null);
-      onTriggerToast(`Ping ${venue.name}: Round-trip latency ${venue.latencyMs}ms (FIX heartbeat verified OK)`);
-    }, 700);
-  };
-
-  const handleTestWebhook = () => {
-    setTestingWebhook(true);
-    setTimeout(() => {
-      setTestingWebhook(false);
-      onTriggerToast('Test alert payload dispatched to Webhook endpoint: 200 OK (Slack/Teams Verified)');
-    }, 850);
-  };
-
-  const handleTestTelegram = () => {
-    setTestingTelegram(true);
-    setTimeout(() => {
-      setTestingTelegram(false);
-      onTriggerToast('Telegram bot test message dispatched to verified group channel.');
-    }, 750);
-  };
-
-  const handleTestOracle = () => {
-    setTestingOracle(true);
-    setTimeout(() => {
-      setTestingOracle(false);
-      onTriggerToast('Dual Oracle Heartbeat: Chainlink (0.4s age, 0.02% delta) & Pyth (120ms age) in full consensus.');
-    }, 900);
-  };
-
-  const handleRunStressTest = () => {
-    setIsRunningBacktest(true);
-    setTimeout(() => {
-      setIsRunningBacktest(false);
-      setBacktestResult({
-        simulatedMaxDd: 2.14,
-        simulatedCVar99: 3.42,
-        sharpeRatio: 2.88,
-        worstPeriodDays: 4,
-        status: 'PASSED_GUARDRAILS'
-      });
-      onTriggerToast(`Monte Carlo Stress Test completed (${formState.monteCarloSimulationsCount.toLocaleString()} paths): Constitution 3.0% DD Guardrail Respected.`);
-    }, 1400);
+    setSaveError(null);
+    onTriggerToast('Settings reverted to the last server state.');
   };
 
   const handleExportConfig = () => {
@@ -328,69 +143,28 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
         if (parsed && typeof parsed === 'object' && parsed.autonomyLevel) {
           setFormState(parsed);
           setIsDirty(true);
-          onTriggerToast('Configuration imported successfully from JSON file. Click SAVE & RATIFY to apply.');
+          onTriggerToast('Configuration imported successfully from JSON file. Click SAVE to persist server-side.');
         } else {
           onTriggerToast('Error: JSON file does not match institutional SystemSettings schema.');
         }
       } catch (err) {
+        void err;
         onTriggerToast('Failed to parse uploaded JSON file.');
       }
     };
     reader.readAsText(file);
   };
 
-  const handleCopyKey = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKeyId(id);
-    setTimeout(() => setCopiedKeyId(null), 1500);
-  };
-
-  const toggleRevealKey = (id: string) => {
-    setRevealedKeyIds(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const handleAddKey = () => {
-    if (!newKeyForm.name || !newKeyForm.key) {
-      onTriggerToast('Please fill in key name and credential secret.');
-      return;
-    }
-    const masked = newKeyForm.key.length > 10 
-      ? `${newKeyForm.key.slice(0, 6)}••••••••••••${newKeyForm.key.slice(-4)}`
-      : '••••••••••••';
-    
-    const newEntry: ApiKeyItem = {
-      id: `key-${Date.now()}`,
-      service: newKeyForm.service,
-      name: newKeyForm.name,
-      keyMasked: masked,
-      fullKey: newKeyForm.key,
-      permissions: newKeyForm.permissions,
-      status: 'ACTIVE',
-      expiresAt: '2028-12-31',
-      lastUsed: 'Just created'
-    };
-
-    setApiKeys(prev => [newEntry, ...prev]);
-    setShowAddKeyModal(false);
-    setNewKeyForm({ service: 'Binance Institutional', name: '', key: '', permissions: 'TRADE_ONLY' });
-    onTriggerToast(`Added new gateway credential: ${newEntry.name}`);
-  };
-
-  const handleDeleteKey = (id: string) => {
-    setApiKeys(prev => prev.filter(k => k.id !== id));
-    onTriggerToast('Gateway credential revoked & removed from active memory enclave.');
-  };
-
   const navItems: { id: SettingsSection; label: string; icon: React.ElementType; badge?: string }[] = [
     { id: 'autonomy', label: 'Autonomy & Governance', icon: Sliders },
     { id: 'risk', label: 'Risk Limits & Firewall', icon: ShieldCheck, badge: 'Constitution' },
-    { id: 'agents', label: 'Multi-Agent & LLM Engines', icon: BrainCircuit, badge: 'LangGraph' },
-    { id: 'execution', label: 'Execution & Venues', icon: Zap, badge: '5 Venues' },
-    { id: 'tradingview', label: 'TradingView & Chart API', icon: BarChart2, badge: 'PRO' },
-    { id: 'oracles', label: 'Data Feeds & Oracles', icon: Radio, badge: 'Dual SLA' },
+    { id: 'agents', label: 'Multi-Agent & LLM Engines', icon: BrainCircuit },
+    { id: 'execution', label: 'Execution & Venues', icon: Zap, badge: `${formState.venues.length} Venues` },
+    { id: 'tradingview', label: 'TradingView & Chart API', icon: BarChart2 },
+    { id: 'oracles', label: 'Data Feeds & Oracles', icon: Radio },
     { id: 'backtest', label: 'Stress Testing & Monte Carlo', icon: LineChart, badge: 'Monte Carlo' },
     { id: 'accounting', label: 'Accounting & Controller', icon: ReceiptText, badge: 'Compliance' },
-    { id: 'apikeys', label: 'API Keys & Secrets Vault', icon: Key, badge: `${apiKeys.length} Keys` },
+    { id: 'apikeys', label: 'API Keys & Secrets Vault', icon: Key },
     { id: 'alerts', label: 'Alerts, Webhooks & Telegram', icon: Bell },
     { id: 'display', label: 'Display & UI Preferences', icon: Monitor },
     { id: 'security', label: 'Security & Multi-Sig', icon: Lock },
@@ -416,11 +190,11 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           </div>
         </div>
 
-        {/* Global Save / Revert Bar */}
+        {/* Global Save / Revert Bar (server is source of truth) */}
         <div className="flex items-center gap-2.5">
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-black/40 border border-white/[0.06] text-slate-400">
             <Fingerprint className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="text-[10px]">CONFIG RATIFIED: <span className="text-cyan-300 font-mono">{lastSavedHash}</span></span>
+            <span className="text-[10px]">SETTINGS: <span className="text-cyan-300 font-mono">{serverAvailable && serverVersion !== null ? `v${serverVersion} (server)` : 'server plane unwired'}</span></span>
           </div>
 
           {isDirty && (
@@ -435,18 +209,37 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           <button
             onClick={handleSave}
-            disabled={!isDirty}
+            disabled={!isDirty || isSaving || !serverAvailable}
+            title={!serverAvailable ? (serverReason ?? 'settings plane not wired') : undefined}
             className={`px-4 py-1.5 rounded font-bold transition-all flex items-center gap-1.5 ${
-              isDirty 
+              isDirty && serverAvailable && !isSaving
                 ? 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-[0_0_16px_rgba(0,240,255,0.4)] animate-pulse'
                 : 'bg-white/[0.05] text-slate-500 border border-white/[0.08] cursor-not-allowed'
             }`}
           >
             <Save className="w-3.5 h-3.5" />
-            <span>{isDirty ? 'SAVE & RATIFY CONFIG' : 'CONFIG SYNCED'}</span>
+            <span>{isSaving ? 'PERSISTING…' : isDirty ? (serverAvailable ? 'SAVE TO SERVER' : 'SAVE UNAVAILABLE') : 'CONFIG SYNCED'}</span>
           </button>
         </div>
       </div>
+
+      {!serverAvailable && (
+        <div className="p-3 rounded bg-amber-950/30 border border-amber-800/50 text-amber-200 text-xs">
+          Settings plane unwired: {serverReason ?? 'no reason published'}. The form below shows neutral
+          defaults — edits are held locally and cannot persist until the plane is wired.
+        </div>
+      )}
+      {authBlocked && (
+        <div className="p-3 rounded bg-rose-950/30 border border-rose-800/50 text-rose-200 text-xs">
+          Operator token required: PUT /api/v1/settings/v1 answered 401. Set your bearer token via the
+          identity control (client.ts) and retry — edits are kept, nothing was saved.
+        </div>
+      )}
+      {saveError && !authBlocked && (
+        <div className="p-3 rounded bg-rose-950/30 border border-rose-800/50 text-rose-200 text-xs">
+          Save failed: {saveError}
+        </div>
+      )}
 
       {/* Main Split Layout: Left Settings Nav + Right Setting Pane */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
@@ -485,16 +278,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           <div className="pt-3 mt-3 border-t border-white/[0.06] px-2 text-[10px] text-slate-400 space-y-1">
             <div className="flex justify-between">
-              <span>AUTONOMY ENGINE:</span>
-              <strong className="text-slate-300">v1.0.4-PROD</strong>
+              <span>SERVER VERSION:</span>
+              <strong className="text-slate-300">{serverAvailable && serverVersion !== null ? `v${serverVersion}` : '—'}</strong>
             </div>
             <div className="flex justify-between">
-              <span>MERKLE CHAIN:</span>
-              <strong className="text-emerald-400">HEALTHY</strong>
-            </div>
-            <div className="flex justify-between">
-              <span>ACTIVE KEYS:</span>
-              <strong className="text-cyan-300">{apiKeys.length} In Enclave</strong>
+              <span>UNSaved EDITS:</span>
+              <strong className={isDirty ? 'text-amber-300' : 'text-slate-500'}>{isDirty ? 'YES' : 'NO'}</strong>
             </div>
           </div>
         </div>
@@ -1115,14 +904,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                           <div className="text-emerald-400 font-mono font-bold">{venue.latencyMs} ms</div>
                         </div>
 
-                        <button
-                          onClick={() => handleTestVenue(venue)}
-                          disabled={testingVenueId === venue.id}
-                          className="px-2.5 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 text-[11px] flex items-center gap-1.5 transition-colors"
+                        <span
+                          title="No venue probe endpoint exists — venue rows are persisted config, not live status"
+                          className="px-2.5 py-1 rounded bg-white/[0.02] border border-white/[0.06] text-slate-500 text-[11px]"
                         >
-                          <RefreshCw className={`w-3 h-3 ${testingVenueId === venue.id ? 'animate-spin text-cyan-400' : ''}`} />
-                          <span>{testingVenueId === venue.id ? 'PINGING...' : 'PING'}</span>
-                        </button>
+                          NO PROBE
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -1177,14 +964,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     Configure official TradingView Pro API credentials, custom datafeeds, webhook signal triggers, and default technical studies.
                   </p>
                 </div>
-                <button
-                  onClick={handleTestTradingView}
-                  disabled={testingTradingView}
-                  className="px-3 py-1.5 rounded bg-indigo-950 hover:bg-indigo-900 border border-indigo-600/60 text-indigo-200 text-xs flex items-center gap-1.5 font-bold transition-all shadow-[0_0_12px_rgba(99,102,241,0.25)] cursor-pointer"
+                <span
+                  title="No datafeed probe harness exists — credentials persist server-side only"
+                  className="px-3 py-1.5 rounded bg-white/[0.02] border border-white/[0.08] text-slate-500 text-xs font-bold"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${testingTradingView ? 'animate-spin text-cyan-400' : ''}`} />
-                  <span>{testingTradingView ? 'TESTING DATAFEED...' : 'TEST TRADINGVIEW API PING'}</span>
-                </button>
+                  NO TEST HARNESS
+                </span>
               </div>
 
               {/* Master Activation Toggle */}
@@ -1406,14 +1191,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     Configure dual-oracle validation rules, price staleness limits, and cross-venue deviation circuit breakers.
                   </p>
                 </div>
-                <button
-                  onClick={handleTestOracle}
-                  disabled={testingOracle}
-                  className="px-3 py-1 rounded bg-cyan-950 hover:bg-cyan-900 border border-cyan-700/60 text-cyan-300 text-xs flex items-center gap-1.5 font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.2)]"
+                <span
+                  title="No oracle probe harness exists — thresholds persist server-side only"
+                  className="px-3 py-1 rounded bg-white/[0.02] border border-white/[0.08] text-slate-500 text-xs font-bold"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${testingOracle ? 'animate-spin' : ''}`} />
-                  <span>{testingOracle ? 'VERIFYING...' : 'TEST ORACLE HEARTBEAT'}</span>
-                </button>
+                  NO TEST HARNESS
+                </span>
               </div>
 
               {/* Oracle Providers */}
@@ -1496,14 +1279,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     Subject current portfolio weights to extreme tail risk events and 100,000 synthetic market paths.
                   </p>
                 </div>
-                <button
-                  onClick={handleRunStressTest}
-                  disabled={isRunningBacktest}
-                  className="px-4 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-bold transition-all shadow-[0_0_16px_rgba(0,240,255,0.4)] flex items-center gap-1.5"
+                <span
+                  title="No stress-test harness exists — scenario and budgets persist server-side only"
+                  className="px-4 py-1.5 rounded bg-white/[0.02] border border-white/[0.08] text-slate-500 text-xs font-bold"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isRunningBacktest ? 'animate-spin' : ''}`} />
-                  <span>{isRunningBacktest ? 'RUNNING SIMULATION...' : 'EXECUTE STRESS SIMULATION'}</span>
-                </button>
+                  NO TEST HARNESS
+                </span>
               </div>
 
               {/* Stress Preset Scenarios */}
@@ -1569,38 +1350,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                 </div>
               </div>
 
-              {/* Backtest Result Display */}
-              {backtestResult && (
-                <div className="p-4 rounded bg-emerald-950/40 border border-emerald-700/60 space-y-3 animate-fade-in">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span className="font-bold text-xs text-white uppercase">Stress Simulation Results: {formState.stressTestScenario}</span>
-                    </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-900 text-emerald-300 font-bold border border-emerald-600">
-                      PASSED (3.0% HARD DD LIMIT MAINTAINED)
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-                    <div className="p-2.5 rounded bg-black/40 border border-white/[0.06]">
-                      <div className="text-[10px] text-slate-400">SIMULATED MAX DRAWDOWN</div>
-                      <div className="text-emerald-400 font-mono font-bold text-sm">-{backtestResult.simulatedMaxDd}%</div>
-                    </div>
-                    <div className="p-2.5 rounded bg-black/40 border border-white/[0.06]">
-                      <div className="text-[10px] text-slate-400">SIMULATED 99.9% CVAR</div>
-                      <div className="text-cyan-300 font-mono font-bold text-sm">{backtestResult.simulatedCVar99}%</div>
-                    </div>
-                    <div className="p-2.5 rounded bg-black/40 border border-white/[0.06]">
-                      <div className="text-[10px] text-slate-400">ANNUALIZED SHARPE</div>
-                      <div className="text-slate-100 font-mono font-bold text-sm">{backtestResult.sharpeRatio}</div>
-                    </div>
-                    <div className="p-2.5 rounded bg-black/40 border border-white/[0.06]">
-                      <div className="text-[10px] text-slate-400">RECOVERY TIME</div>
-                      <div className="text-slate-100 font-mono font-bold text-sm">{backtestResult.worstPeriodDays} Trading Days</div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* No stress engine exists server-side: scenario + budgets persist, nothing executes */}
+              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] text-xs text-slate-400 leading-relaxed">
+                No stress-test harness is wired. The scenario, path budget, and lookback above are stored
+                with the server blob when you save — no simulation runs from this panel. Walk-forward
+                backtests live under the Strategies tab (POST /api/v1/research/backtest).
+              </div>
             </div>
           )}
 
@@ -1766,73 +1521,15 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     Hardware-enclave encrypted exchange keys, AI inference tokens, and regulatory data feed credentials.
                   </p>
                 </div>
-                <button
-                  onClick={() => setShowAddKeyModal(true)}
-                  className="px-3 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.4)] flex items-center gap-1.5"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>ADD CREDENTIAL</span>
-                </button>
               </div>
 
-              {/* Key List */}
-              <div className="space-y-2.5">
-                {apiKeys.map((key) => {
-                  const isRevealed = revealedKeyIds[key.id];
-                  return (
-                    <div
-                      key={key.id}
-                      className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] flex flex-wrap items-center justify-between gap-3 text-xs"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 font-bold text-white">
-                          <span>{key.service}</span>
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-black/50 text-cyan-300 border border-cyan-800 font-mono">
-                            {key.permissions}
-                          </span>
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
-                            {key.status}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-400">{key.name}</div>
-                        <div className="flex items-center gap-2 pt-1 font-mono text-[11px]">
-                          <span className="text-slate-300 bg-black/60 px-2 py-0.5 rounded border border-white/[0.08]">
-                            {isRevealed ? key.fullKey : key.keyMasked}
-                          </span>
-                          <button
-                            onClick={() => toggleRevealKey(key.id)}
-                            className="text-slate-400 hover:text-white p-1"
-                            title={isRevealed ? 'Mask Key' : 'Reveal Key'}
-                          >
-                            {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                          <button
-                            onClick={() => handleCopyKey(key.id, key.fullKey)}
-                            className="text-slate-400 hover:text-white p-1"
-                            title="Copy Key"
-                          >
-                            {copiedKeyId === key.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <div className="text-right text-[10px] text-slate-400 font-mono">
-                          <div>LAST USED: <span className="text-slate-200">{key.lastUsed}</span></div>
-                          <div>EXPIRES: <span className="text-slate-200">{key.expiresAt}</span></div>
-                        </div>
-
-                        <button
-                          onClick={() => handleDeleteKey(key.id)}
-                          className="p-1.5 rounded hover:bg-rose-950/60 text-slate-500 hover:text-rose-400 transition-colors"
-                          title="Revoke and remove key"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+              {/* No secrets backend exists: never demonstrated fake credentials here */}
+              <div className="p-6 rounded bg-white/[0.02] border border-white/[0.06] text-center">
+                <div className="text-xs font-bold text-slate-200">NO SECRETS VAULT WIRED</div>
+                <div className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                  No credential store exists server-side, so this panel holds no keys and accepts none.
+                  Do not paste secrets into the settings blob — it is stored as plain JSON.
+                </div>
               </div>
             </div>
           )}
@@ -1897,14 +1594,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     onChange={(e) => handleChange('webhookUrl', e.target.value)}
                     className="bg-black/50 border border-white/[0.1] rounded px-3 py-1.5 text-xs text-white font-mono flex-1 focus:border-cyan-500 focus:outline-none"
                   />
-                  <button
-                    onClick={handleTestWebhook}
-                    disabled={testingWebhook}
-                    className="px-3.5 py-1.5 rounded bg-cyan-950 hover:bg-cyan-900 border border-cyan-700/60 text-cyan-300 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                  <span
+                    title="No webhook dispatch harness exists — the URL persists server-side only"
+                    className="px-3.5 py-1.5 rounded bg-white/[0.02] border border-white/[0.08] text-slate-500 font-bold text-xs"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${testingWebhook ? 'animate-spin' : ''}`} />
-                    <span>{testingWebhook ? 'SENDING...' : 'TEST PAYLOAD'}</span>
-                  </button>
+                    NO TEST HARNESS
+                  </span>
                 </div>
               </div>
 
@@ -1931,14 +1626,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                       placeholder="Telegram Group Chat ID (-100...)"
                       className="bg-black/50 border border-white/[0.1] rounded px-3 py-1 text-xs text-white font-mono flex-1 focus:border-cyan-500 focus:outline-none"
                     />
-                    <button
-                      onClick={handleTestTelegram}
-                      disabled={testingTelegram}
-                      className="px-3 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 text-xs flex items-center gap-1.5 transition-colors"
+                    <span
+                      title="No Telegram dispatch harness exists — settings persist server-side only"
+                      className="px-3 py-1 rounded bg-white/[0.02] border border-white/[0.08] text-slate-500 text-xs font-bold"
                     >
-                      <Send className="w-3 h-3 text-cyan-400" />
-                      <span>{testingTelegram ? 'PAGING...' : 'TEST DISPATCH'}</span>
-                    </button>
+                      NO TEST HARNESS
+                    </span>
                   </div>
                 )}
               </div>
@@ -2125,16 +1818,10 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
                 <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
                   <div className="font-bold text-white text-xs">Master Operator Key Fingerprint</div>
-                  <div className="p-2 rounded bg-black/50 border border-white/[0.08] font-mono text-[11px] text-cyan-300 flex items-center justify-between">
-                    <span>9F8A-42C1-88E0-BA32-001F</span>
-                    <button
-                      onClick={() => handleCopyKey('hsm', '9F8A-42C1-88E0-BA32-001F')}
-                      className="text-slate-400 hover:text-white"
-                    >
-                      {copiedKeyId === 'hsm' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
+                  <div className="p-2 rounded bg-black/50 border border-white/[0.08] font-mono text-[11px] text-slate-500">
+                    — (no HSM attestation published)
                   </div>
-                  <div className="text-[10px] text-slate-400">Enclave Status: Hardware Verified &amp; Attested (TPM 2.0)</div>
+                  <div className="text-[10px] text-slate-400">Enclave Status: unknown — no attestation endpoint exists.</div>
                 </div>
               </div>
 
@@ -2248,100 +1935,6 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
         </div>
       </div>
-
-      {/* Add Credential Modal */}
-      {showAddKeyModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[#0d0f17] border border-white/[0.12] rounded-lg p-5 shadow-2xl space-y-4 font-mono">
-            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
-              <div className="flex items-center gap-2 text-cyan-400 font-bold text-sm">
-                <Key className="w-4 h-4" />
-                <span>ADD GATEWAY CREDENTIAL</span>
-              </div>
-              <button
-                onClick={() => setShowAddKeyModal(false)}
-                className="text-slate-400 hover:text-white text-xs"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-400 text-[11px]">Target Service / Exchange</label>
-                <select
-                  value={newKeyForm.service}
-                  onChange={(e) => setNewKeyForm({ ...newKeyForm, service: e.target.value })}
-                  className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-1.5 text-white font-mono mt-1 focus:border-cyan-500 focus:outline-none"
-                >
-                  <option value="Polymarket CLOB Gateway">Polymarket CLOB &amp; Polygon L2 Settlement</option>
-                  <option value="Interactive Brokers FIX Gateway">Interactive Brokers Global (TSE, HKEX, Euronext, NSE)</option>
-                  <option value="EBS &amp; 360T Interbank Forex">EBS &amp; 360T Interbank Forex FIX 4.4</option>
-                  <option value="ICE Europe &amp; LME Direct">ICE Europe &amp; London Metal Exchange (LME)</option>
-                  <option value="Binance Institutional">Binance Institutional (FIX 4.4)</option>
-                  <option value="CME Group Direct">CME Group Direct (Aurora iLink3)</option>
-                  <option value="Coinbase Prime Custody">Coinbase Prime Custody</option>
-                  <option value="Hyperliquid L1">Hyperliquid L1 Perps</option>
-                  <option value="Google Gemini AI Engine">Google Gemini GenAI Token</option>
-                  <option value="Anthropic Claude Engine">Anthropic Claude Token</option>
-                  <option value="SEC EDGAR Feed">SEC EDGAR Continuous Feed</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-slate-400 text-[11px]">Credential Name / Description</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Primary Arbitrum Sub-account"
-                  value={newKeyForm.name}
-                  onChange={(e) => setNewKeyForm({ ...newKeyForm, name: e.target.value })}
-                  className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-1.5 text-white font-mono mt-1 focus:border-cyan-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-400 text-[11px]">API Key / Secret Token</label>
-                <input
-                  type="password"
-                  placeholder="Paste raw secret token here..."
-                  value={newKeyForm.key}
-                  onChange={(e) => setNewKeyForm({ ...newKeyForm, key: e.target.value })}
-                  className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-1.5 text-white font-mono mt-1 focus:border-cyan-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-400 text-[11px]">Enforced Permission Scope</label>
-                <select
-                  value={newKeyForm.permissions}
-                  onChange={(e) => setNewKeyForm({ ...newKeyForm, permissions: e.target.value as any })}
-                  className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-1.5 text-white font-mono mt-1 focus:border-cyan-500 focus:outline-none"
-                >
-                  <option value="READ_ONLY">Read Only (Telemetry &amp; Orderbook)</option>
-                  <option value="TRADE_ONLY">Trade Only (Orders Allowed, Withdrawals Forbidden)</option>
-                  <option value="FULL_ACCESS">Full Access (Inference &amp; Admin)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/[0.08]">
-              <button
-                onClick={() => setShowAddKeyModal(false)}
-                className="px-3 py-1.5 rounded bg-white/[0.05] hover:bg-white/[0.1] text-xs text-slate-300"
-              >
-                CANCEL
-              </button>
-              <button
-                onClick={handleAddKey}
-                className="px-4 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs"
-              >
-                ENCRYPT &amp; SAVE KEY
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Reset Confirmation Modal */}
       {showResetConfirm && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -2363,10 +1956,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
               <button
                 onClick={() => {
                   onResetDefaults();
-                  setFormState(settings);
-                  setIsDirty(false);
                   setShowResetConfirm(false);
-                  onTriggerToast('System configuration reset to Institutional Defaults.');
                 }}
                 className="px-4 py-1.5 rounded bg-rose-600 hover:bg-rose-500 text-black font-bold text-xs"
               >

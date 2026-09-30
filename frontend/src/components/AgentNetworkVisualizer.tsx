@@ -46,13 +46,13 @@ export const AgentNetworkVisualizer: React.FC<AgentNetworkVisualizerProps> = ({
 
         <div className="flex items-center gap-3 text-[11px] font-mono">
           <span className="flex items-center gap-1 text-emerald-400">
-            <TrendingUp className="w-3 h-3" /> 3 BULL
+            <TrendingUp className="w-3 h-3" /> {bullAgents.length} BULL
           </span>
           <span className="flex items-center gap-1 text-rose-400">
-            <TrendingDown className="w-3 h-3" /> 1 CHALLENGER
+            <TrendingDown className="w-3 h-3" /> {bearAgents.length} BEAR
           </span>
           <span className="flex items-center gap-1 text-cyan-400">
-            <ShieldCheck className="w-3 h-3" /> 4 VERIFIERS
+            <ShieldCheck className="w-3 h-3" /> {neutralAgents.length} NEUTRAL
           </span>
         </div>
       </div>
@@ -108,21 +108,21 @@ export const AgentNetworkVisualizer: React.FC<AgentNetworkVisualizerProps> = ({
           </div>
 
           <div className="text-sm font-semibold text-white text-center mt-1 px-2 leading-snug">
-            Equities / Crypto Momentum Overweight with US 2Y/10Y Curve Steepener
+            Agent roster topology ({agents.length} registered)
           </div>
 
           <div className="w-full mt-3 pt-2 border-t border-white/[0.08] space-y-1.5 text-[10px] font-mono">
             <div className="flex justify-between text-slate-400">
-              <span>CONSENSUS LEVEL:</span>
-              <span className="text-cyan-300 font-bold font-mono-num">87.4% SUPERMAJORITY</span>
+              <span>ROSTER SIZE:</span>
+              <span className="text-cyan-300 font-bold font-mono-num">{agents.length} AGENTS</span>
             </div>
             <div className="flex justify-between text-slate-400">
-              <span>OPPOSING CHALLENGES:</span>
-              <span className="text-amber-400 font-medium">1 ADDRESSED</span>
+              <span>CONSENSUS LEVEL:</span>
+              <span className="text-slate-500 font-mono-num">— (no debate feed here)</span>
             </div>
             <div className="flex justify-between text-slate-400">
               <span>FIREWALL APPROVAL:</span>
-              <span className="text-emerald-400 font-bold">15/15 CHECKS PASSED</span>
+              <span className="text-slate-500 font-mono-num">— (see Risk tab)</span>
             </div>
           </div>
 

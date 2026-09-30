@@ -115,6 +115,8 @@ export const CommandCanvas: React.FC<CommandCanvasProps> = ({
           <IntelligenceStream
             items={intelligence}
             onSelectItem={onSelectIntelligence}
+            onRefresh={() => intelQ.refresh()}
+            refreshing={intelQ.loading}
           />
         </div>
       </div>

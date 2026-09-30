@@ -108,7 +108,7 @@ export const AgentDrawer: React.FC<AgentDrawerProps> = ({
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">SYSTEM PROMPT PIN:</span>
-              <span className="text-slate-400 truncate max-w-[200px]">sha256:4a02...7d8f</span>
+              <span className="text-slate-500">— (not published)</span>
             </div>
           </div>
 
@@ -119,11 +119,11 @@ export const AgentDrawer: React.FC<AgentDrawerProps> = ({
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Consensus Minimum:</span>
-              <span className="text-slate-200">75.0%</span>
+              <span className="text-slate-500">— (see Settings)</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Adversarial Challenger Requirement:</span>
-              <span className="text-emerald-400">MANDATORY (§4.2)</span>
+              <span className="text-slate-500">— (see Settings)</span>
             </div>
           </div>
         </div>

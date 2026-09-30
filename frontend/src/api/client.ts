@@ -28,7 +28,7 @@ function requestId(): string {
 }
 
 async function request<T>(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PUT",
   path: string,
   body?: unknown,
   timeoutMs = 15_000,
@@ -82,4 +82,5 @@ async function safeDetail(res: Response): Promise<string> {
 export const http = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body: unknown) => request<T>("POST", path, body),
+  put: <T>(path: string, body: unknown) => request<T>("PUT", path, body),
 };

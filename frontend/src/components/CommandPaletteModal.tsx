@@ -61,37 +61,38 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     { id: 'nav-portfolio', category: 'NAVIGATION', title: 'Go to Portfolio Intelligence', subtitle: 'Positions, factor exposures, Kelly sizing', action: () => { onNavigate('portfolio'); onClose(); } },
     { id: 'nav-markets', category: 'NAVIGATION', title: 'Go to Market Intelligence', subtitle: 'Cross-asset regime & volatility surfaces', action: () => { onNavigate('markets'); onClose(); } },
     { id: 'nav-agents', category: 'NAVIGATION', title: 'Go to AI Agent Network', subtitle: 'Multi-agent debate & consensus engine', action: () => { onNavigate('agents'); onClose(); } },
+    { id: 'nav-strategies', category: 'NAVIGATION', title: 'Go to Strategies & Backtest Lab', subtitle: 'Family performance & server walk-forward scoring', action: () => { onNavigate('strategies'); onClose(); } },
     { id: 'nav-provenance', category: 'NAVIGATION', title: 'Go to Decision Provenance', subtitle: 'Lineage from source to execution fill', action: () => { onNavigate('provenance'); onClose(); } },
     { id: 'nav-risk', category: 'NAVIGATION', title: 'Go to Risk Command Center', subtitle: 'Continuous spectrum & firewall governor', action: () => { onNavigate('risk'); onClose(); } },
     { id: 'nav-execution', category: 'NAVIGATION', title: 'Go to Execution Workspace', subtitle: 'TWAP slicers & venue routing', action: () => { onNavigate('execution'); onClose(); } },
     { id: 'nav-models', category: 'NAVIGATION', title: 'Go to Model Governance', subtitle: 'MLflow registry, walk-forward validation', action: () => { onNavigate('models'); onClose(); } },
     { id: 'nav-accounting', category: 'NAVIGATION', title: 'Go to Accounting & Tax', subtitle: 'Double-entry ledger & compliance controller sign-off', action: () => { onNavigate('accounting'); onClose(); } },
     { id: 'nav-audit', category: 'NAVIGATION', title: 'Go to Audit & System Integrity', subtitle: 'Merkle hash chain & Constitution v1.0.0', action: () => { onNavigate('audit'); onClose(); } },
-    { id: 'nav-system', category: 'NAVIGATION', title: 'Go to System Health', subtitle: '38/38 wired components & telemetry', action: () => { onNavigate('system'); onClose(); } },
+    { id: 'nav-system', category: 'NAVIGATION', title: 'Go to System Health', subtitle: 'Wired components & telemetry (live counts)', action: () => { onNavigate('system'); onClose(); } },
     { id: 'nav-ds', category: 'NAVIGATION', title: 'Go to Design System Catalog', subtitle: 'Institutional UI component tokens', action: () => { onNavigate('design_system'); onClose(); } },
     { id: 'nav-settings', category: 'NAVIGATION', title: 'Go to System Settings & Config', subtitle: 'Risk limits, venue gateways, multi-agent tuning & governance', action: () => { onNavigate('settings'); onClose(); } },
 
     // Configuration Actions
-    { id: 'act-new-order', category: 'ACTIONS', title: 'Dispatch New Algorithmic Order (TWAP / VWAP)', subtitle: 'Route slices through Smart Order Router (SOR)', action: () => { onNavigate('execution'); onClose(); } },
-    { id: 'act-run-debate', category: 'ACTIONS', title: 'Run Live Multi-Agent Adversarial Debate', subtitle: 'Simulate LangGraph consensus on Fed, Earnings, or Oil shock', action: () => { onNavigate('provenance'); onClose(); } },
-    { id: 'act-run-backtest', category: 'ACTIONS', title: 'Run Walk-Forward Backtester & Sensitivity Grid', subtitle: 'Simulate 1,000 bars with fractional Kelly tuning', action: () => { onNavigate('research'); onClose(); } },
-    { id: 'act-stress-test', category: 'ACTIONS', title: 'Simulate Instant Macro Portfolio Shock', subtitle: 'Crypto flash crash, stagflation, or tech selloff', action: () => { onNavigate('portfolio'); onClose(); } },
+    { id: 'act-new-order', category: 'ACTIONS', title: 'Stage an Algorithmic Order (TWAP / VWAP)', subtitle: 'Review parameters — submission is not wired', action: () => { onNavigate('execution'); onClose(); } },
+    { id: 'act-run-debate', category: 'ACTIONS', title: 'Open Recorded Multi-Agent Debates', subtitle: 'Sessions recorded by the backend, if any', action: () => { onNavigate('provenance'); onClose(); } },
+    { id: 'act-run-backtest', category: 'ACTIONS', title: 'Run Server Walk-Forward Backtest', subtitle: 'Scores the live equity curve via /research/backtest', action: () => { onNavigate('research'); onClose(); } },
+    { id: 'act-stress-test', category: 'ACTIONS', title: 'Open Portfolio Shock View', subtitle: 'Live exposures only — no shock engine exists', action: () => { onNavigate('portfolio'); onClose(); } },
     { id: 'act-risk-config', category: 'ACTIONS', title: 'Configure Drawdown Circuit Breakers', subtitle: 'Edit Tier 1, 2, and 3 emergency halt thresholds', action: () => { onNavigate('settings'); onClose(); } },
     { id: 'act-venue-config', category: 'ACTIONS', title: 'Manage Connected Exchange Gateways', subtitle: 'Binance, CME, Coinbase, Hyperliquid, Interactive Brokers', action: () => { onNavigate('settings'); onClose(); } },
     { id: 'act-agent-weights', category: 'ACTIONS', title: 'Calibrate Agent Reputation Weights', subtitle: 'Adjust LangGraph consensus voting distribution', action: () => { onNavigate('settings'); onClose(); } },
     { id: 'act-tax-method', category: 'ACTIONS', title: 'Change Tax Lot Optimization Method', subtitle: 'Switch between HIFO, FIFO, LIFO, and SpecID', action: () => { onNavigate('settings'); onClose(); } },
     { id: 'act-export-json', category: 'ACTIONS', title: 'Export Full System Configuration JSON', subtitle: 'Backup current operational parameters and risk limits', action: () => { onNavigate('settings'); onClose(); } },
 
-    // Symbols
-    { id: 'sym-btc', category: 'SYMBOLS', title: 'Inspect BTC/USD', subtitle: '$94,820.00 • Momentum Overweight', action: () => { onNavigate('portfolio'); if (onSelectSymbol) onSelectSymbol('BTC/USD'); onClose(); } },
-    { id: 'sym-eth', category: 'SYMBOLS', title: 'Inspect ETH/USD', subtitle: '$3,410.50 • Staking Yield Accumulation', action: () => { onNavigate('portfolio'); if (onSelectSymbol) onSelectSymbol('ETH/USD'); onClose(); } },
-    { id: 'sym-nvda', category: 'SYMBOLS', title: 'Inspect NVDA', subtitle: '$138.40 • Semi Supply Dispersion Long', action: () => { onNavigate('portfolio'); if (onSelectSymbol) onSelectSymbol('NVDA'); onClose(); } },
-    { id: 'sym-spx', category: 'SYMBOLS', title: 'Inspect SPX', subtitle: '$5,820.00 • Trend Following Exposure', action: () => { onNavigate('portfolio'); if (onSelectSymbol) onSelectSymbol('SPX'); onClose(); } },
+    // Symbols (quotes resolve on the trading tab — none are stated here)
+    { id: 'sym-btc', category: 'SYMBOLS', title: 'Inspect BTC/USD', subtitle: 'Quotes load from the candle feed', action: () => { onNavigate('portfolio'); if (onSelectSymbol) onSelectSymbol('BTC/USD'); onClose(); } },
+    { id: 'sym-eth', category: 'SYMBOLS', title: 'Inspect ETH/USD', subtitle: 'Quotes load from the candle feed', action: () => { onNavigate('portfolio'); if (onSelectSymbol) onSelectSymbol('ETH/USD'); onClose(); } },
+    { id: 'sym-nvda', category: 'SYMBOLS', title: 'Inspect NVDA', subtitle: 'Quotes load from the candle feed', action: () => { onNavigate('portfolio'); if (onSelectSymbol) onSelectSymbol('NVDA'); onClose(); } },
+    { id: 'sym-spx', category: 'SYMBOLS', title: 'Inspect SPX', subtitle: 'Quotes load from the candle feed', action: () => { onNavigate('portfolio'); if (onSelectSymbol) onSelectSymbol('SPX'); onClose(); } },
 
-    // Agents
-    { id: 'agt-macro', category: 'AGENTS', title: 'Agent: Macro Regime Specialist', subtitle: 'Confidence: 89.2% • Bias: Bull', action: () => { onNavigate('agents'); onClose(); } },
-    { id: 'agt-challenger', category: 'AGENTS', title: 'Agent: Adversarial Challenger', subtitle: 'Confidence: 81.0% • Bias: Bear', action: () => { onNavigate('agents'); onClose(); } },
-    { id: 'agt-risk', category: 'AGENTS', title: 'Agent: Risk Firewall Sentinel', subtitle: 'Confidence: 96.5% • Bias: Neutral', action: () => { onNavigate('agents'); onClose(); } },
+    // Agents (roster resolves on the agents tab — no stance is stated here)
+    { id: 'agt-macro', category: 'AGENTS', title: 'Agent: Macro Regime Specialist', subtitle: 'Inspect live roster', action: () => { onNavigate('agents'); onClose(); } },
+    { id: 'agt-challenger', category: 'AGENTS', title: 'Agent: Adversarial Challenger', subtitle: 'Inspect live roster', action: () => { onNavigate('agents'); onClose(); } },
+    { id: 'agt-risk', category: 'AGENTS', title: 'Agent: Risk Firewall Sentinel', subtitle: 'Inspect live roster', action: () => { onNavigate('agents'); onClose(); } },
 
     // Constitution
     { id: 'cst-drawdown', category: 'CONSTITUTION', title: 'Constitution §2.1: Tiered Drawdown Rule', subtitle: 'Halt trading when intraday drawdown touches 3.00%', action: () => { onNavigate('audit'); onClose(); } },

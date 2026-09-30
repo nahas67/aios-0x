@@ -1,29 +1,28 @@
 import React, { useState } from 'react';
-import { 
-  Zap, 
-  X, 
-  ShieldCheck, 
-  ArrowUpRight, 
-  ArrowDownRight, 
-   
-   
-   
-  
-  
-
+import {
+  Zap,
+  X,
+  ShieldCheck,
+  ArrowUpRight,
+  ArrowDownRight,
 } from 'lucide-react';
-import { ExecutionOrder } from '../types';
 
 interface CreateOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onDispatchOrder: (order: ExecutionOrder) => void;
+  onNotice: (msg: string) => void;
 }
 
+/**
+ * Order staging modal. The backend exposes no order-submission endpoint
+ * (orders are read-only over HTTP), so this form stages parameters for
+ * review only: submitting reports that nothing was sent instead of
+ * fabricating an order id, fill price, or slippage figure.
+ */
 export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
   isOpen,
   onClose,
-  onDispatchOrder,
+  onNotice,
 }) => {
   const [symbol, setSymbol] = useState<string>('BTC/USD');
   const [side, setSide] = useState<'BUY' | 'SELL'>('BUY');
@@ -34,7 +33,6 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
   const [venue, setVenue] = useState<string>('AUTO_SOR');
   const [maxSlippageBps, setMaxSlippageBps] = useState<number>(1.5);
   const [slicesCount, setSlicesCount] = useState<number>(12);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   if (!isOpen) return null;
 
@@ -43,30 +41,12 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
   const handleDispatch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || parseFloat(amount) <= 0) return;
-
-    setIsSubmitting(true);
-
-    setTimeout(() => {
-      const newOrder: ExecutionOrder = {
-        id: `ord-${Date.now().toString().slice(-6)}`,
-        time: new Date().toLocaleTimeString(),
-        symbol: symbol,
-        side: side,
-        quantity: parseFloat(amount),
-        notionalUsd: totalNotional,
-        fillPrice: parseFloat(price),
-        venue: venue === 'AUTO_SOR' ? 'Smart Order Router (SOR Multi-Venue)' : venue,
-        orderState: 'FILLED',
-        slippageBps: parseFloat((Math.random() * maxSlippageBps).toFixed(2)),
-        strategy: `${orderType} Algorithmic Slicer`,
-        agent: 'Smart Execution SOR Gateway',
-        riskState: 'COMPLIANT',
-      };
-
-      onDispatchOrder(newOrder);
-      setIsSubmitting(false);
-      onClose();
-    }, 700);
+    onNotice(
+      `Order NOT sent: no order-submission endpoint exists server-side. ` +
+      `Staged ${side} ${amount} ${symbol} (${orderType}, ${slicesCount} slices over ${durationMinutes}m, ` +
+      `slippage cap ${maxSlippageBps} bps, venue ${venue}) was discarded, no fill fabricated.`,
+    );
+    onClose();
   };
 
   return (
@@ -78,10 +58,10 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
             <Zap className="w-5 h-5 text-cyan-400" />
             <div>
               <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                INSTITUTIONAL ALGORITHMIC ORDER DISPATCH
+                INSTITUTIONAL ALGORITHMIC ORDER STAGING
               </h3>
               <p className="text-[10px] text-slate-400">
-                SOR Smart Routing • Slicing Engine • Pre-trade Firewall Validation
+                Parameter review only — submission is not wired
               </p>
             </div>
           </div>
@@ -94,6 +74,13 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
         </div>
 
         <form onSubmit={handleDispatch} className="p-5 space-y-4 text-xs">
+          {/* Not-wired notice */}
+          <div className="rounded border border-amber-800/50 bg-amber-950/20 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
+            Order routing is not wired: the backend publishes orders read-only. Submitting
+            this form stages parameters for review and reports honestly — no order id,
+            fill, or slippage is generated.
+          </div>
+
           {/* Asset & Direction Selection */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -117,7 +104,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
                 <option value="ETH/USD">ETH/USD (Ethereum Spot)</option>
                 <option value="SOL/USD">SOL/USD (Solana Spot)</option>
                 <option value="NVDA">NVDA (NVIDIA Corporation)</option>
-                <option value="SPY">SPY (S&P 500 ETF Trust)</option>
+                <option value="SPY">SPY (S&amp;P 500 ETF Trust)</option>
                 <option value="AAPL">AAPL (Apple Inc.)</option>
                 <option value="BTC-PERP">BTC-PERP (Hyperliquid L1)</option>
                 <option value="ETH-PERP">ETH-PERP (Hyperliquid L1)</option>
@@ -203,7 +190,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
               </label>
               <select
                 value={orderType}
-                onChange={(e) => setOrderType(e.target.value as any)}
+                onChange={(e) => setOrderType(e.target.value as never)}
                 className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono focus:border-cyan-500 focus:outline-none"
               >
                 <option value="TWAP">TWAP (Time-Weighted Average Price)</option>
@@ -281,25 +268,21 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
             </div>
           )}
 
-          {/* Pre-trade Calculation & Guardrail Ribbon */}
+          {/* Staged calculation */}
           <div className="p-3 rounded bg-black/40 border border-white/[0.08] space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">ESTIMATED NOTIONAL:</span>
+              <span className="text-slate-400">STAGED NOTIONAL:</span>
               <span className="text-white font-bold font-mono">
                 ${totalNotional.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">ESTIMATED FEES (3 BPS):</span>
-              <span className="text-cyan-300 font-mono">${(totalNotional * 0.0003).toFixed(2)}</span>
-            </div>
             <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/[0.04]">
-              <span className="text-emerald-400 flex items-center gap-1">
+              <span className="text-slate-500 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                CONSTITUTION §2.1 LIMIT PASS
+                Pre-trade firewall: not evaluated client-side
               </span>
-              <span className="text-slate-400 text-[10px]">
-                Pre-trade VaR Delta: <strong className="text-white">+0.04%</strong>
+              <span className="text-slate-500 text-[10px]">
+                NOT SENT
               </span>
             </div>
           </div>
@@ -315,15 +298,11 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || !amount || parseFloat(amount) <= 0}
-              className={`px-5 py-2 rounded font-bold flex items-center gap-2 transition-all ${
-                side === 'BUY'
-                  ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_16px_rgba(16,185,129,0.4)]'
-                  : 'bg-rose-500 hover:bg-rose-400 text-black shadow-[0_0_16px_rgba(244,63,94,0.4)]'
-              }`}
+              disabled={!amount || parseFloat(amount) <= 0}
+              className="px-5 py-2 rounded font-bold flex items-center gap-2 transition-all bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.12] text-slate-200"
             >
               <Zap className="w-4 h-4" />
-              <span>{isSubmitting ? 'ROUTING THROUGH SOR...' : `DISPATCH ${side} ORDER`}</span>
+              <span>STAGE {side} ORDER (NOT SENT)</span>
             </button>
           </div>
         </form>

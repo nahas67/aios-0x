@@ -17,31 +17,30 @@ import { Unavailable } from '../Unavailable';
 
 interface ExecutionWorkspaceProps {
   onSelectOrder?: (order: ExecutionOrder) => void;
-  onAddOrder?: (order: ExecutionOrder) => void;
+  onNotice?: (msg: string) => void;
 }
 
 /**
  * Execution workspace wired to GET /api/v1/orders.
  * The hardcoded algorithmic slicer jobs are deleted: no slicing engine
  * state is published by the backend, so progress bars it showed were theater.
+ * Order submission is not wired either (orders are read-only over HTTP), so
+ * the create modal stages parameters and reports honestly instead of
+ * fabricating fills.
  * (L2 depth book + venue grid untouched — separate backend gaps.)
  */
 export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
   onSelectOrder,
-  onAddOrder,
+  onNotice,
 }) => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [selectedAssetDepth, setSelectedAssetDepth] = useState<string>('BTC/USD');
   const [activeTab, setActiveTab] = useState<'tape' | 'depth' | 'analytics'>('tape');
-  const [localOrders, setLocalOrders] = useState<ExecutionOrder[]>([]);
 
   const ordersQ = useApi(() => portfolioApi.orders());
 
-  const handleDispatchNewOrder = (newOrder: ExecutionOrder) => {
-    setLocalOrders(prev => [newOrder, ...prev]);
-    if (onAddOrder) {
-      onAddOrder(newOrder);
-    }
+  const handleStagedNotice = (msg: string) => {
+    if (onNotice) onNotice(msg);
   };
 
   if (ordersQ.loading) {
@@ -54,7 +53,7 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
   if ("unavailable" in adapted) {
     return <Unavailable title="Execution unavailable" reason={adapted.unavailable} />;
   }
-  const orders = [...localOrders, ...adapted];
+  const orders = adapted;
 
   const venues = [
     { name: 'Binance Institutional', volume: '$42.8M', fillRate: '99.98%', latency: '1.2ms', status: 'OPTIMAL' },
@@ -328,7 +327,7 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
       <CreateOrderModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        onDispatchOrder={handleDispatchNewOrder}
+        onNotice={handleStagedNotice}
       />
     </div>
   );

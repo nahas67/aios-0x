@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import {  Power, X } from 'lucide-react';
+import { Power, X } from 'lucide-react';
+import { runControl, ControlFailure } from '../lib/control';
 
 interface KillSwitchModalProps {
   isOpen: boolean;
@@ -7,6 +8,11 @@ interface KillSwitchModalProps {
   onConfirmKill: () => void;
 }
 
+/**
+ * Emergency kill switch. Invoking it POSTs the real `trigger_kill_switch`
+ * control action (audited server-side, RBAC-gated). Denials (403/VIEWER) and
+ * failures surface honestly inline — no simulated halt sequence.
+ */
 export const KillSwitchModal: React.FC<KillSwitchModalProps> = ({
   isOpen,
   onClose,
@@ -14,18 +20,29 @@ export const KillSwitchModal: React.FC<KillSwitchModalProps> = ({
 }) => {
   const [confirmationText, setConfirmationText] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const isConfirmed = confirmationText.trim().toUpperCase() === 'CONFIRM HALT';
 
-  const handleExecute = () => {
-    if (!isConfirmed) return;
+  const handleExecute = async () => {
+    if (!isConfirmed || isExecuting) return;
     setIsExecuting(true);
-    setTimeout(() => {
-      setIsExecuting(false);
+    setActionError(null);
+    try {
+      await runControl("trigger_kill_switch");
       onConfirmKill();
-    }, 1200);
+    } catch (err) {
+      const msg = err instanceof ControlFailure ? err.message : String(err);
+      setActionError(
+        err instanceof ControlFailure && err.kind === "denied"
+          ? `Kill switch denied: ${msg} (this role may not perform trigger_kill_switch)`
+          : `Kill switch failed: ${msg}`,
+      );
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   return (
@@ -39,7 +56,7 @@ export const KillSwitchModal: React.FC<KillSwitchModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-white tracking-tight">EMERGENCY KILL SWITCH</h2>
-              <div className="text-[10px] text-red-400 font-mono">AUTONOMOUS DE-RISKING & HALT SEQUENCE</div>
+              <div className="text-[10px] text-red-400 font-mono">AUDITED CONTROL ACTION: trigger_kill_switch</div>
             </div>
           </div>
 
@@ -54,15 +71,22 @@ export const KillSwitchModal: React.FC<KillSwitchModalProps> = ({
         {/* Warning Content */}
         <div className="my-4 space-y-3 text-xs">
           <div className="p-3 rounded bg-red-950/30 border border-red-800/50 text-red-200 leading-relaxed">
-            <strong>WARNING:</strong> Invoking the institutional Kill Switch initiates an irreversible automated safety sequence:
+            <strong>WARNING:</strong> Invoking the kill switch sends a real, audited
+            control action to the backend. It is RBAC-gated: without an operator token
+            for a permitted role the server denies it.
           </div>
 
           <ul className="space-y-1.5 text-slate-300 text-[11px] list-disc list-inside pl-1">
-            <li>Cancels all 12 open limit & TWAP algorithmic slicing orders immediately.</li>
-            <li>Submits market flattening orders across all connected institutional venues (Binance, CME, Hyperliquid).</li>
-            <li>Transitions Autonomy Level from <span className="text-cyan-300 font-bold">SUPERVISED</span> to <span className="text-red-400 font-bold">EMERGENCY_HALT</span>.</li>
-            <li>Records an immutable, non-repudiable emergency incident report to the Merkle audit trail.</li>
+            <li>Requests cancellation of working orders and flattening via the server control plane.</li>
+            <li>Transitions Autonomy Level toward <span className="text-red-400 font-bold">EMERGENCY_HALT</span> server-side.</li>
+            <li>Records an audited CONTROL_ACTION event in the hash chain.</li>
           </ul>
+
+          {actionError && (
+            <div className="p-2.5 rounded bg-rose-950/40 border border-rose-700/60 text-rose-200 text-[11px] leading-relaxed">
+              {actionError}
+            </div>
+          )}
 
           <div className="pt-2 border-t border-white/[0.06]">
             <label className="block text-[10px] text-slate-400 mb-1.5 uppercase">
@@ -98,7 +122,7 @@ export const KillSwitchModal: React.FC<KillSwitchModalProps> = ({
             }`}
           >
             <Power className="w-3.5 h-3.5" />
-            <span>{isExecuting ? 'EXECUTING HALT SEQUENCE...' : 'EXECUTE EMERGENCY HALT'}</span>
+            <span>{isExecuting ? 'SENDING KILL ACTION…' : 'EXECUTE EMERGENCY HALT'}</span>
           </button>
         </div>
       </div>

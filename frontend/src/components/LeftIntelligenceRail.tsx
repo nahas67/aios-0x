@@ -25,8 +25,18 @@ import { WorkspaceTab } from '../types';
 interface LeftIntelligenceRailProps {
   activeTab: WorkspaceTab;
   onSelectTab: (tab: WorkspaceTab) => void;
-  pendingApprovalsCount?: number;
-  activeRiskWarnings?: number;
+  /** Live count from /approvals — badge hidden while unknown. */
+  pendingApprovalsCount?: number | null;
+  /** Live count from /risk compliance alerts + /alerts — badge hidden while unknown. */
+  activeRiskWarnings?: number | null;
+  /** Live count from /agents — badge hidden while unknown. */
+  agentsCount?: number | null;
+  /** Live count from /strategies — badge hidden while unknown. */
+  strategiesCount?: number | null;
+  /** Live count from /knowledge — badge hidden while unknown. */
+  researchCount?: number | null;
+  /** Live "wired/total" from /health components — badge hidden while unknown. */
+  systemWired?: string | null;
 }
 
 interface NavItemConfig {
@@ -41,41 +51,48 @@ interface NavItemConfig {
 export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
   activeTab,
   onSelectTab,
-  pendingApprovalsCount = 1,
-  activeRiskWarnings = 0,
+  pendingApprovalsCount = null,
+  activeRiskWarnings = null,
+  agentsCount = null,
+  strategiesCount = null,
+  researchCount = null,
+  systemWired = null,
 }) => {
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
+  const countBadge = (n: number | null | undefined): string | number | undefined =>
+    n !== null && n !== undefined && n > 0 ? n : undefined;
+
   const navItems: NavItemConfig[] = [
     { id: 'overview', label: 'Command Canvas', icon: LayoutDashboard },
-    { id: 'trading', label: 'Live Trading', icon: CandlestickChart, badge: 'PRO', badgeColor: 'cyan' },
+    { id: 'trading', label: 'Live Trading', icon: CandlestickChart },
     { id: 'portfolio', label: 'Portfolio', icon: PieChart },
     { id: 'markets', label: 'Markets', icon: TrendingUp },
-    { id: 'research', label: 'Research', icon: BrainCircuit, badge: '5' },
-    { id: 'agents', label: 'Agents', icon: Users2, badge: '8', badgeColor: 'cyan' },
-    { id: 'strategies', label: 'Strategies', icon: GitFork },
+    { id: 'research', label: 'Research', icon: BrainCircuit, badge: countBadge(researchCount) },
+    { id: 'agents', label: 'Agents', icon: Users2, badge: countBadge(agentsCount), badgeColor: 'cyan' },
+    { id: 'strategies', label: 'Strategies', icon: GitFork, badge: countBadge(strategiesCount) },
     { id: 'execution', label: 'Execution', icon: Zap },
-    { 
-      id: 'risk', 
-      label: 'Risk', 
-      icon: ShieldAlert, 
-      badge: activeRiskWarnings > 0 ? activeRiskWarnings : undefined, 
-      badgeColor: 'amber' 
+    {
+      id: 'risk',
+      label: 'Risk',
+      icon: ShieldAlert,
+      badge: countBadge(activeRiskWarnings),
+      badgeColor: 'amber'
     },
     { id: 'models', label: 'Models', icon: Binary },
     { id: 'provenance', label: 'Provenance', icon: Network },
-    { 
-      id: 'accounting', 
-      label: 'Accounting', 
-      icon: ReceiptText, 
-      badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined, 
-      badgeColor: 'violet' 
+    {
+      id: 'accounting',
+      label: 'Accounting',
+      icon: ReceiptText,
+      badge: countBadge(pendingApprovalsCount),
+      badgeColor: 'violet'
     },
     { id: 'financial', label: 'Financial Kernel', icon: Landmark },
     { id: 'audit', label: 'Audit', icon: FileCheck2 },
-    { id: 'system', label: 'System', icon: Server, badge: '38/38' },
+    { id: 'system', label: 'System', icon: Server, badge: systemWired ?? undefined },
     { id: 'design_system', label: 'Design System', icon: Palette },
-    { id: 'settings', label: 'Settings', icon: SettingsIcon, badge: 'Config' }
+    { id: 'settings', label: 'Settings', icon: SettingsIcon }
   ];
 
   return (

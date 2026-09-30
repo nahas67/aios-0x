@@ -22,8 +22,9 @@ interface TopSystemBarProps {
   onExecutionModeToggle: () => void;
   onOpenCommandPalette: () => void;
   onTriggerKillSwitch: () => void;
-  drawdownPct: number;
-  chainVerified: boolean;
+  drawdownPct: number | null;
+  /** Null while /audit/verify has not answered — renders UNKNOWN, never assumed. */
+  chainVerified: boolean | null;
   onOpenSettings?: () => void;
   activeTab?: WorkspaceTab;
 }
@@ -102,19 +103,21 @@ export const TopSystemBar: React.FC<TopSystemBarProps> = ({
             <span>MARKET OPEN</span>
           </div>
 
-          {/* Audit Chain */}
+          {/* Audit Chain (derived from /audit/verify, never assumed) */}
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/[0.03] text-slate-300 border border-white/[0.06] text-[11px]">
-            <ShieldCheck className={`w-3 h-3 ${chainVerified ? 'text-emerald-400' : 'text-amber-400'}`} />
-            <span>{chainVerified ? 'AUDIT VERIFIED' : 'AUDIT AUDITING'}</span>
+            <ShieldCheck className={`w-3 h-3 ${chainVerified === true ? 'text-emerald-400' : chainVerified === false ? 'text-rose-400' : 'text-slate-500'}`} />
+            <span>{chainVerified === true ? 'AUDIT VERIFIED' : chainVerified === false ? 'AUDIT BROKEN' : 'AUDIT UNKNOWN'}</span>
           </div>
 
-          {/* Risk Level */}
+          {/* Risk Level (null while /risk has not answered) */}
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/[0.03] text-slate-300 border border-white/[0.06] text-[11px]">
             <span className="text-slate-500">RISK:</span>
-            <span className="font-mono text-cyan-300">{drawdownPct.toFixed(2)}% DD</span>
-            <span className="text-[9px] px-1 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/50 uppercase">
-              LOW
-            </span>
+            <span className="font-mono text-cyan-300">{drawdownPct !== null ? `${drawdownPct.toFixed(2)}% DD` : '—'}</span>
+            {drawdownPct !== null && (
+              <span className="text-[9px] px-1 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/50 uppercase">
+                LOW
+              </span>
+            )}
           </div>
         </div>
       </div>

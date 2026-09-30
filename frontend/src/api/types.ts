@@ -343,6 +343,112 @@ export interface EvaluationRecord {
   summary: string;
 }
 
+// ------------------------------------------------- market chart (Phase: A5)
+//
+// GET /api/v1/market/candles?symbol=&tf= answers either
+// {available:true, symbol, tf, candles:[{time,open,high,low,close,volume}],
+//  indicators:{ema20,ema50,rsi14,macd,bollinger}, source}
+// or {available:false, reason}. Every indicator is null when the real
+// series is too short — render "—", never invent a value.
+
+export interface MarketCandle {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface MarketIndicators {
+  ema20: number | null;
+  ema50: number | null;
+  rsi14: number | null;
+  macd: number | null;
+  bollinger: { upper: number; middle: number; lower: number } | null;
+}
+
+export type MarketCandles =
+  | {
+      available: true;
+      symbol: string;
+      tf: string;
+      candles: MarketCandle[];
+      indicators: MarketIndicators;
+      source?: string | null;
+    }
+  | { available: false; reason: string };
+
+export interface MarketInstrument {
+  symbol: string;
+  name: string;
+  category: string;
+}
+
+// ------------------------------------------------- debates (Phase: A1)
+//
+// GET /api/v1/debates answers {available:true, debates:[...]} or
+// {available:false, reason} (e.g. MODEL_PROVIDER=none with no sessions).
+
+export interface DebateTurnWire {
+  agentId: string;
+  stance: string;
+  thesis: string;
+  confidencePct: number | null;
+}
+
+export interface DebateSessionWire {
+  id: string;
+  symbol: string | null;
+  side: string;
+  status: string;
+  consensusScorePct: number | null;
+  turns: DebateTurnWire[];
+}
+
+export type DebatesView =
+  | { available: true; debates: DebateSessionWire[] }
+  | { available: false; reason: string };
+
+// ------------------------------------------------- settings plane (Phase: B1)
+//
+// GET /api/v1/settings/v1 answers
+//   {available:true, version, settings} (empty object at version 0)
+// or {available:false, reason} when the plane is not wired.
+// PUT /api/v1/settings/v1 takes the raw settings object and answers
+// {version, settings}. PUT is fail-closed: 401 without a bearer token.
+
+export type SettingsV1View =
+  | { available: true; version: number; settings: Record<string, unknown> }
+  | { available: false; reason: string };
+
+export interface SettingsV1PutResult {
+  version: number;
+  settings: Record<string, unknown>;
+}
+
+// ------------------------------------------------- backtest (Phase: B4)
+//
+// POST /api/v1/research/backtest {closes (cap 5000), train_bars, test_bars}
+// answers {sharpe, max_dd_pct, points, train_bars, test_bars, windows}.
+
+export interface BacktestWindow {
+  window_index: number;
+  start: number;
+  end: number;
+  test_sharpe: number | null;
+  test_max_dd_pct: number | null;
+}
+
+export interface BacktestResult {
+  sharpe: number | null;
+  max_dd_pct: number | null;
+  points: number;
+  train_bars: number;
+  test_bars: number;
+  windows: BacktestWindow[];
+}
+
 // ------------------------------------------------------------------ settings
 
 export interface SettingsView {

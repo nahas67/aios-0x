@@ -12,9 +12,11 @@ import type {
   Alert,
   Approval,
   AuditRow,
+  BacktestResult,
   CalibrationReport,
   ChatResponse,
   ControlResult,
+  DebatesView,
   DecisionDrilldown,
   Equity,
   EvaluationRecord,
@@ -26,6 +28,8 @@ import type {
   Health,
   HypothesisDetail,
   KnowledgeSummary,
+  MarketCandles,
+  MarketInstrument,
   ModelVersion,
   Order,
   Pnl,
@@ -34,6 +38,8 @@ import type {
   Position,
   Regime,
   RiskState,
+  SettingsV1PutResult,
+  SettingsV1View,
   SettingsView,
   StrategyRow,
   KernelBookOfRecord,
@@ -121,6 +127,26 @@ export const researchApi = {
   memory: () => http.get<Record<string, unknown>>(`${v1}/memory`),
   decisions: (executionId: string) =>
     http.get<DecisionDrilldown>(`${v1}/decisions/${encodeURIComponent(executionId)}`),
+  backtest: (closes: number[], train_bars = 90, test_bars = 30) =>
+    http.post<BacktestResult>(`${v1}/research/backtest`, { closes, train_bars, test_bars }),
+};
+
+export const marketApi = {
+  candles: (symbol: string, tf: string) =>
+    http.get<MarketCandles>(
+      `${v1}/market/candles?symbol=${encodeURIComponent(symbol)}&tf=${encodeURIComponent(tf)}`,
+    ),
+  instruments: () => http.get<{ instruments: MarketInstrument[] }>(`${v1}/market/instruments`),
+};
+
+export const debatesApi = {
+  debates: () => http.get<DebatesView>(`${v1}/debates`),
+};
+
+export const settingsV1Api = {
+  get: () => http.get<SettingsV1View>(`${v1}/settings/v1`),
+  put: (settings: Record<string, unknown>) =>
+    http.put<SettingsV1PutResult>(`${v1}/settings/v1`, settings),
 };
 
 export const intelligenceApi = {
@@ -176,4 +202,18 @@ export const controlApi = {
     http.post<ChatResponse>(`${v1}/chat`, body),
 };
 
-export type { Opportunity, DecisionDrilldown } from "./types";
+export type {
+  Opportunity,
+  DecisionDrilldown,
+  BacktestResult,
+  BacktestWindow,
+  DebateSessionWire,
+  DebateTurnWire,
+  DebatesView,
+  MarketCandle,
+  MarketCandles,
+  MarketIndicators,
+  MarketInstrument,
+  SettingsV1PutResult,
+  SettingsV1View,
+} from "./types";

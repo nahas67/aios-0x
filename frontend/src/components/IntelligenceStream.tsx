@@ -15,23 +15,26 @@ interface IntelligenceStreamProps {
   items: IntelligenceItem[];
   onSelectItem: (item: IntelligenceItem) => void;
   className?: string;
+  /** Real refetch wired by the parent (useApi refresh). Spinner tracks it. */
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }
 
 export const IntelligenceStream: React.FC<IntelligenceStreamProps> = ({
   items,
   onSelectItem,
   className = '',
+  onRefresh,
+  refreshing = false,
 }) => {
   const [filter, setFilter] = useState<'ALL' | 'CRYPTO' | 'EQUITIES' | 'MACRO' | 'VOLATILITY'>('ALL');
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const filteredItems = filter === 'ALL' 
-    ? items 
+  const filteredItems = filter === 'ALL'
+    ? items
     : items.filter(i => i.category === filter);
 
   const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 600);
+    if (onRefresh) onRefresh();
   };
 
   const getRiskBadge = (risk: IntelligenceItem['riskImpact']) => {
@@ -77,10 +80,11 @@ export const IntelligenceStream: React.FC<IntelligenceStreamProps> = ({
 
         <button
           onClick={handleRefresh}
-          className="text-slate-400 hover:text-slate-200 p-1 rounded hover:bg-white/[0.04] transition-colors"
-          title="Refresh multi-agent consensus"
+          disabled={!onRefresh}
+          className="text-slate-400 hover:text-slate-200 p-1 rounded hover:bg-white/[0.04] transition-colors disabled:opacity-40"
+          title={onRefresh ? "Refetch opportunities from /api/v1/opportunities" : "No refetch source"}
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-cyan-400' : ''}`} />
         </button>
       </div>
 

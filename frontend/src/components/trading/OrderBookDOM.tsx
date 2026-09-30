@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Layers } from 'lucide-react';
 
 interface OrderBookProps {
@@ -7,87 +7,17 @@ interface OrderBookProps {
   onSelectPrice?: (price: number) => void;
 }
 
-interface OrderBookLevel {
-  price: number;
-  size: number;
-  total: number;
-}
-
+/**
+ * L2 depth view. The backend exposes no Level-2 order-book feed, so this
+ * renders a mounted honest empty state instead of simulated depth. The
+ * mark strip still shows the last real mark passed in from the chart.
+ */
 export const OrderBookDOM: React.FC<OrderBookProps> = ({
   symbol,
   markPrice,
   onSelectPrice,
 }) => {
-  const [precision] = useState<number>(symbol.includes('JPY') || symbol.includes('7203') ? 1 : symbol.startsWith('PM-') ? 4 : 2);
-  const [depthRows] = useState<number>(7);
-  const [bids, setBids] = useState<OrderBookLevel[]>([]);
-  const [asks, setAsks] = useState<OrderBookLevel[]>([]);
-  const [spreadBps, setSpreadBps] = useState<number>(0.8);
-  const [lastTickSide, setLastTickSide] = useState<'BUY' | 'SELL' | null>(null);
-
-  // Generate initial order book around mark price
-  useEffect(() => {
-    const isCrypto = symbol.includes('BTC') || symbol.includes('ETH');
-    const isPoly = symbol.startsWith('PM-');
-    const step = isPoly ? 0.005 : isCrypto ? 2.5 : markPrice * 0.0004;
-
-    const newAsks: OrderBookLevel[] = [];
-    let askTotal = 0;
-    for (let i = depthRows; i >= 1; i--) {
-      const price = +(markPrice + i * step).toFixed(precision);
-      const size = Math.floor(Math.random() * (isCrypto ? 12 : isPoly ? 24000 : 1500)) + (isCrypto ? 1 : 100);
-      askTotal += size;
-      newAsks.push({ price, size, total: askTotal });
-    }
-
-    const newBids: OrderBookLevel[] = [];
-    let bidTotal = 0;
-    for (let i = 1; i <= depthRows; i++) {
-      const price = +(markPrice - i * step).toFixed(precision);
-      const size = Math.floor(Math.random() * (isCrypto ? 12 : isPoly ? 24000 : 1500)) + (isCrypto ? 1 : 100);
-      bidTotal += size;
-      newBids.push({ price, size, total: bidTotal });
-    }
-
-    setAsks(newAsks);
-    setBids(newBids);
-  }, [symbol, markPrice, depthRows, precision]);
-
-  // Micro-tick animation for dynamic depth
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const isAsk = Math.random() > 0.5;
-      setLastTickSide(isAsk ? 'SELL' : 'BUY');
-
-      if (isAsk) {
-        setAsks(prev => {
-          if (prev.length === 0) return prev;
-          const idx = Math.floor(Math.random() * prev.length);
-          const next = [...prev];
-          const delta = (Math.random() - 0.45) * 50;
-          next[idx] = { ...next[idx], size: Math.max(10, Math.round(next[idx].size + delta)) };
-          return next;
-        });
-      } else {
-        setBids(prev => {
-          if (prev.length === 0) return prev;
-          const idx = Math.floor(Math.random() * prev.length);
-          const next = [...prev];
-          const delta = (Math.random() - 0.45) * 50;
-          next[idx] = { ...next[idx], size: Math.max(10, Math.round(next[idx].size + delta)) };
-          return next;
-        });
-      }
-
-      setSpreadBps(+(0.4 + Math.random() * 0.8).toFixed(2));
-    }, 800);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const maxAskTotal = asks[0]?.total || 1;
-  const maxBidTotal = bids[bids.length - 1]?.total || 1;
-  const maxTotal = Math.max(maxAskTotal, maxBidTotal, 1);
+  const precision = symbol.includes('JPY') || symbol.includes('7203') ? 1 : symbol.startsWith('PM-') ? 4 : 2;
 
   return (
     <div className="bg-[#08090d] border border-white/[0.08] rounded-xl flex flex-col overflow-hidden font-mono text-xs select-none">
@@ -103,7 +33,7 @@ export const OrderBookDOM: React.FC<OrderBookProps> = ({
 
         <div className="flex items-center gap-2 text-[10px] text-slate-400">
           <span className="text-slate-400">Spread:</span>
-          <span className="text-cyan-300 font-bold font-mono-num">{spreadBps} bps</span>
+          <span className="text-slate-500 font-bold font-mono-num">—</span>
         </div>
       </div>
 
@@ -114,67 +44,31 @@ export const OrderBookDOM: React.FC<OrderBookProps> = ({
         <div className="text-right">Total</div>
       </div>
 
-      {/* ASKS (Sells / Red) */}
-      <div className="flex flex-col-reverse py-1">
-        {asks.map((level, i) => {
-          const depthPct = Math.min(100, (level.total / maxTotal) * 100);
-          return (
-            <div
-              key={`ask-${i}`}
-              onClick={() => onSelectPrice && onSelectPrice(level.price)}
-              className="grid grid-cols-3 px-3 py-0.5 text-[10px] hover:bg-white/[0.04] cursor-pointer relative group transition-colors"
-            >
-              {/* Depth background fill */}
-              <div 
-                className="absolute top-0 bottom-0 right-0 bg-rose-500/15 pointer-events-none transition-all duration-300"
-                style={{ width: `${depthPct}%` }}
-              />
-              <div className="text-rose-400 font-bold relative z-10 font-mono-num">{level.price.toFixed(precision)}</div>
-              <div className="text-right text-slate-300 relative z-10 font-mono-num">{level.size.toLocaleString()}</div>
-              <div className="text-right text-slate-400 relative z-10 font-mono-num">{level.total.toLocaleString()}</div>
-            </div>
-          );
-        })}
+      {/* Honest absence: no L2 source exists server-side */}
+      <div className="py-8 px-4 text-center">
+        <div className="text-[11px] text-slate-300 font-semibold">No L2 feed configured</div>
+        <div className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+          The backend publishes no Level-2 depth for {symbol}. Depth rows are withheld
+          rather than simulated.
+        </div>
       </div>
 
       {/* CURRENT MID / MARK PRICE STRIP */}
       <div className="my-0.5 px-3 py-1.5 bg-[#0e1017] border-y border-white/[0.06] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className={`text-xs font-bold font-mono-num ${
-            lastTickSide === 'BUY' ? 'text-emerald-400' : 'text-rose-400'
-          }`}>
-            {markPrice.toFixed(precision)}
-          </span>
+          <button
+            onClick={() => onSelectPrice && markPrice > 0 && onSelectPrice(markPrice)}
+            className="text-xs font-bold font-mono-num text-slate-100 hover:text-cyan-300 transition-colors"
+            title="Use mark as limit price"
+          >
+            {markPrice > 0 ? markPrice.toFixed(precision) : "—"}
+          </button>
           <span className="text-[9px] text-slate-400 uppercase">Mark</span>
         </div>
 
-        <div className="flex items-center gap-1.5 text-[9px] text-slate-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-          <span className="text-slate-300 font-mono">1.2ms FIX</span>
+        <div className="flex items-center gap-1.5 text-[9px] text-slate-500">
+          <span>source: chart feed</span>
         </div>
-      </div>
-
-      {/* BIDS (Buys / Green) */}
-      <div className="flex flex-col py-1">
-        {bids.map((level, i) => {
-          const depthPct = Math.min(100, (level.total / maxTotal) * 100);
-          return (
-            <div
-              key={`bid-${i}`}
-              onClick={() => onSelectPrice && onSelectPrice(level.price)}
-              className="grid grid-cols-3 px-3 py-0.5 text-[10px] hover:bg-white/[0.04] cursor-pointer relative group transition-colors"
-            >
-              {/* Depth background fill */}
-              <div 
-                className="absolute top-0 bottom-0 right-0 bg-emerald-500/15 pointer-events-none transition-all duration-300"
-                style={{ width: `${depthPct}%` }}
-              />
-              <div className="text-emerald-400 font-bold relative z-10 font-mono-num">{level.price.toFixed(precision)}</div>
-              <div className="text-right text-slate-300 relative z-10 font-mono-num">{level.size.toLocaleString()}</div>
-              <div className="text-right text-slate-400 relative z-10 font-mono-num">{level.total.toLocaleString()}</div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );

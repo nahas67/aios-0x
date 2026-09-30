@@ -13,18 +13,12 @@ import { Unavailable } from '../Unavailable';
 /**
  * Accounting workspace wired to GET /api/v1/accounting.
  * Ledger rows come from accounts_minor (minor → USD); the TRIAL BALANCE
- * badge comes from `balanced`. The controller sign-off is a local UI
- * attestation only — it anchors nothing until a server-side flow exists.
+ * badge comes from `balanced`. Controller sign-off has no server-side flow
+ * (no matching control action), so it renders as an honest not-wired state
+ * instead of a local attestation.
  */
 export const AccountingTaxWorkspace: React.FC = () => {
-  const [controllerApproved, setControllerApproved] = React.useState<boolean>(false);
-  const [approvalMessage, setApprovalMessage] = React.useState<string | null>(null);
   const accounting = useApi(() => riskApi.accounting());
-
-  const handleControllerSignOff = () => {
-    setControllerApproved(true);
-    setApprovalMessage('Fund Controller sign-off recorded locally (not anchored to any Merkle block).');
-  };
 
   if (accounting.loading) {
     return <div className="text-xs text-slate-400 font-mono p-8">Loading ledger from /api/v1/accounting…</div>;
@@ -85,50 +79,33 @@ export const AccountingTaxWorkspace: React.FC = () => {
       {/* Controller / Auditor Sign-Off Banner */}
       <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className={`w-9 h-9 rounded flex items-center justify-center ${
-            controllerApproved ? 'bg-emerald-950 text-emerald-400 border border-emerald-700' : 'bg-indigo-950 text-indigo-400 border border-indigo-700'
-          }`}>
+          <div className="w-9 h-9 rounded flex items-center justify-center bg-white/[0.03] text-slate-400 border border-white/[0.08]">
             <FileCheck2 className="w-5 h-5" />
           </div>
           <div>
             <div className="text-xs font-bold text-white flex items-center gap-2">
               <span>FUND CONTROLLER & STATUTORY COMPLIANCE OVERSIGHT</span>
-              <span className={`text-[9px] px-2 py-0.5 rounded font-bold ${
-                controllerApproved ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-300 border border-amber-800'
-              }`}>
-                {controllerApproved ? 'RECORDED LOCALLY' : 'PENDING DAILY SIGN-OFF'}
+              <span className="text-[9px] px-2 py-0.5 rounded font-bold bg-white/[0.04] text-slate-400 border border-white/[0.08]">
+                SIGN-OFF NOT WIRED
               </span>
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">
-              Local attestation only — no server-side sign-off flow exists yet
-              {adapted.requiresSignoff ? ' (professional sign-off required)' : ''}
+              No controller sign-off flow exists server-side (no matching control action)
+              {adapted.requiresSignoff ? ' — professional sign-off is still required out of band' : ''}
             </div>
           </div>
         </div>
 
         <div>
-          {controllerApproved ? (
-            <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 px-3 py-1.5 rounded bg-emerald-950/60 border border-emerald-700">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>CONTROLLER SIGN-OFF RECORDED</span>
-            </div>
-          ) : (
-            <button
-              onClick={handleControllerSignOff}
-              className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold font-mono transition-all shadow-[0_0_12px_rgba(99,102,241,0.4)] flex items-center gap-2"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>RATIFY DAILY CONTROLLER SIGN-OFF</span>
-            </button>
-          )}
+          <span
+            title="No server-side sign-off flow exists"
+            className="px-4 py-2 rounded bg-white/[0.03] border border-white/[0.08] text-slate-500 text-xs font-bold font-mono inline-flex items-center gap-2 cursor-not-allowed"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>SIGN-OFF NOT WIRED</span>
+          </span>
         </div>
       </div>
-
-      {approvalMessage && (
-        <div className="p-3 rounded bg-emerald-950/50 border border-emerald-700 text-emerald-300 text-xs flex items-center justify-between animate-fade-in">
-          <span>{approvalMessage}</span>
-        </div>
-      )}
 
       {/* General Ledger Table */}
       <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl">
