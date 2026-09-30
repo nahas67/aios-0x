@@ -103,6 +103,15 @@ python_version = "3.11"
 strict = true
 warn_unreachable = true
 pretty = true
+# research/benchmarks/ holds standalone benchmark scripts, not library code.
+# They exercise LangGraph (group A) and comparable frameworks that are NOT
+# dependencies of this project: the dependency policy admits nothing without an
+# ADR, and a benchmark harness does not earn one. The directory has no
+# __init__.py, so its files are not addressable as a package and an `overrides`
+# rule cannot match them; `exclude` is the only mechanism that reaches them.
+# These scripts are likewise not collected by pytest, so reading one is the only
+# way to discover what it requires.
+exclude = ["^research/benchmarks/"]
 
 [[tool.mypy.overrides]]
 module = "tests.*"
