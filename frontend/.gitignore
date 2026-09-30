@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+# Incremental typecheck cache written by `tsc -b` (the CI typecheck step).
+# A build cache is not source; without this the CI frontend job leaves an
+# untracked file behind and every local typecheck does too.
+*.tsbuildinfo
