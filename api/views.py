@@ -4,6 +4,7 @@ Pure functions returning JSON-able dicts - the contract any UI (web, TUI,
 export) consumes. No framework, no I/O; the HTTP server is a thin shell.
 """
 
+import hashlib
 import json
 import os
 from collections import defaultdict
@@ -1032,6 +1033,124 @@ class SystemSnapshotBuilder:
         """Recent formal EvaluationRecords (§14): PASS/FAIL/INCONCLUSIVE."""
         rows = self.store.iter_event_payloads("EVALUATION_RECORD")
         return list(reversed(rows))[:limit]
+
+    def audit_verify(self) -> dict[str, Any]:
+        """Walk the hash chain and report integrity with real counts.
+
+        Replaces any client-side "N blocks intact" theatre: every number here
+        is recomputed from the ``event_log`` table on each call.
+        """
+        from core.persistence import SqliteMemoryStore
+
+        if not isinstance(self.store, SqliteMemoryStore):
+            ok, bad_seq = self.store.verify_chain()
+            try:
+                blocks = int(self.store.counts().get("event_log", 0))
+            except Exception:  # noqa: BLE001 - view must not crash the API
+                blocks = 0
+            return {
+                "valid": ok,
+                "blocks_checked": blocks,
+                "head_hash": "",
+                "breaks": [{"seq": bad_seq, "reason": "chain break"}]
+                if bad_seq is not None
+                else [],
+            }
+        with self.store._lock:  # noqa: SLF001 - same-package read
+            rows = self.store._conn.execute(
+                "SELECT seq, ts, kind, ref_id, payload_json, prev_hash, hash "
+                "FROM event_log ORDER BY seq ASC"
+            ).fetchall()
+        expected_prev = "0" * 64
+        head_hash = "0" * 64
+        breaks: list[dict[str, Any]] = []
+        for row in rows:
+            recomputed = hashlib.sha256(
+                f"{row['ts']}|{row['kind']}|{row['ref_id']}|"
+                f"{row['payload_json']}|{row['prev_hash']}".encode()
+            ).hexdigest()
+            reasons: list[str] = []
+            if row["prev_hash"] != expected_prev:
+                reasons.append("prev_hash mismatch")
+            if row["hash"] != recomputed:
+                reasons.append("hash mismatch")
+            if reasons:
+                breaks.append({"seq": int(row["seq"]), "reason": "; ".join(reasons)})
+            # Continue from the stored hash so one break does not cascade
+            # into false positives on every later block.
+            expected_prev = row["hash"]
+            head_hash = row["hash"]
+        return {
+            "valid": not breaks,
+            "blocks_checked": len(rows),
+            "head_hash": head_hash,
+            "breaks": breaks,
+        }
+
+    def models_registry_view(self) -> dict[str, Any]:
+        """Model governance list reshaped from ``ModelRegistry.list_versions()``.
+
+        Matches the ``/models`` honest-absence convention: no registry means
+        ``{available: False, models: []}``, never a fabricated roster.
+        """
+        bridge = self.kernel_bridge
+        if bridge is None or getattr(bridge, "kernel", None) is None:
+            return {"available": False, "models": []}
+        registry = getattr(bridge.kernel, "models", None)
+        if registry is None or not hasattr(registry, "list_versions"):
+            return {"available": False, "models": []}
+        try:
+            versions = registry.list_versions()
+        except Exception as exc:  # noqa: BLE001 - report, never invent
+            return {"available": False, "models": [], "reason": str(exc)}
+        models: list[dict[str, Any]] = []
+        for mv in versions:
+            model_id = str(mv.get("model_id", ""))
+            version = str(mv.get("version", ""))
+            models.append(
+                {
+                    "id": f"{model_id}@{version}" if model_id else version,
+                    "name": model_id,
+                    "version": version,
+                    "status": mv.get("status"),
+                    "model_type": mv.get("model_type"),
+                    "artifact_hash": mv.get("artifact_hash", ""),
+                    "evaluation_metrics": mv.get("evaluation_metrics", {}),
+                    "feature_ref": mv.get("feature_ref", {}),
+                    "created_at": mv.get("created_at"),
+                }
+            )
+        return {"available": True, "models": models}
+
+    def instruments_view(self) -> dict[str, Any]:
+        """Tradeable symbols from live sources — regimes, positions, orders.
+
+        No hardcoded symbol list: when no source is wired the honest answer
+        is an empty list, matching the ``/regimes`` convention.
+        """
+        class_map: dict[str, str] = {}
+        governor = self.governor or getattr(self.control_plane, "governor", None)
+        raw_classes = getattr(governor, "_classes", None)
+        if isinstance(raw_classes, dict):
+            class_map = {str(k): str(v) for k, v in raw_classes.items()}
+        symbols: dict[str, dict[str, Any]] = {}
+
+        def _add(symbol: object) -> None:
+            if not isinstance(symbol, str) or not symbol or symbol in symbols:
+                return
+            symbols[symbol] = {
+                "symbol": symbol,
+                "name": symbol,
+                "category": class_map.get(symbol, "UNKNOWN"),
+            }
+
+        for row in self.regimes():
+            _add(row.get("symbol"))
+        for position in self.positions():
+            _add(position.get("symbol"))
+        for order in self.orders():
+            _add(order.get("symbol"))
+        return {"instruments": sorted(symbols.values(), key=lambda r: str(r["symbol"]))}
 
     # ------------------------------------------------------------- human gates
 

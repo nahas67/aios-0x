@@ -241,6 +241,28 @@ def _serve_static(handler: BaseHTTPRequestHandler, dist_dir: Path, url_path: str
 # Handler factory
 # ---------------------------------------------------------------------------
 
+def _parse_limit(qs: Mapping[str, list[str]], default: int) -> int:
+    """Parse ``?limit=`` without ever producing a 500.
+
+    Raises ``ValueError`` (mapped to HTTP 400 by the caller) on non-integer
+    input; a negative limit clamps to the endpoint default instead of
+    silently slicing from the wrong end.
+    """
+    raw_values = qs.get("limit")
+    if not raw_values:
+        return default
+    raw = raw_values[0]
+    if str(raw).strip() == "":
+        return default
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"invalid limit {raw!r}; must be an integer") from exc
+    if value < 0:
+        return default
+    return value
+
+
 def make_handler(
     builder: SystemSnapshotBuilder,
     control_plane: ControlPlane | None,
@@ -469,7 +491,11 @@ def make_handler(
                     self._json(builder.financial_cash())
                 elif path == "/api/v1/financial/orders":
                     qs = parse_qs(urlparse(self.path).query)
-                    lim = int((qs.get("limit") or ["100"])[0])
+                    try:
+                        lim = _parse_limit(qs, 100)
+                    except ValueError as exc:
+                        self._json({"error": str(exc)}, status=400)
+                        return
                     self._json(builder.financial_orders(limit=lim))
                 elif path.startswith("/api/v1/financial/orders/"):
                     order_id = path.rsplit("/", 1)[-1]
@@ -479,7 +505,11 @@ def make_handler(
                         self._json({"error": "unknown order"}, status=404)
                 elif path == "/api/v1/financial/fills":
                     qs = parse_qs(urlparse(self.path).query)
-                    lim = int((qs.get("limit") or ["100"])[0])
+                    try:
+                        lim = _parse_limit(qs, 100)
+                    except ValueError as exc:
+                        self._json({"error": str(exc)}, status=400)
+                        return
                     self._json(builder.financial_fills(limit=lim))
                 elif path == "/api/v1/financial/invariants":
                     self._json(builder.financial_invariants())
@@ -487,11 +517,19 @@ def make_handler(
                     self._json(builder.financial_health())
                 elif path == "/api/v1/financial/outbox":
                     qs = parse_qs(urlparse(self.path).query)
-                    lim = int((qs.get("limit") or ["50"])[0])
+                    try:
+                        lim = _parse_limit(qs, 50)
+                    except ValueError as exc:
+                        self._json({"error": str(exc)}, status=400)
+                        return
                     self._json(builder.financial_outbox(limit=lim))
                 elif path == "/api/v1/financial/reconciliation":
                     qs = parse_qs(urlparse(self.path).query)
-                    lim = int((qs.get("limit") or ["20"])[0])
+                    try:
+                        lim = _parse_limit(qs, 20)
+                    except ValueError as exc:
+                        self._json({"error": str(exc)}, status=400)
+                        return
                     self._json(builder.financial_reconciliation(limit=lim))
                 elif path == "/api/v1/portfolio":
                     self._json(builder.portfolio())
@@ -508,8 +546,14 @@ def make_handler(
                 elif path == "/api/v1/audit":
                     qs = parse_qs(urlparse(self.path).query)
                     q = (qs.get("q") or [""])[0]
-                    lim = int((qs.get("limit") or ["50"])[0])
+                    try:
+                        lim = _parse_limit(qs, 50)
+                    except ValueError as exc:
+                        self._json({"error": str(exc)}, status=400)
+                        return
                     self._json({"audit": builder.audit(query=q, limit=lim)})
+                elif path == "/api/v1/audit/verify":
+                    self._json(builder.audit_verify())
                 elif path == "/api/v1/equity":
                     self._json(builder.equity())
                 elif path == "/api/v1/pnl":
@@ -532,15 +576,29 @@ def make_handler(
                         self._json({"error": "unknown hypothesis"}, status=404)
                 elif path == "/api/v1/platform-events":
                     qs = parse_qs(urlparse(self.path).query)
-                    lim = int((qs.get("limit") or ["100"])[0])
+                    try:
+                        lim = _parse_limit(qs, 100)
+                    except ValueError as exc:
+                        self._json({"error": str(exc)}, status=400)
+                        return
                     self._json({"events": builder.platform_feed(limit=lim)})
+                elif path == "/api/v1/event-backbone":
+                    self._json(builder.event_backbone_view())
                 elif path == "/api/v1/stream":
                     self._stream(builder)
                 elif path == "/api/v1/models":
                     self._json(builder.models_view())
+                elif path == "/api/v1/models/registry":
+                    self._json(builder.models_registry_view())
+                elif path == "/api/v1/market/instruments":
+                    self._json(builder.instruments_view())
                 elif path == "/api/v1/evaluations":
                     qs = parse_qs(urlparse(self.path).query)
-                    lim = int((qs.get("limit") or ["50"])[0])
+                    try:
+                        lim = _parse_limit(qs, 50)
+                    except ValueError as exc:
+                        self._json({"error": str(exc)}, status=400)
+                        return
                     self._json({"evaluations": builder.evaluations_view(limit=lim)})
                 elif path == "/api/v1/gates":
                     self._json(builder.gates_view())

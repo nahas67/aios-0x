@@ -14,6 +14,7 @@ Actions delegate to components injected by the composition root; the plane
 never reaches into community internals beyond that wiring.
 """
 
+import inspect
 import logging
 from collections.abc import Awaitable, Callable
 from enum import StrEnum
@@ -131,6 +132,7 @@ class ControlPlane:
         positions_view: Callable[[], dict[str, dict[str, str]]] | None = None,
         trial_evaluator: Callable[[str], Awaitable[dict[str, Any]]] | None = None,
         kernel_bridge: Any = None,
+        reconciliation_engine: Any = None,
     ) -> None:
         self.store = store
         self.event_bus = event_bus
@@ -146,6 +148,10 @@ class ControlPlane:
         self._positions_view = positions_view or (lambda: {})
         self._trial_evaluator = trial_evaluator
         self.kernel_bridge = kernel_bridge
+        # Reconciliation engine for finding resolution (B2). Optional: when no
+        # engine is wired the resolution decision is recorded in the audit
+        # chain without claiming durable store state.
+        self.reconciliation_engine = reconciliation_engine
         self.paused = False
         self.live_capital_approved_by: str | None = None
         self.autonomy: AutonomyMode = AutonomyMode.SUPERVISED  # fail-closed: no auto-execution by default
@@ -208,7 +214,14 @@ class ControlPlane:
         if handler is None:
             raise NotImplementedError(action_enum.value)
 
-        result = await handler(operator_id, **params)
+        # Handlers that declare a ``role`` parameter receive the
+        # server-resolved role (never a client-supplied one); a ``role`` key
+        # inside params is ignored so it cannot collide or spoof.
+        if "role" in inspect.signature(handler).parameters:
+            call_params = {k: v for k, v in params.items() if k != "role"}
+            result = await handler(operator_id, role=role_enum.value, **call_params)
+        else:
+            result = await handler(operator_id, **params)
         result_record = {
             "operator_id": operator_id,
             "role": role_enum.value,
@@ -479,6 +492,58 @@ class ControlPlane:
             raise RuntimeError("settings reference not wired")
         self.settings_ref.research_mode = mode
         return {"research_mode": mode}
+
+    async def _do_resolve_reconciliation_finding(
+        self,
+        operator_id: str,
+        finding_id: str = "",
+        note: str = "",
+        role: str = "VIEWER",
+    ) -> dict[str, Any]:
+        """Resolve a reconciliation finding under human authority.
+
+        When a reconciliation engine is wired, resolution flows through it so
+        a CRITICAL finding keeps its RISK_ADMIN gate (the engine re-checks the
+        server-resolved role). Otherwise the resolution decision is recorded
+        in the audit chain without claiming durable store state.
+        """
+        from core.financial_kernel import FinancialStoreError
+
+        target = (finding_id or "").strip()
+        if not target:
+            raise ValueError("finding_id required")
+        engine = self.reconciliation_engine
+        if engine is not None and hasattr(engine, "resolve"):
+            try:
+                stored = engine.resolve(target, operator_id, role, note)
+            except PermissionError:
+                raise
+            except (KeyError, ValueError, FinancialStoreError) as exc:
+                # Unknown ids are a client error (HTTP 400), never a 500.
+                raise ValueError(str(exc)) from exc
+            return {
+                "finding_id": stored.finding_id,
+                "resolved": True,
+                "status": str(stored.status),
+                "note": note,
+                "via": "reconciliation-engine",
+            }
+        self.store.append_event(
+            "RECONCILIATION_FINDING_RESOLVED",
+            target,
+            {
+                "finding_id": target,
+                "operator_id": operator_id,
+                "role": role,
+                "note": note,
+            },
+        )
+        return {
+            "finding_id": target,
+            "resolved": True,
+            "note": note,
+            "via": "audit-record",
+        }
 
     def _require_governor(self) -> None:
         if self.governor is None:
