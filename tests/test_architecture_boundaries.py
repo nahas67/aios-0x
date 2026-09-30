@@ -1,8 +1,17 @@
 """Architecture boundary tests: the plane manifest is machine-enforced.
 
 ARCHITECTURE_PLANES.md declares the module → plane mapping; these tests make
-the invariants non-negotiable. The plane re-housing is enforced here rather
-than expressed as thousands of lines of file churn.
+the invariants non-negotiable. The plane re-housing is enforced here rather than
+expressed as thousands of lines of file churn.
+
+A note on injected dependencies, because the rule has a cost and the cost has a
+known shape. When Community 5 began routing every venue call through the tool
+guardian, the obvious implementation imported ``kernel.tool_governance`` and
+this test failed. Both easy fixes were wrong: dropping the governance left the
+execution path unguarded, and relaxing the boundary made the plane manifest a
+suggestion. The resolution was to split the wire types into
+``schemas/governance.py`` and inject the implementation. Expect the same shape
+of problem for any future control-plane dependency reaching a community.
 """
 
 import re
