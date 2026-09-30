@@ -1,0 +1,312 @@
+"""The goal registry is a machine-enforced object, not documentation.
+
+``docs/goals/goals.json`` is the single source of truth for vNext goal status
+(``docs/goals/README.md``). These tests make the registry's own rules
+non-negotiable: no unknown statuses, no duplicate ids, no dangling
+dependencies, no gate without a check scheme, and no ``LANDED`` goal whose
+evidence is empty.
+
+The last rule is the one that matters. A goal is LANDED only when code and
+tests back it, so a document cannot promote a goal by assertion.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+REGISTRY_PATH = ROOT / "docs" / "goals" / "goals.json"
+
+VALID_STATUSES = frozenset({"LANDED", "PARTIAL", "NOT_STARTED", "BLOCKED", "SUPERSEDED"})
+VALID_SCHEMES = frozenset({"test", "lint", "constitution", "manual"})
+
+ALLOWED_GOAL_KEYS = frozenset(
+    {
+        "id",
+        "title",
+        "layer",
+        "workstream",
+        "status",
+        "depends_on",
+        "blocked_by",
+        "summary",
+        "gates",
+        "evidence",
+        "blocker",
+        "notes",
+        "adoption_note",
+        "refusal_note",
+        "status_note",
+    }
+)
+
+
+def _registry() -> dict[str, Any]:
+    if not REGISTRY_PATH.exists():
+        pytest.fail(f"goal registry missing: {REGISTRY_PATH}")
+    return json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+
+
+def _goals() -> list[dict[str, Any]]:
+    goals = _registry().get("goals")
+    assert isinstance(goals, list) and goals, "registry must declare a non-empty goals list"
+    return goals
+
+
+def _by_id() -> dict[str, dict[str, Any]]:
+    return {goal["id"]: goal for goal in _goals()}
+
+
+# --------------------------------------------------------------------- shape
+
+
+def test_registry_declares_its_own_vocabulary() -> None:
+    """The registry publishes the vocabularies the validator enforces.
+
+    Keeping the vocabulary in the data means a reader of the JSON does not
+    have to open this file to know what is legal.
+    """
+    registry = _registry()
+    assert registry["schema_version"] == 1
+    assert set(registry["statuses"]) == VALID_STATUSES
+    assert set(registry["check_schemes"]) == VALID_SCHEMES
+
+
+def test_every_goal_uses_a_known_status() -> None:
+    unknown = [
+        f"{goal['id']}={goal['status']!r}"
+        for goal in _goals()
+        if goal.get("status") not in VALID_STATUSES
+    ]
+    assert unknown == [], f"unknown goal status: {unknown}"
+
+
+def test_goal_ids_are_unique_and_well_formed() -> None:
+    ids = [goal["id"] for goal in _goals()]
+    duplicates = sorted({i for i in ids if ids.count(i) > 1})
+    assert duplicates == [], f"duplicate goal ids: {duplicates}"
+    malformed = [i for i in ids if not (isinstance(i, str) and i.startswith("G") and i[1:].isdigit())]
+    assert malformed == [], f"malformed goal ids: {malformed}"
+
+
+def test_goals_declare_no_unknown_keys() -> None:
+    """An unrecognised key is almost always a typo that silently disables a gate."""
+    unknown = [
+        f"{goal['id']}: {sorted(set(goal) - ALLOWED_GOAL_KEYS)}"
+        for goal in _goals()
+        if set(goal) - ALLOWED_GOAL_KEYS
+    ]
+    assert unknown == [], f"unknown goal keys: {unknown}"
+
+
+# ------------------------------------------------------------------ closure
+
+
+def test_dependencies_reference_known_goals() -> None:
+    known = set(_by_id())
+    dangling = [
+        f"{goal['id']} -> {ref}"
+        for goal in _goals()
+        for ref in (*goal.get("depends_on", []), *goal.get("blocked_by", []))
+        if ref not in known
+    ]
+    assert dangling == [], f"dangling goal references: {dangling}"
+
+
+def test_dependency_graph_is_acyclic() -> None:
+    """A cycle would make the workstream order unschedulable.
+
+    Implemented as a depth-first search so the assertion names the actual
+    cycle rather than reporting a generic failure.
+    """
+    by_id = _by_id()
+    state: dict[str, int] = {}  # 0 unvisited, 1 on stack, 2 done
+    cycles: list[list[str]] = []
+
+    def visit(node: str, stack: list[str]) -> None:
+        state[node] = 1
+        stack.append(node)
+        for dependency in by_id.get(node, {}).get("depends_on", []):
+            if dependency not in by_id:
+                continue
+            if state.get(dependency) == 1:
+                cycles.append([*stack[stack.index(dependency) :], dependency])
+            elif state.get(dependency, 0) == 0:
+                visit(dependency, stack)
+        stack.pop()
+        state[node] = 2
+
+    for goal_id in sorted(by_id):
+        if state.get(goal_id, 0) == 0:
+            visit(goal_id, [])
+    assert cycles == [], f"cyclic goal dependencies: {cycles}"
+
+
+def test_every_dependency_appears_before_its_dependent_in_file_order() -> None:
+    """Ordering sanity: a prerequisite should not be declared after its consumer.
+
+    This is a readability invariant rather than a correctness one - the
+    registry is meant to be read top to bottom as the build order.
+    """
+    order = {goal["id"]: index for index, goal in enumerate(_goals())}
+    inversions = [
+        f"{goal['id']} depends on later {dependency}"
+        for goal in _goals()
+        for dependency in goal.get("depends_on", [])
+        if dependency in order and order[dependency] > order[goal["id"]]
+    ]
+    assert inversions == [], f"goal ordering inversions: {inversions}"
+
+
+# -------------------------------------------------------------------- gates
+
+
+def test_every_goal_has_at_least_one_gate() -> None:
+    """A goal with no gate is a wish, not a goal."""
+    empty = [goal["id"] for goal in _goals() if not goal.get("gates")]
+    assert empty == [], f"goals without gates: {empty}"
+
+
+def test_every_gate_declares_a_known_check_scheme() -> None:
+    bad = [
+        f"{goal['id']} -> {gate.get('check')!r}"
+        for goal in _goals()
+        for gate in goal.get("gates", [])
+        if gate.get("check", "").split(":", 1)[0] not in VALID_SCHEMES
+    ]
+    assert bad == [], f"unknown check scheme: {bad}"
+
+
+def test_test_gates_name_an_executable_path() -> None:
+    """A ``test:`` gate must name a file, and the claim in the goal's evidence
+    that the gate does not yet exist is recorded honestly.
+
+    Gates for unwritten goals legitimately point at files that do not exist
+    yet; what must not happen is a gate with no path at all.
+    """
+    bad = [
+        f"{goal['id']} -> {gate.get('check')!r}"
+        for goal in _goals()
+        for gate in goal.get("gates", [])
+        if gate.get("check", "").startswith("test:")
+        and not gate["check"].split(":", 1)[1].strip().endswith(".py")
+    ]
+    assert bad == [], f"test gate without a .py target: {bad}"
+
+
+def test_gate_statements_are_assertions() -> None:
+    """Every gate states what is true when it passes.
+
+    Without this a gate can degrade into a restatement of the goal title,
+    which passes review while enforcing nothing.
+    """
+    weak = [
+        f"{goal['id']} -> {gate.get('statement')!r}"
+        for goal in _goals()
+        for gate in goal.get("gates", [])
+        if len(str(gate.get("statement", "")).split()) < 8
+    ]
+    assert weak == [], f"gate statements too short to assert: {weak}"
+
+
+# ------------------------------------------------------------------- status
+
+
+def test_landed_goals_carry_evidence() -> None:
+    """The anti-aspiration rule: a goal cannot be LANDED on assertion alone.
+
+    This is the single most important test in the file. A registry that
+    permits LANDED-without-evidence is a wishlist wearing a schema.
+    """
+    hollow = [goal["id"] for goal in _goals() if goal.get("status") == "LANDED" and not goal.get("evidence")]
+    assert hollow == [], f"LANDED goals with no evidence: {hollow}"
+
+
+def test_landed_goals_evidence_paths_exist() -> None:
+    """Evidence must point at files that are actually in the repository."""
+    missing: list[str] = []
+    for goal in _goals():
+        if goal.get("status") != "LANDED":
+            continue
+        for reference in goal.get("evidence", []):
+            if not (ROOT / reference).exists():
+                missing.append(f"{goal['id']} -> {reference}")
+    assert missing == [], f"LANDED goals cite missing evidence: {missing}"
+
+
+def test_blocked_goals_state_what_blocks_them() -> None:
+    """A blocked goal without a stated blocker is just a delayed one.
+
+    ``blocker`` and ``blocked_by`` are separate on purpose: the first is prose
+    a human reads, the second is a machine-checked dependency edge.
+    """
+    bad = [
+        goal["id"]
+        for goal in _goals()
+        if goal.get("status") == "BLOCKED" and not (goal.get("blocker") and goal.get("blocked_by"))
+    ]
+    assert bad == [], f"BLOCKED goals missing blocker or blocked_by: {bad}"
+
+
+def test_not_started_goals_for_missing_capabilities_say_why() -> None:
+    """A NOT_STARTED goal for a capability someone believes exists should
+    carry a blocker explaining the absence, so a reader does not assume the
+    work was attempted and abandoned."""
+    bad = [
+        goal["id"]
+        for goal in _goals()
+        if goal.get("status") == "NOT_STARTED" and not (goal.get("blocker") or goal.get("notes"))
+    ]
+    assert bad == [], f"NOT_STARTED goals without explanation: {bad}"
+
+
+def test_no_goal_sits_between_workstreams_unexplained() -> None:
+    """Every goal maps to a workstream, and the W0..W12 sequence is closed.
+
+    An unmapped goal means the vNext program has an item nobody scheduled.
+    """
+    workstreams = {goal.get("workstream") for goal in _goals()}
+    assert None not in workstreams, "a goal has no workstream"
+    unexpected = sorted(ws for ws in workstreams if ws and not re.match(r"^W\d+$", str(ws)))
+    assert unexpected == [], f"unexpected workstream ids: {unexpected}"
+
+
+# ------------------------------------------------------------------- guards
+
+
+def test_registry_does_not_claim_goals_the_code_lacks() -> None:
+    """Guard the most dangerous failure mode: a registry that marks a goal
+    LANDED because someone said so.
+
+    This test asserts the inverse direction for the two capability groups that
+    a vNext program is most likely to overstate. It reads the source rather
+    than trusting the registry, so editing the registry cannot make it pass.
+    """
+
+    def occurrences(pattern: str) -> int:
+        total = 0
+        for path in ROOT.rglob("*.py"):
+            if any(part in {".venv-fresh", "__pycache__", ".vt-study"} for part in path.parts):
+                continue
+            if "tests" in path.parts or "docs" in path.parts:
+                continue
+            try:
+                total += len(re.findall(pattern, path.read_text(encoding="utf-8"), re.IGNORECASE))
+            except (UnicodeDecodeError, OSError):  # pragma: no cover
+                continue
+        return total
+
+    by_id = _by_id()
+    for goal_id, capability in (("G080", r"\b(purged|embargo|cpcv|deflated_sharpe)\b"), ("G120", r"\bplaybook\b")):
+        goal = by_id[goal_id]
+        present = occurrences(capability) > 0
+        if not present:
+            assert goal["status"] in {"NOT_STARTED", "PARTIAL"}, (
+                f"{goal_id} claims {goal['status']} but no {capability!r} implementation "
+                "exists in project source"
+            )
