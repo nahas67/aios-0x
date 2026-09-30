@@ -1,7 +1,7 @@
 """Command-center HTTP server (stdlib only) + static UI.
 
 Routes:
-    GET /                    -> ui/dist/index.html (or ui/index.html fallback)
+    GET /                    -> ui/dist/index.html (built via npm run build in frontend/)
     GET /assets/*            -> ui/dist/assets/* (hashed, immutable cache)
     GET /favicon.svg         -> ui/dist/favicon.svg
     GET /api/v1/session/me   -> authenticated identity (operator_id, role)
@@ -46,10 +46,9 @@ logger = logging.getLogger(__name__)
 
 _ROOT = Path(__file__).resolve().parents[1]
 _DIST_DIR = _ROOT / "ui" / "dist"
-_LEGACY_UI = _ROOT / "ui" / "index.html"
-
-# SPA index: prefer compiled dist, fall back to legacy single-file HTML.
-_UI_INDEX = _DIST_DIR / "index.html" if (_DIST_DIR / "index.html").exists() else _LEGACY_UI
+# NOTE: the SPA index (ui/dist/index.html) is resolved live at request time in
+# do_GET via _serve_static — never snapshot it at import, or a fresh
+# `npm run build` would leave this process serving a stale path.
 
 MAX_REQUEST_BYTES = 64 * 1024
 
@@ -414,12 +413,14 @@ def make_handler(
                     if _serve_static(self, _DIST_DIR, "/favicon.svg"):
                         return
 
-            # --- legacy fallback ---
+            # --- SPA index (resolved live so a fresh build is served) ---
             if path == "/" or path == "/ui":
-                if _LEGACY_UI.exists():
-                    self._text(_LEGACY_UI.read_text(encoding="utf-8"), ctype="text/html")
-                else:
-                    self._text("ui/index.html missing", status=404)
+                if _serve_static(self, _DIST_DIR, "/index.html"):
+                    return
+                self._text(
+                    "ui/dist/index.html missing (run npm run build in frontend/)",
+                    status=404,
+                )
                 return
 
             # SPA fallback

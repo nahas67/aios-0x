@@ -89,7 +89,6 @@ INCLUDE_FILES = [
     "docker-compose.yml",
     "README.md",
     ".env.example",
-    "ui/index.html",
 ]
 
 

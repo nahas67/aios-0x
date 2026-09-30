@@ -122,8 +122,13 @@ def test_sse_platform_tail_carries_events(tmp_path: Path) -> None:
 
 
 def test_ui_ships_eventsource_consumer(tmp_path: Path) -> None:
-    """The SPA must consume the stream, not just poll."""
-    ui = Path(__file__).resolve().parents[1] / "ui" / "index.html"
-    text = ui.read_text(encoding="utf-8")
-    assert "EventSource" in text
+    """The SPA must consume the stream, not just poll.
+
+    The app hand-rolls SSE over fetch + ReadableStream instead of native
+    EventSource because EventSource cannot send an Authorization bearer
+    header, and stream requests must carry operator identity.
+    """
+    stream = Path(__file__).resolve().parents[1] / "frontend" / "src" / "api" / "stream.ts"
+    text = stream.read_text(encoding="utf-8")
     assert "/api/v1/stream" in text
+    assert "ReadableStream" in text

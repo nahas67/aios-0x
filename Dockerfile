@@ -24,7 +24,6 @@ RUN pip install --no-cache-dir ".[postgres,nats]" && \
 # Immutable reference data.
 COPY data/golden /app/data/golden
 COPY --from=frontend-builder /build/ui/dist /app/ui/dist
-COPY ui/index.html /app/ui/index.html
 
 # The service writes only to /app/data (normally a mounted volume) and /tmp.
 RUN mkdir -p /app/data /tmp && \
