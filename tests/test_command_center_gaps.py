@@ -249,7 +249,14 @@ def test_audit_verify_shipped_db(tmp_path: Path) -> None:
     shipped = Path("data/aios.db")
     assert shipped.exists(), "shipped data/aios.db required for this honesty check"
     copy = tmp_path / "aios-copy.db"
-    shutil.copy(shipped, copy)  # never touch the shipped file itself
+    # sqlite backup API (not shutil.copy): a consistent snapshot even if a
+    # live server holds the WAL open — a bare file copy mid-write reads back
+    # as "database disk image is malformed".
+    src = sqlite3.connect(str(shipped))
+    dst = sqlite3.connect(str(copy))
+    src.backup(dst)
+    dst.close()
+    src.close()
     store = SqliteMemoryStore(copy)
     payload = SystemSnapshotBuilder(store=store).audit_verify()
     raw = sqlite3.connect(str(copy))
