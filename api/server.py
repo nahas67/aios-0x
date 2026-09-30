@@ -244,8 +244,8 @@ def _parse_limit(qs: Mapping[str, list[str]], default: int) -> int:
     """Parse ``?limit=`` without ever producing a 500.
 
     Raises ``ValueError`` (mapped to HTTP 400 by the caller) on non-integer
-    input; a negative limit clamps to the endpoint default instead of
-    silently slicing from the wrong end.
+    input; a zero or negative limit clamps to the endpoint default instead
+    of silently slicing from the wrong end (``orders[-0:]`` is the full list).
     """
     raw_values = qs.get("limit")
     if not raw_values:
@@ -257,7 +257,7 @@ def _parse_limit(qs: Mapping[str, list[str]], default: int) -> int:
         value = int(str(raw).strip())
     except (TypeError, ValueError) as exc:
         raise ValueError(f"invalid limit {raw!r}; must be an integer") from exc
-    if value < 0:
+    if value <= 0:
         return default
     return value
 
@@ -741,7 +741,7 @@ def make_handler(
                 self._json(result)
             except PermissionError as exc:
                 self._json({"error": str(exc)}, status=403)
-            except (ValueError, RuntimeError, NotImplementedError, KeyError) as exc:
+            except (ValueError, RuntimeError, NotImplementedError, KeyError, TypeError) as exc:
                 self._json({"error": str(exc)}, status=400)
             except Exception:  # noqa: BLE001 - server boundary
                 logger.exception("control action failed")

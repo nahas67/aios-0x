@@ -215,13 +215,16 @@ class ControlPlane:
             raise NotImplementedError(action_enum.value)
 
         # Handlers that declare a ``role`` parameter receive the
-        # server-resolved role (never a client-supplied one); a ``role`` key
-        # inside params is ignored so it cannot collide or spoof.
+        # server-resolved role (never a client-supplied one); ``role`` and
+        # ``operator_id`` keys inside params are dropped so they can neither
+        # collide with the positional identity args (TypeError → HTTP 500)
+        # nor spoof the audit record.
         if "role" in inspect.signature(handler).parameters:
-            call_params = {k: v for k, v in params.items() if k != "role"}
+            call_params = {k: v for k, v in params.items() if k not in ("role", "operator_id")}
             result = await handler(operator_id, role=role_enum.value, **call_params)
         else:
-            result = await handler(operator_id, **params)
+            call_params = {k: v for k, v in params.items() if k != "operator_id"}
+            result = await handler(operator_id, **call_params)
         result_record = {
             "operator_id": operator_id,
             "role": role_enum.value,
@@ -505,7 +508,9 @@ class ControlPlane:
         When a reconciliation engine is wired, resolution flows through it so
         a CRITICAL finding keeps its RISK_ADMIN gate (the engine re-checks the
         server-resolved role). Otherwise the resolution decision is recorded
-        in the audit chain without claiming durable store state.
+        in the audit chain without claiming durable store state — but severity
+        is unknowable without the engine, so the fallback fail-closes to the
+        higher authority and requires RESET_LOCKOUT (RISK_ADMIN/ADMIN).
         """
         from core.financial_kernel import FinancialStoreError
 
@@ -528,6 +533,13 @@ class ControlPlane:
                 "note": note,
                 "via": "reconciliation-engine",
             }
+        if ControlAction.RESET_LOCKOUT not in ROLE_MATRIX.get(
+            OperatorRole(str(role).strip().upper()), frozenset()
+        ):
+            raise PermissionError(
+                "role may not resolve a reconciliation finding without a wired "
+                "engine: severity is unverifiable, RESET_LOCKOUT required"
+            )
         self.store.append_event(
             "RECONCILIATION_FINDING_RESOLVED",
             target,

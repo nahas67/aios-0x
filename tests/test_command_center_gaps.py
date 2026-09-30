@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
 import sqlite3
 import time
 import urllib.error
@@ -201,12 +200,14 @@ def test_resolve_finding_unknown_id_is_value_error(tmp_path: Path) -> None:
 
 
 def test_resolve_finding_audit_fallback_without_engine(tmp_path: Path) -> None:
+    # Fail-closed: severity is unknowable without an engine, so the fallback
+    # requires the higher (RISK_ADMIN/RESET_LOCKOUT) authority for every id.
     store = SqliteMemoryStore(tmp_path / "audit.db")
     plane = _plane(store)
     record = asyncio.run(
         plane.execute(
-            "op-1",
-            "OPERATOR",
+            "ra-1",
+            "RISK_ADMIN",
             "resolve_reconciliation_finding",
             {"finding_id": "f-123", "note": "no engine wired"},
         )
@@ -360,3 +361,103 @@ def test_instruments_routed(server_port: int) -> None:
     status, payload = _get(server_port, "/api/v1/market/instruments")
     assert status == 200
     assert isinstance(payload["instruments"], list)
+
+
+# --------------------------------------- review fix-pass: 3 Important findings
+
+
+def _post(port: int, path: str, body: dict[str, Any], token: str = "test-token") -> tuple[int, dict[str, Any]]:
+    url = f"http://127.0.0.1:{port}{path}"
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode(),
+        method="POST",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as resp:
+            return resp.status, json.loads(resp.read() or b"{}")
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        try:
+            return exc.code, json.loads(raw) if raw else {}
+        except (json.JSONDecodeError, ValueError):
+            return exc.code, {}
+
+
+@pytest.fixture(scope="module")
+def control_port(tmp_path_factory: pytest.TempPathFactory) -> Any:
+    from api.server import ServerIdentity
+
+    store = SqliteMemoryStore(tmp_path_factory.mktemp("gaps-control") / "audit.db")
+    plane = _plane(store)  # no reconciliation engine -> audit fallback path
+    builder = SystemSnapshotBuilder(store=store)
+    server = CommandCenterServer(
+        builder,
+        plane,
+        port=0,
+        auth_token="test-token",
+        identity_map={"test-token": ServerIdentity(operator_id="admin-1", role="ADMIN")},
+    )
+    server.start()
+    time.sleep(0.3)
+    yield server.port
+    server.stop()
+    store.close()
+
+
+def test_control_unknown_param_returns_400_not_500(control_port: int) -> None:
+    status, payload = _post(control_port, "/api/v1/control/pause_trading", {"params": {"bogus_kwarg": 1}})
+    assert status == 400, (status, payload)
+    assert "error" in payload
+
+
+def test_control_operator_id_in_params_not_trusted(control_port: int) -> None:
+    status, payload = _post(
+        control_port, "/api/v1/control/pause_trading", {"params": {"operator_id": "spoof"}}
+    )
+    assert status == 200, (status, payload)
+    assert payload["operator_id"] == "admin-1"
+
+
+def test_resolve_fallback_operator_denied_without_engine(tmp_path: Path) -> None:
+    plane = _plane(SqliteMemoryStore(tmp_path / "audit.db"))
+    with pytest.raises(PermissionError, match="RESET_LOCKOUT"):
+        asyncio.run(
+            plane.execute(
+                "op-1", "OPERATOR", "resolve_reconciliation_finding", {"finding_id": "f-123"}
+            )
+        )
+
+
+def test_resolve_fallback_risk_admin_allowed_without_engine(tmp_path: Path) -> None:
+    store = SqliteMemoryStore(tmp_path / "audit.db")
+    plane = _plane(store)
+    record = asyncio.run(
+        plane.execute(
+            "ra-1",
+            "RISK_ADMIN",
+            "resolve_reconciliation_finding",
+            {"finding_id": "f-123", "note": "no engine wired"},
+        )
+    )
+    assert record["result"] == {
+        "finding_id": "f-123",
+        "resolved": True,
+        "note": "no engine wired",
+        "via": "audit-record",
+    }
+    kinds = [p for p in store.iter_event_payloads("RECONCILIATION_FINDING_RESOLVED")]
+    assert kinds and kinds[0]["finding_id"] == "f-123"
+
+
+def test_limit_zero_clamps_to_default() -> None:
+    from api.server import _parse_limit
+
+    assert _parse_limit({"limit": ["0"]}, 50) == 50
+
+
+@pytest.mark.parametrize("path", LIMIT_ENDPOINTS)
+def test_limit_zero_returns_200(server_port: int, path: str) -> None:
+    status, _ = _get(server_port, f"{path}?limit=0")
+    assert status == 200, (path, status)
