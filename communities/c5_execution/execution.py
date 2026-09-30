@@ -13,12 +13,13 @@ Lockout clears ONLY via RiskGovernor.human_reset(operator_id).
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from communities.c5_execution.adapters import BaseExecutionAdapter
 from communities.c5_execution.oms import DurableOrderManager
 from core.event_bus import BaseEventBus, EventTopic
 from core.financial_kernel import DurableOrder, Fill
+from core.trace import new_trace_id
 from schemas.contracts import (
     EmergencyStateValue,
     OrderRequest,
@@ -93,9 +94,27 @@ class OrderManager:
         return any(o.status in open_states for o in self.orders.values())
 
     async def on_plan(
-        self, plan: PortfolioAllocationPlan, locked_out: bool
+        self,
+        plan: PortfolioAllocationPlan,
+        locked_out: bool,
+        *,
+        envelope: Any | None = None,
+        instrument_id: str | None = None,
+        mic: str | None = None,
+        strategy_version: str | None = None,
+        timings: Any = (),
+        survivorship: Any | None = None,
+        trace_id: str | None = None,
     ) -> TradeExecutionReceipt | None:
-        """Execute an approved plan through the lifecycle (idempotent)."""
+        """Execute an approved plan through the lifecycle (idempotent).
+
+        The firewall context (envelope plus the identity fields the verdict
+        needs) travels with the plan from here to the venue: the OMS demands
+        the verdict before persisting, and the adapter re-checks the envelope
+        scope before contacting the venue. Omit it and a firewall-bound
+        deployment refuses at both boundaries; a deployment without a
+        firewall behaves exactly as before.
+        """
         if not plan.approved:
             logger.info("order manager ignoring unapproved plan %s", plan.plan_id)
             return None
@@ -140,7 +159,28 @@ class OrderManager:
         self.orders[client_id] = order
         await self.event_bus.publish(EventTopic.ORDER_SUBMITTED, order)
 
-        durable_order = self._write_ahead(order)
+        # The firewall prices notional off a reference price, which for a
+        # market order is the plan's entry price rather than a limit that
+        # does not exist. Passing limit_price (None on markets) would make
+        # every market order unevaluable.
+        # Observability is not authorization: a missing trace id mints one
+        # with a logged warning rather than refusing the order. Blocking
+        # orders over missing telemetry would confuse safety with telemetry,
+        # and a telemetry outage would become a trading halt.
+        if trace_id is None:
+            trace_id = new_trace_id()
+            logger.warning("no trace id supplied for plan %s; minted %s", plan.plan_id, trace_id)
+        durable_order = self._write_ahead(
+            order,
+            envelope=envelope,
+            instrument_id=instrument_id,
+            mic=mic,
+            price=plan.strategy.entry_price,
+            strategy_version=strategy_version,
+            timings=timings,
+            survivorship=survivorship,
+            trace_id=trace_id,
+        )
 
         # Re-check as late as possible: a lockout engaged while this order was
         # being prepared must still stop it before the venue sees it. A suppressed
@@ -158,7 +198,9 @@ class OrderManager:
             return None
 
         try:
-            receipt = await self.adapter.submit(plan, quantity)
+            receipt = await self.adapter.submit(
+                plan, quantity, envelope=envelope, trace_id=trace_id
+            )
         except Exception as exc:
             # A venue exception must still leave durable state consistent: an
             # order that never reached the venue can never stay "accepted".
@@ -186,7 +228,19 @@ class OrderManager:
 
     # ------------------------------------------------------- durable write path
 
-    def _write_ahead(self, order: OrderRequest) -> DurableOrder | None:
+    def _write_ahead(
+        self,
+        order: OrderRequest,
+        *,
+        envelope: Any | None = None,
+        instrument_id: str | None = None,
+        mic: str | None = None,
+        price: float | None = None,
+        strategy_version: str | None = None,
+        timings: Any = (),
+        survivorship: Any | None = None,
+        trace_id: str | None = None,
+    ) -> DurableOrder | None:
         """Persist the order before the venue sees it ("write-ahead OMS").
 
         The durable idempotency key is scoped to the plan, not just the
@@ -208,6 +262,14 @@ class OrderManager:
             order_type=order.order_type,
             limit_price=order.limit_price,
             plan_id=order.plan_id,
+            envelope=envelope,
+            instrument_id=instrument_id,
+            mic=mic,
+            price=price if price is not None else order.limit_price,
+            strategy_version=strategy_version,
+            timings=timings,
+            survivorship=survivorship,
+            trace_id=trace_id,
         )
         if written.status is not OrderStatus.PENDING_NEW:
             # Same attempt already exists in durable state: never re-drive it.
