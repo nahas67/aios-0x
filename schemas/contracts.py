@@ -47,6 +47,15 @@ class DataProvenance(BaseModel):
         default=None,
         description="Exchange/event time of the underlying data if different from retrieval time",
     )
+    available_at: datetime | None = Field(
+        default=None,
+        description=(
+            "When this datum became knowable to a consumer (feed publish, filing hit "
+            "EDGAR). The point-in-time join key: research must filter on this, not on "
+            "retrieved_at. None means unknown, and unknown rows are excluded from "
+            "research evidence rather than trusted (goal G030)."
+        ),
+    )
     quality_state: QualityState = Field(
         default="UNKNOWN",
         description="Data-quality state used by freshness/corruption gates",
@@ -620,6 +629,39 @@ class VolRegime(StrEnum):
     LOW = "LOW"
     NORMAL = "NORMAL"
     HIGH = "HIGH"
+
+
+class DecisionAction(StrEnum):
+    """The closed decision vocabulary both constraints and other agents use.
+
+    Four members, deliberately: TRADE, WAIT, ESCALATE, ABSTAIN. An unlisted
+    action cannot be governed, so it must not be expressible — the authority
+    chain pins the closed set structurally.
+    """
+
+    TRADE = "TRADE"
+    WAIT = "WAIT"
+    ESCALATE = "ESCALATE"
+    ABSTAIN = "ABSTAIN"
+
+
+class TradeDecision(BaseModel):
+    """A decision about whether to act, carrying no size.
+
+    The decision tier proposes; the portfolio brain sizes; the firewall
+    authorizes. A decision object with quantity/notional/weight fields would
+    collapse all three into one, so the fields are absent by design and the
+    authority chain greps for their absence.
+    """
+
+    model_config = {"frozen": True}
+
+    action: DecisionAction
+    trigger: str = Field(..., min_length=1, description="The condition that fired, with its numbers")
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    refs: dict[str, str] = Field(
+        default_factory=dict, description="Join keys (trace_id, envelope_id, claim_id), never payloads"
+    )
 
 
 class RegimeState(BaseModel):
