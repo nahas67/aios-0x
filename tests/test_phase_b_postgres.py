@@ -205,21 +205,43 @@ class TestPostgresLive:
 
         Asserts on DELTAS over pre-run counts because the live database
         accumulates rows across runs (that is the point of persistence).
+
+        ``autonomy_mode`` is pinned to AUTONOMOUS exactly as the SQLite vertical
+        slice does. A headless replay under the default SUPERVISED mode correctly
+        produces no trades at all (plans wait for human approval), so asserting on
+        trades without pinning the mode would test nothing.
         """
         write_dataset(tmp_path / "golden", symbols=["BTC/USD"], total_bars=60)
         store = self._store()
         before = store.counts()
         store.close()
 
-        runner = ReplayRunner(
-            csv_path_by_symbol={"BTC/USD": tmp_path / "golden" / "BTC_USD_1d.csv"},
-            store_path=tmp_path / "unused.db",
-            initial_balance=100000.0,
-            slippage_pct=0.05,
-            settings=Settings(model_provider="none"),
-        )
-        runner.store = self._store()  # promote to PG before the run
-        summary = asyncio.run(runner.run())
+        # The durable financial kernel itself runs on PostgreSQL for this replay.
+        from core.pg_financial_store import PostgresFinancialStore
+
+        durable = PostgresFinancialStore(PG_DSN, auto_migrate=True)
+        try:
+            runner = ReplayRunner(
+                csv_path_by_symbol={"BTC/USD": tmp_path / "golden" / "BTC_USD_1d.csv"},
+                store_path=tmp_path / "unused.db",
+                initial_balance=100000.0,
+                slippage_pct=0.05,
+                settings=Settings(model_provider="none", autonomy_mode="AUTONOMOUS"),
+                financial_store=durable,
+            )
+            runner.store = self._store()  # promote the audit log to PG too
+            summary = asyncio.run(runner.run())
+
+            # V1-A.2: orders, fills and the book were written through PostgreSQL,
+            # and the invariants that hold on SQLite hold identically here.
+            assert summary.durable_orders >= 1
+            assert summary.durable_fills >= 1
+            assert durable.orders()
+            assert durable.verify_invariants().ok is True
+            assert durable.active_lockouts() == []
+        finally:
+            durable.close()
+
         assert summary.chain_valid is True
         assert summary.trades_closed >= 1
 

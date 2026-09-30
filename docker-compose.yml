@@ -4,12 +4,15 @@ services:
   aios:
     build: .
     ports:
-      - "8787:8787"
+      - "127.0.0.1:8787:8787"
     volumes:
       - aios-data:/app/data
       - ./data/golden:/app/data/golden:ro
     env_file:
       - .env
+    read_only: true
+    tmpfs:
+      - /tmp
     environment:
       - PYTHONUNBUFFERED=1
     restart: unless-stopped

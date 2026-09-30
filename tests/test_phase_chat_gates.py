@@ -48,7 +48,7 @@ def test_gates_view_reports_blockers_and_approval(tmp_path: Path) -> None:
     view = builder.gates_view()
     by_id = {g["gate"]: g for g in view["gates"]}
     assert by_id["broker_testnet"]["status"] == "BLOCKED"
-    assert "AIOS_EXCHANGE_API_KEY" in by_id["broker_testnet"]["how_to_unblock"]
+    assert "testnet adapter wiring" in by_id["broker_testnet"]["how_to_unblock"]
     assert by_id["tax_signoff"]["status"] == "BLOCKED"
     assert by_id["live_capital"]["status"] == "BLOCKED"
     assert view["production_allowed"] is False
@@ -59,7 +59,8 @@ def test_gates_view_reports_blockers_and_approval(tmp_path: Path) -> None:
     )
     view2 = builder.gates_view()
     capital = next(g for g in view2["gates"] if g["gate"] == "live_capital")
-    assert capital["status"] == "APPROVED"
+    assert capital["status"] == "RECORDED"
+    assert view2["live_routing_enabled"] is False
     assert view2["live_capital_approved_by"] == "principal"
 
 

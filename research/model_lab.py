@@ -19,6 +19,7 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 _FEATURE_RETURNS = (1, 2, 3, 5)
 _FEATURE_VOL_WINDOWS = (5, 10)
@@ -201,7 +202,21 @@ def walk_forward_evaluate(
     }
 
 
-def train_pooled(series_by_symbol: dict[str, list[float]]) -> dict[str, object]:
+class TrainResult(TypedDict, total=False):
+    """Registry payload from :func:`train_pooled`.
+
+    ``total=False`` because the honest failure path is ``{"trained": False}`` —
+    the remaining keys exist only when a model was actually fit. Callers must
+    gate on ``trained`` before trusting ``artifact_hash`` / ``metrics``.
+    """
+
+    trained: bool
+    artifact_hash: str
+    metrics: dict[str, float]
+    per_symbol: dict[str, dict[str, float]]
+
+
+def train_pooled(series_by_symbol: dict[str, list[float]]) -> TrainResult:
     """Train one pooled model across all symbols; evaluate walk-forward per symbol.
 
     Returns the registry payload: artifact hash + honest metrics.

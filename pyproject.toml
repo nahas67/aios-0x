@@ -1,3 +1,9 @@
+# AIOS-0X — the ONE authoritative dependency model.
+#
+# There is deliberately no per-component requirements file: a fresh environment
+# installs the project and runs its supported test suite from this file alone.
+# See docs/DEVELOPMENT.md for the canonical install commands and the lock
+# strategy (`scripts/lock_dependencies.py` -> requirements.lock, generated).
 [project]
 name = "aios"
 version = "0.1.0"
@@ -5,31 +11,79 @@ description = "AIOS-0X: AI-native investment institution - multi-community intel
 requires-python = ">=3.11"
 license = { text = "Proprietary" }
 dependencies = [
-    "pydantic>=2.12,<3",
+    # Imported by shipped modules at import time, so these are not optional.
+    "pydantic>=2.12,<3",          # every contract in schemas/ and core/
+    "pydantic-settings>=2.13,<3",  # core/config.py
+    "httpx>=0.28,<0.29",          # core/model_gateway.py provider transport
 ]
 
 [project.optional-dependencies]
+# --- server-grade financial state plane (V1-A.2) -----------------------------
+postgres = ["psycopg[binary]>=3.3,<4"]
+
+# --- durable event backbone (V1-A.2) ----------------------------------------
+nats = ["nats-py>=2.15,<3"]
+
+# --- optional market venue adapters (lazy imports; see core/jetstream_bus.py) -
+ccxt = ["ccxt>=4.5,<5"]
+
+# --- optional semantic memory -------------------------------------------------
+qdrant = ["qdrant-client>=1.19,<2"]
+
+# --- development / verification ----------------------------------------------
 dev = [
     "pytest>=9.0,<10",
+    "pytest-asyncio>=1.4,<2",
+    "pytest-timeout>=2.3,<3",
+    "pytest-xdist>=3.8,<4",
     "ruff>=0.16,<0.17",
     "mypy>=2.3,<3",
 ]
+
+# `aios[all]` repeats the optional lists rather than referring to sibling extras:
+# self-referencing extras resolve inconsistently across pip/setuptools versions,
+# and an install that silently drops a backend is worse than a longer list.
+all = [
+    "psycopg[binary]>=3.3,<4",
+    "nats-py>=2.15,<3",
+    "ccxt>=4.5,<5",
+    "qdrant-client>=1.19,<2",
+]
+
+[project.scripts]
+aios = "aios.cli:main"
 
 [build-system]
 requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["aios", "core", "kernel", "schemas", "communities", "simulation", "research", "api"]
+[tool.setuptools.packages.find]
+include = [
+    "aios*",
+    "api*",
+    "communities*",
+    "core*",
+    "evaluation*",
+    "kernel*",
+    "research*",
+    "schemas*",
+    "simulation*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# Integration suites (real PostgreSQL / real JetStream) are marked and skipped
+# unless their DSN/URL environment variables are present. See tests/conftest.py.
+markers = [
+    "integration: requires a real PostgreSQL and/or NATS JetStream service",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 exclude = [".git", "__pycache__", ".venv", "data"]
+extend-exclude = ["ui/dist", "frontend/node_modules"]
 
 [tool.ruff.lint]
 select = [
@@ -56,4 +110,12 @@ disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
 module = "ccxt.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "nats.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "psycopg.*"
 ignore_missing_imports = true

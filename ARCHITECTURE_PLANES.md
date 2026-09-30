@@ -51,7 +51,7 @@ Judgment calls are documented inline where a module spans planes.
 | Module | Notes |
 |---|---|
 | `simulation/paper_engine.py` | venue simulation |
-| `communities/c5_execution/*` | order lifecycle + adapters |
+| `communities/c5_execution/*` | order lifecycle + adapters; `oms.py` (durable write-ahead orders), `reconciliation.py` (broker-vs-internal workflow) |
 | `research/walkforward.py`, `research/integrity.py`, `research/disaster.py` | honest backtest harnesses |
 | `simulation/generate_golden_data.py` | deterministic datasets |
 
@@ -65,6 +65,8 @@ Judgment calls are documented inline where a module spans planes.
 | Module | Notes |
 |---|---|
 | `core/persistence.py`, `core/pg_store.py`, `core/store_factory.py` | hash-chained memory store (SQLite/PG) |
+| `core/financial_kernel.py` | **deterministic financial state** (ADR-005): durable orders/transitions/fills/cash postings/positions, transactional outbox, consumer inbox, reconciliation records, `verify_invariants()` |
+| `core/ibor.py` | **Investment Book of Record** (ADR-006): the single source of portfolio truth |
 | `communities/c1_data/*` | ingestion/normalization/validation (§10 data architecture pipeline) |
 | `core/event_recovery.py` | §26 durable replay read-side |
 | `kernel/registries.py`, `kernel/provenance.py` | versioned artifacts + lineage graph |
@@ -83,6 +85,14 @@ Judgment calls are documented inline where a module spans planes.
 ## Composition Roots — allowed to touch everything, touch nothing else's job
 `simulation/replay_runner.py`, `simulation/kernel_bridge.py`,
 `aios/cli.py` (boot path), `tests/*`.
+
+## Authority notes introduced by the financial kernel
+- The financial store is **mutation authority** for orders/fills/cash; agents never
+  write to it directly. Communities reach it through composition roots, exactly
+  like the kernel (invariant 1 below).
+- `core/ibor.py` and `core/financial_kernel.py` are AIOS-owned authoritative
+  components (spec §58) — third-party engines may adapt to them, never replace
+  them as the source of financial truth.
 
 ## Enforced invariants (`tests/test_architecture_boundaries.py`)
 1. **No business logic touches the OS directly**: nothing under `communities/`

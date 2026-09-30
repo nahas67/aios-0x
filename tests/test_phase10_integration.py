@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from core.agents import registered_agents
+from core.config import Settings
 from core.vector_memory import BaseVectorMemory, InMemoryVectorMemory
 
 
@@ -103,9 +104,11 @@ def _debate_responder_any():
 def test_runner_registers_roster_and_upserts_memory(tmp_path: Path) -> None:
     from simulation.replay_runner import ReplayRunner
 
+    _settings = Settings(model_provider="none", autonomy_mode="AUTONOMOUS")
     runner = ReplayRunner(
         csv_path_by_symbol=_dataset(tmp_path),
         store_path=tmp_path / "int.db",
+        settings=_settings,
     )
     summary = asyncio.run(runner.run())
     assert summary.trades_closed >= 1
@@ -125,6 +128,7 @@ def test_auto_tax_computation_and_ca_gate(tmp_path: Path) -> None:
     runner = ReplayRunner(
         csv_path_by_symbol=_dataset(tmp_path),
         store_path=tmp_path / "tax.db",
+        settings=Settings(model_provider="none", autonomy_mode="AUTONOMOUS"),
     )
     summary = asyncio.run(runner.run())
     assert summary.trades_closed >= 1

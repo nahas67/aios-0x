@@ -13,6 +13,8 @@ import json
 import pathlib
 import sys
 
+from pydantic import BaseModel
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from communities.c1_data.ccxt_fetcher import CcxtDataFetcher  # noqa: E402
@@ -28,9 +30,9 @@ async def _run(exchange: str, symbol: str, timeframe: str, aios_symbol: str) -> 
     bus = InMemoryEventBus()
     await bus.start()
 
-    received = []
+    received: list[BaseModel] = []
 
-    async def sink(payload):
+    async def sink(payload: BaseModel) -> None:
         received.append(payload)
 
     await bus.subscribe(EventTopic.DATA_ACQUIRED, sink)

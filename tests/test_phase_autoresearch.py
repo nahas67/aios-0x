@@ -147,7 +147,7 @@ def test_runner_autoresearch_closes_the_loop(tmp_path: Path) -> None:
         store_path=tmp_path / "run.db",
         initial_balance=100000.0,
         slippage_pct=0.05,
-        settings=Settings(model_provider="none"),
+        settings=Settings(model_provider="none", autonomy_mode="AUTONOMOUS"),
     )
     asyncio.run(runner.run())
 

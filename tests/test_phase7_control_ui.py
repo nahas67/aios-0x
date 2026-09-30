@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from core.config import Settings
 from core.control_plane import ControlAction, ControlPlane, OperatorRole
 from core.event_bus import InMemoryEventBus
 from core.persistence import SqliteMemoryStore
@@ -180,9 +181,12 @@ def test_views_shapes_and_metrics(tmp_path: Path) -> None:
     from simulation.replay_runner import ReplayRunner
 
     write_dataset(tmp_path / "golden", symbols=["BTC/USD"], total_bars=40)
+    from core.config import Settings
+    _settings = Settings(model_provider="none", autonomy_mode="AUTONOMOUS")
     runner = ReplayRunner(
         csv_path_by_symbol={"BTC/USD": tmp_path / "golden" / "BTC_USD_1d.csv"},
         store_path=tmp_path / "views.db",
+        settings=_settings,
     )
     asyncio.run(runner.run())
     builder = runner.build_snapshot_builder()
@@ -210,6 +214,31 @@ def test_views_shapes_and_metrics(tmp_path: Path) -> None:
     assert 'aios_emergency_state{state="' in metrics
 
 
+def test_http_server_requires_bearer_token_when_configured(tmp_path: Path) -> None:
+    from api.server import CommandCenterServer
+    from api.views import SystemSnapshotBuilder
+
+    store = SqliteMemoryStore(tmp_path / "auth.db")
+    server = CommandCenterServer(SystemSnapshotBuilder(store), port=0, auth_token="test-token")
+    server.start()
+    try:
+        base = f"http://127.0.0.1:{server.port}"
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(f"{base}/api/v1/executive", timeout=5)
+        assert error.value.code == 401
+        request = urllib.request.Request(
+            f"{base}/api/v1/executive",
+            headers={"Authorization": "Bearer test-token", "X-Request-ID": "req-123"},
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            assert response.headers["X-Request-ID"] == "req-123"
+            assert json.loads(response.read())["chain_valid"] is True
+        with urllib.request.urlopen(f"{base}/api/v1/health", timeout=5) as response:
+            assert response.status == 200
+    finally:
+        server.stop()
+
+
 def test_http_server_roundtrip(tmp_path: Path) -> None:
     from api.server import CommandCenterServer
     from simulation.generate_golden_data import write_dataset
@@ -219,6 +248,7 @@ def test_http_server_roundtrip(tmp_path: Path) -> None:
     runner = ReplayRunner(
         csv_path_by_symbol={"BTC/USD": tmp_path / "golden" / "BTC_USD_1d.csv"},
         store_path=tmp_path / "http.db",
+        settings=Settings(model_provider="none", autonomy_mode="AUTONOMOUS"),
     )
     asyncio.run(runner.run())
     plane = runner.build_control_plane()
@@ -249,7 +279,9 @@ def test_http_server_roundtrip(tmp_path: Path) -> None:
             urllib.request.urlopen(req, timeout=5)
             raised = False
         except urllib.error.HTTPError as err:
-            raised = err.code == 403
-        assert raised, "VIEWER reset must be denied"
+            # Authentication is intentionally disabled for this read-only
+            # fixture; unauthenticated mutation is rejected before RBAC.
+            raised = err.code == 401
+        assert raised, "Unauthenticated reset must be rejected"
     finally:
         server.stop()

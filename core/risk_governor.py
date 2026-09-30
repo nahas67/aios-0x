@@ -16,7 +16,6 @@ from core.event_bus import BaseEventBus, EventTopic
 from schemas.contracts import (
     EmergencyEvent,
     EmergencyStateValue,
-    ReconciliationReport,
 )
 
 if TYPE_CHECKING:
@@ -132,16 +131,6 @@ class RiskGovernor:
             pass  # WARNING/CAUTION remain governed by C9 sizing; no emergency yet
         return not self.locked_out
 
-    async def observe_reconciliation(self, report: ReconciliationReport) -> bool:
-        """Reconciliation failure is an EXECUTION_FAILURE lockout trigger."""
-        if report.ok:
-            return not self.locked_out
-        await self.escalate(
-            EmergencyStateValue.EXECUTION_FAILURE,
-            f"reconciliation failed: {'; '.join(report.mismatches)[:300]}",
-            triggered_by="reconciler",
-        )
-        return False
 
 
 def load_lockout_from_store(store: "BaseMemoryStore") -> bool:

@@ -1,0 +1,51 @@
+# AIOS-0X disposable test infrastructure for the V1-A.2 integration suites.
+#
+# Both services bind to loopback-only, non-default ports so they never collide
+# with a developer's own PostgreSQL or NATS. Every service is ephemeral
+# (tmpfs storage) and safe to destroy at any time.
+#
+#   docker compose -f docker-compose.test.yml up -d
+#   export AIOS_TEST_PG_DSN="postgresql://aios:testpass123@127.0.0.1:5433/aios_test"
+#   export AIOS_TEST_NATS_URL="nats://127.0.0.1:54222"
+#   python -m pytest -q -m integration
+#   docker compose -f docker-compose.test.yml down -v
+#
+# Without those two variables the integration suites skip; the default suite
+# stays hermetic and green on SQLite + the in-memory bus.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aios_test
+      POSTGRES_USER: aios
+      POSTGRES_PASSWORD: testpass123
+    ports:
+      - '127.0.0.1:5433:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U aios -d aios_test']
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+  nats:
+    image: nats:2-alpine
+    # JetStream with a memory store: the infra is disposable, and any durability
+    # claim we make in tests must come from the outbox/inbox tables, not from
+    # the broker holding messages for us.
+    command:
+      - '--jetstream'
+      - '--store_dir=/data'
+      - '--http_port=8422'
+      - '-m=8422'
+    ports:
+      - '127.0.0.1:54222:4222'
+      - '127.0.0.1:8422:8422'
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:8422/healthz']
+      interval: 2s
+      timeout: 3s
+      retries: 10

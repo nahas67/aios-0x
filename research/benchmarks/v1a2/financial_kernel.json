@@ -1,0 +1,180 @@
+{
+  "phase": "V1-A.2",
+  "harness": "research/benchmarks/v1a2/financial_kernel_bench.py",
+  "run_tag": "1789712307-19416",
+  "account": "bench-1789712307-19416",
+  "note": "Institutional V1 numbers, single node, correctness first. Latencies are milliseconds (mean/p50/p95/p99). Run on a shared developer workstation, not a dedicated benchmark host.",
+  "config": {
+    "orders": 300,
+    "fills": 300,
+    "reservations": 150,
+    "snapshots": 100,
+    "reconciliations": 50,
+    "outbox_batches": 5,
+    "contention_workers": 4,
+    "contention_per_worker": 50,
+    "jetstream_messages": 2000,
+    "reps": 3
+  },
+  "tiers": {
+    "sqlite": {
+      "backend": "sqlite",
+      "order_transaction_ms": {
+        "n": 300,
+        "mean": 0.6873,
+        "p50": 0.6606,
+        "p95": 0.8833,
+        "p99": 1.3136,
+        "min": 0.4765,
+        "max": 2.5378
+      },
+      "fill_application_ms": {
+        "n": 300,
+        "mean": 0.9123,
+        "p50": 0.8646,
+        "p95": 1.1799,
+        "p99": 1.6862,
+        "min": 0.6326,
+        "max": 4.0587
+      },
+      "cash_reserve_release_ms": {
+        "n": 150,
+        "mean": 1.2334,
+        "p50": 1.1509,
+        "p95": 1.4992,
+        "p99": 2.9453,
+        "min": 1.0014,
+        "max": 3.3594
+      },
+      "ibor_snapshot_ms": {
+        "n": 100,
+        "mean": 8.9585,
+        "p50": 8.7868,
+        "p95": 11.5124,
+        "p99": 15.895,
+        "min": 6.0919,
+        "max": 18.2089
+      },
+      "reconciliation_ms": {
+        "n": 50,
+        "mean": 16.6815,
+        "p50": 16.3767,
+        "p95": 19.6519,
+        "p99": 22.0021,
+        "min": 13.2929,
+        "max": 22.0021
+      },
+      "outbox": {
+        "published": 1000,
+        "seconds": 0.5744,
+        "events_per_sec": 1740.9,
+        "remaining_backlog": 301
+      },
+      "invariants_ok": true,
+      "status": "measured",
+      "reps": 3,
+      "fill_application_ms_p50_by_rep": [
+        0.6922,
+        0.809,
+        0.8646
+      ]
+    },
+    "postgres": {
+      "backend": "postgres",
+      "order_transaction_ms": {
+        "n": 300,
+        "mean": 4.6873,
+        "p50": 4.6072,
+        "p95": 5.5139,
+        "p99": 6.7451,
+        "min": 3.7699,
+        "max": 8.0744
+      },
+      "fill_application_ms": {
+        "n": 300,
+        "mean": 9.3478,
+        "p50": 8.9963,
+        "p95": 11.8241,
+        "p99": 15.3797,
+        "min": 8.1037,
+        "max": 25.4738
+      },
+      "cash_reserve_release_ms": {
+        "n": 150,
+        "mean": 8.406,
+        "p50": 8.2855,
+        "p95": 9.1214,
+        "p99": 12.4267,
+        "min": 7.4136,
+        "max": 13.4628
+      },
+      "ibor_snapshot_ms": {
+        "n": 100,
+        "mean": 22.3259,
+        "p50": 21.4723,
+        "p95": 27.7355,
+        "p99": 31.9789,
+        "min": 19.5713,
+        "max": 33.5261
+      },
+      "reconciliation_ms": {
+        "n": 50,
+        "mean": 29.4615,
+        "p50": 28.7732,
+        "p95": 35.565,
+        "p99": 37.9444,
+        "min": 26.8218,
+        "max": 37.9444
+      },
+      "outbox": {
+        "published": 1000,
+        "seconds": 1.0152,
+        "events_per_sec": 985.0,
+        "remaining_backlog": 906
+      },
+      "invariants_ok": true,
+      "status": "measured",
+      "contention": {
+        "workers": 4,
+        "per_worker": 50,
+        "targeted": 200,
+        "applied": 200,
+        "applied_per_worker": [
+          50,
+          50,
+          50,
+          50
+        ],
+        "seconds": 1.2863,
+        "fills_per_sec": 155.5,
+        "fills_persisted": 200,
+        "invariants_ok": true,
+        "errors": [],
+        "error_count": 0,
+        "note": "workers are independent PostgreSQL backends racing on one order row; process-level races are covered by tests/test_v1a2_concurrency.py"
+      }
+    }
+  },
+  "jetstream": {
+    "status": "measured",
+    "messages": 2000,
+    "seconds": 0.6174,
+    "msg_per_sec": 3239.6,
+    "published_counter": 2000,
+    "deduplicated": 0,
+    "publish_failures": 0,
+    "consumer_lag": null,
+    "stored_distinct_payloads": 2000,
+    "health": {
+      "backend": "jetstream",
+      "url": "nats://127.0.0.1:54222",
+      "stream": "AIOS_EVENTS",
+      "connected": true,
+      "server": "<nats server v2.11.6>",
+      "reconnect_count": 0,
+      "published": 2000,
+      "publish_failures": 0
+    }
+  },
+  "wall_seconds": 39.64
+}

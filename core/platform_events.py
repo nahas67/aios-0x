@@ -36,8 +36,12 @@ class PlatformEventType(StrEnum):
     HYPOTHESIS_REJECTED = "aios.platform.hypothesis_rejected"
     EVALUATION_COMPLETED = "aios.platform.evaluation_completed"
     ORDER_REQUESTED = "aios.platform.order_requested"
+    ORDER_ACCEPTED_BY_VENUE = "aios.platform.order_accepted_by_venue"
     ORDER_AUTHORIZED = "aios.platform.order_authorized"
     ORDER_DENIED = "aios.platform.order_denied"
+    ORDER_CANCELLED = "aios.platform.order_cancelled"
+    RECONCILIATION_COMPLETED = "aios.platform.reconciliation_completed"
+    RECONCILIATION_FINDING_OPENED = "aios.platform.reconciliation_finding_opened"
     RISK_DECISION_MADE = "aios.platform.risk_decision_made"
     EXECUTION_COMPLETED = "aios.platform.execution_completed"
     POST_MORTEM_CREATED = "aios.platform.post_mortem_created"
@@ -220,6 +224,37 @@ def execution_completed(
         fill_price=fill_price,
         quantity=quantity,
         venue=venue,
+    )
+
+
+def reconciliation_completed(
+    run_id: str, account_id: str, finding_count: int, ok: bool
+) -> PlatformEvent:
+    """One reconciliation pass finished (§26)."""
+    return _make(
+        PlatformEventType.RECONCILIATION_COMPLETED,
+        "c5-execution",
+        "reconciliation_run",
+        run_id,
+        f"account {account_id}: {finding_count} discrepancy(ies), ok={ok}",
+        account_id=account_id,
+        finding_count=finding_count,
+        ok=ok,
+    )
+
+
+def reconciliation_finding_opened(
+    finding_id: str, kind: str, severity: str, subject: str
+) -> PlatformEvent:
+    return _make(
+        PlatformEventType.RECONCILIATION_FINDING_OPENED,
+        "c5-execution",
+        "reconciliation_finding",
+        finding_id,
+        f"{severity} {kind} on {subject}",
+        kind=kind,
+        severity=severity,
+        subject=subject,
     )
 
 

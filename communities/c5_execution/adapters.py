@@ -49,7 +49,13 @@ class BaseExecutionAdapter(ABC):
 
     @abstractmethod
     def positions_snapshot(self) -> dict[str, float]:
-        """Symbol -> filled quantity for reconciliation."""
+        """Symbol -> *signed net* quantity, as the venue would report it.
+
+        Reconciliation compares this against the IBOR's signed position, so an
+        implementation that returns unsiged magnitudes or lets one symbol
+        overwrite another will manufacture divergences that do not exist. Shorts
+        are negative; several positions in one symbol are summed.
+        """
 
 
 class PaperExecutionAdapter(BaseExecutionAdapter):
@@ -73,9 +79,25 @@ class PaperExecutionAdapter(BaseExecutionAdapter):
         return receipt
 
     def positions_snapshot(self) -> dict[str, float]:
-        return {
-            p.receipt.symbol: p.receipt.filled_quantity for p in self.engine.open_positions.values()
-        }
+        """Signed net position per symbol.
+
+        Two defects lived here and both produced phantom reconciliation findings
+        once the durable engine started comparing quantities:
+
+        * ``TradeExecutionReceipt.filled_quantity`` is an unsigned magnitude, so
+          keying on it alone reported a short as a positive quantity — the venue
+          appeared to hold a long the book had never opened. Direction comes from
+          the position's action.
+        * A dict comprehension keyed by symbol let the *last* open position for a
+          symbol overwrite the others instead of netting them.
+        """
+        net: dict[str, float] = {}
+        for position in self.engine.open_positions.values():
+            magnitude = position.receipt.filled_quantity
+            signed = -magnitude if position.action == "SELL" else magnitude
+            symbol = position.receipt.symbol
+            net[symbol] = round(net.get(symbol, 0.0) + signed, 12)
+        return net
 
 
 class CcxtExecutionAdapter(BaseExecutionAdapter):
@@ -83,10 +105,9 @@ class CcxtExecutionAdapter(BaseExecutionAdapter):
 
     Safety rails (Constitution / Directive 74):
     - Requires AIOS_ALLOW_LIVE_EXECUTION=1 AND credentials present.
-    - Testnet is the DEFAULT venue; real-money routing additionally demands
-      ``allow_real_money=True`` (the composition root passes it only after
-      reading a LIVE_CAPITAL_APPROVAL event from the audit store) per
-      CONSTITUTION §1 live gate.
+    - Live routing is constitutionally disabled in the current release,
+      regardless of credentials, environment variables, ADMIN approval, or
+      ``allow_real_money``. Only the testnet venue can be constructed.
     - Enforces a hard per-order notional cap until the constitution is amended.
     Without the rails it refuses loudly; it NEVER paper-simulates instead.
     """
@@ -119,10 +140,15 @@ class CcxtExecutionAdapter(BaseExecutionAdapter):
             problems.append("AIOS_ALLOW_LIVE_EXECUTION != 1")
         if not key or not secret:
             problems.append(f"missing credentials ({api_key_env}/{secret_env})")
-        if not self.testnet and not allow_real_money:
+        if not self.testnet:
+            # The ratified constitution currently forbids live routing. Keep
+            # this invariant inside the adapter so no caller, environment
+            # variable, or boolean argument can turn a test configuration into
+            # a real-money venue before a ratified amendment and a separate
+            # production composition root exist.
             problems.append(
-                "real-money venue requested without LIVE_CAPITAL_APPROVAL "
-                "(CONSTITUTION §1 live gate)"
+                "real-money routing is constitutionally disabled (CONSTITUTION §1); "
+                "testnet is the only supported CCXT venue"
             )
         if problems:
             raise ExecutionUnavailableError(

@@ -98,7 +98,7 @@ _EVIDENCE_QUALIFIED = ", ".join(
 )
 
 
-def _hypothesis_row(h: Hypothesis) -> tuple:
+def _hypothesis_row(h: Hypothesis) -> tuple[Any, ...]:
     return (
         h.hypothesis_id,
         h.statement,
@@ -119,7 +119,7 @@ def _hypothesis_row(h: Hypothesis) -> tuple:
     )
 
 
-def _evidence_row(e: EvidencePackage) -> tuple:
+def _evidence_row(e: EvidencePackage) -> tuple[Any, ...]:
     return (
         e.evidence_id,
         e.source,
@@ -270,7 +270,8 @@ class SqliteResearchStore(BaseResearchStore):
         limit: int = 500,
     ) -> list[Hypothesis]:
         query = f"SELECT {_HYPOTHESIS_COLUMNS} FROM hypotheses"  # noqa: S608
-        clauses, params = [], []
+        clauses: list[str] = []
+        params: list[Any] = []
         if status is not None:
             clauses.append("status = ?")
             params.append(status.value)
@@ -373,7 +374,13 @@ class PostgresResearchStore(SqliteResearchStore):
                 "Install with: pip install 'psycopg[binary]'"
             ) from exc
         self._lock = threading.RLock()
-        self._conn = psycopg.connect(dsn)
+        # Annotated Any deliberately: this subclass reuses the SQLite parent's
+        # SQL-building logic but holds a *psycopg* connection, so inheriting the
+        # parent's ``sqlite3.Connection`` type would be a lie that also makes
+        # every ``with conn.cursor()`` below look like a sqlite3 cursor
+        # (which does not support the context-manager protocol) instead of the
+        # psycopg one (which does).
+        self._conn: Any = psycopg.connect(dsn)
         self._conn.autocommit = False
         self._sqlite_mode = False  # marker: execute() uses %s placeholders
         self._ensure_schema_pg()
@@ -383,7 +390,7 @@ class PostgresResearchStore(SqliteResearchStore):
     def _q(self, query: str) -> str:
         return query.replace("?", "%s")
 
-    def _exec(self, cur: Any, query: str, params: tuple = ()) -> None:
+    def _exec(self, cur: Any, query: str, params: tuple[Any, ...] = ()) -> None:
         cur.execute(self._q(query), params)
 
     def _ensure_schema_pg(self) -> None:
@@ -477,7 +484,8 @@ class PostgresResearchStore(SqliteResearchStore):
         limit: int = 500,
     ) -> list[Hypothesis]:
         query = f"SELECT {_HYPOTHESIS_COLUMNS} FROM hypotheses"  # noqa: S608
-        clauses, params = [], []
+        clauses: list[str] = []
+        params: list[Any] = []
         if status is not None:
             clauses.append("status = ?")
             params.append(status.value)
@@ -586,8 +594,11 @@ def build_research_store(
     store_path: str | Path,
     database_url: str | None = None,
 ) -> BaseResearchStore:
-    store_cls = select_research_store_class(database_url)
+    store_cls: Any = select_research_store_class(database_url)
     if store_cls is SqliteResearchStore:
         return SqliteResearchStore(Path(str(store_path)).with_suffix(".research.db"))
-    return store_cls(database_url or "")
+    # The Postgres subclass takes a DSN where the SQLite one takes a path; the
+    # base ABC declares no constructor, so the dispatcher is typed Any.
+    built: BaseResearchStore = store_cls(database_url or "")
+    return built
 

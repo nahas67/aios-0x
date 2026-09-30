@@ -9,7 +9,7 @@ timestamp-free determinism hash identical across identical runs.
 import hashlib
 import json
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -22,7 +22,12 @@ from communities.c2_research.research_agent import ResearchAgent
 from communities.c3_verification.verification_agent import VerificationAgent
 from communities.c4_strategy.strategy_agent import StrategyAgent
 from communities.c5_execution.adapters import PaperExecutionAdapter
+from communities.c5_execution.broker_reconciliation import snapshot_from_rows
 from communities.c5_execution.execution import KillSwitch, OrderManager
+from communities.c5_execution.reconciliation import (
+    ReconciliationEngine,
+    ReconciliationResult,
+)
 from communities.c6_observation.observation_agent import ObservationAgent
 from communities.c6_observation.postmortem_engine import PostmortemEngine
 from communities.c7_memory.memory_agent import MemoryAgent
@@ -38,6 +43,12 @@ from communities.c11_finance.tax import BUILTIN_RULES, LotBook, TaxEngine
 from core.config import Settings
 from core.data_quality import AnomalyDetector, SymbolHealthRegistry
 from core.event_bus import BaseEventBus, EventTopic, InMemoryEventBus
+from core.financial_kernel import (
+    BaseFinancialStore,
+    Fill,
+    FinancialStoreError,
+    ReconciliationMode,
+)
 from core.model_gateway import BaseModelGateway, ModelResponse, build_gateway
 from core.model_router import ModelRouter
 from core.persistence import BaseMemoryStore
@@ -49,9 +60,9 @@ from schemas.contracts import (
     CandidateHypothesis,
     Disposal,
     EmergencyStateValue,
+    OrderSide,
     PortfolioAllocationPlan,
     PredictionRecord,
-    ReconciliationReport,
     StrategySpecification,
     TaxComputation,
     TradeExecutionReceipt,
@@ -66,6 +77,10 @@ if TYPE_CHECKING:
     from core.control_plane import ControlPlane
 
 logger = logging.getLogger(__name__)
+
+#: Adapter version recorded on every per-bar reconciliation run, so a finding can
+#: always be traced to the code that produced the venue's answer.
+PAPER_RECONCILIATION_ADAPTER = "paper-positions-only-1.0"
 
 # ---- Zero-trust publishing map (§24): actor -> topics it may publish.
 # Everything else (DATA_ANOMALY, RECONCILIATION_FAILED, aios.platform.*) is
@@ -126,6 +141,12 @@ class RunSummary(BaseModel):
     events_logged: int = 0
     chain_valid: bool = True
     determinism_hash: str = ""
+    durable_orders: int = 0
+    durable_fills: int = 0
+    durable_open_orders: int = 0
+    financial_invariants_ok: bool = True
+    ibor_rebuild_ok: bool = True
+    outbox_backlog: int = 0
     model_calls: int = 0
     total_model_cost_usd: float = 0.0
     research_mode_used: str = "deterministic"
@@ -155,7 +176,7 @@ class ReplayRunner:
 
     def __init__(
         self,
-        csv_path_by_symbol: dict[str, str | Path],
+        csv_path_by_symbol: Mapping[str, str | Path],
         store_path: str | Path,
         initial_balance: float = 100000.0,
         slippage_pct: float = 0.05,
@@ -167,6 +188,7 @@ class ReplayRunner:
         macro_calendar_path: str | Path | None = None,
         shadow_mode: bool = False,
         use_live_news: bool = False,
+        financial_store: BaseFinancialStore | None = None,
     ) -> None:
         """Build the runner; call :meth:`run` to execute the replay.
 
@@ -320,12 +342,42 @@ class ReplayRunner:
             exposure_by_class_provider=self._class_exposures,
         )
 
-        # ---- C5 execution chain: plan -> order lifecycle -> venue
+        # ---- Deterministic financial state plane (V1-A): durable OMS + IBOR.
+        # Orders are written ahead of the venue call, fills are applied exactly
+        # once, and the book is rebuildable from the fill ledger. Bus/audit
+        # semantics are unchanged: no extra topics are published here, the
+        # outbox is drained by the dedicated publisher process.
+        from communities.c5_execution.oms import DurableOrderManager
+        from core.financial_kernel import build_financial_store
+        from core.ibor import InvestmentBookOfRecord
+        from core.safety_plane import SafetyPlane
+
+        self.financial_store = financial_store or build_financial_store(
+            f"{store_path}.financial.db"
+        )
+
+        # ---- Safety plane (spec §33): durable, deterministic restrictions.
+        # It reads lockouts from the financial store rather than process memory,
+        # so a CRITICAL reconciliation discrepancy still blocks orders after a
+        # restart. It is consulted at the last moment before a venue call.
         self.adapter = PaperExecutionAdapter(self.paper)
+        self.safety_plane = SafetyPlane(
+            self.financial_store, audit=self.store, broker=self.adapter.venue
+        )
+        self.oms = DurableOrderManager(
+            self.financial_store, safety=self.safety_plane, broker=self.adapter.venue
+        )
+        self.ibor = InvestmentBookOfRecord(
+            self.financial_store, mark_provider=self._last_price_of
+        )
+
+        # ---- C5 execution chain: plan -> order lifecycle -> venue
         self.order_manager = OrderManager(
             event_bus=self._scoped("c5-execution"),
             adapter=self.adapter,
             quantity_provider=self._plan_quantity,
+            durable=self.oms,
+            safety=self.safety_plane,
         )
 
         # ---- Emergency authority + kill switch
@@ -351,7 +403,19 @@ class ReplayRunner:
             flatten_callback=self._flatten_position,
             price_lookup=self._last_price_of,
         )
-        self._fill_mirror: dict[str, str] = {}  # execution_id -> symbol (reconciliation)
+
+        # ---- §26 reconciliation: ONE authoritative engine.
+        # The legacy per-bar `ReconciliationReport` (positions-only, in-memory,
+        # free-text mismatches, no persistence and no route to the safety plane)
+        # is retired. This engine is the same one the API and the operator
+        # surface read, so there is a single definition of financial consistency
+        # and a single durable record of every pass.
+        self.reconciliation = ReconciliationEngine(
+            self.financial_store,
+            account_id=self.oms.account_id,
+            safety=self.safety_plane,
+        )
+        self.reconciliation_runs = 0
 
         # ---- C11 finance back office
         self.ledger = DoubleEntryLedger(event_bus=self._scoped("c11-finance"))
@@ -460,6 +524,11 @@ class ReplayRunner:
         # Outcome collection
         self.trade_lines: list[str] = []
         self.equity_curve: list[float] = []
+
+        # Vibe-Trading-style "trust layer": the machine-checkable run card for
+        # this replay, populated at summarize time and exposed read-only to
+        # the command center (GET /api/v1/run-summary).
+        self.run_summary: RunSummary | None = None
 
         self._subscriptions: list[tuple[EventTopic, Any]] = [
             (EventTopic.DATA_ACQUIRED, self._on_data_quality),
@@ -675,6 +744,12 @@ class ReplayRunner:
                     plan, locked_out=self.risk_governor.locked_out
                 )
             )
+            # Apply autonomy from settings (fail-closed SUPERVISED default):
+            from core.control_plane import AutonomyMode
+            try:
+                plane.autonomy = AutonomyMode(self.settings.autonomy_mode.upper())
+            except (ValueError, AttributeError):
+                plane.autonomy = AutonomyMode.SUPERVISED
             self._control_plane = plane
         return self._control_plane
 
@@ -705,6 +780,12 @@ class ReplayRunner:
             research_engine=self.research_engine,
             kernel_bridge=self.kernel_bridge,
             ca_workflow=self.ca_workflow,
+            financial_store=self.financial_store,
+            ibor=self.ibor,
+            safety_plane=self.safety_plane,
+            # The same engine instance the per-bar pass uses, so the UI reports
+            # on the reconciliation that actually ran rather than a second one.
+            reconciliation_engine=self.reconciliation,
         )
 
     def serve(self, port: int = 8787) -> Any:
@@ -724,30 +805,64 @@ class ReplayRunner:
             return
         await self._settle(position.receipt, exit_price, "KILL_SWITCH")
 
-    async def _reconcile(self) -> ReconciliationReport:
-        """Adapter snapshot vs internal fill mirror; mismatch = execution failure."""
-        venue_positions = self.adapter.positions_snapshot()
-        mirror_symbols = set(self._fill_mirror.values())
-        mismatches: list[str] = []
-        for symbol in sorted(set(venue_positions) | mirror_symbols):
-            venue_qty = venue_positions.get(symbol)
-            internal_open = any(
-                p.receipt.symbol == symbol for p in self.paper.open_positions.values()
+    async def _reconcile(self) -> ReconciliationResult:
+        """Per-bar venue-vs-internal comparison through the durable engine (§26).
+
+        The venue here can answer for positions and nothing else, and it says so:
+        the snapshot declares ``covers_positions=True`` with orders/executions
+        unsupported. That declaration is what keeps this honest — the engine will
+        not record a CRITICAL "order missing at the venue" or "execution absent
+        from the venue" finding for facets the paper venue was never asked about.
+
+        A divergence is no longer a transient string: it is a persisted
+        reconciliation run plus typed findings, and a CRITICAL finding engages a
+        durable safety-plane restriction before this method returns. The bus
+        event and the emergency escalation are preserved, but they are now driven
+        by the durable verdict rather than by a second, weaker definition of
+        consistency.
+        """
+        try:
+            venue_positions = self.adapter.positions_snapshot()
+        except Exception as exc:  # noqa: BLE001 - an unreadable venue is not a pass
+            # The dangerous failure mode is a reconciliation that "passes"
+            # because the adapter returned nothing. An unreadable venue is an
+            # execution-path failure and is escalated as one; no run is recorded,
+            # so no operator can later read a clean verdict that never happened.
+            logger.error("venue %s could not be read for reconciliation: %s", self.adapter.venue, exc)
+            await self.risk_governor.escalate(
+                EmergencyStateValue.EXECUTION_FAILURE,
+                f"reconciliation aborted: venue {self.adapter.venue} unreadable ({exc})",
+                triggered_by="reconciler",
             )
-            if venue_qty is not None and not internal_open and venue_qty > 0:
-                mismatches.append(f"{symbol}: venue reports {venue_qty} qty; internal none")
-            if venue_qty is None and internal_open:
-                # Paper adapter mirrors engine by construction; divergence = bug/tamper.
-                mismatches.append(f"{symbol}: internal open position missing at venue")
-        report = ReconciliationReport(
-            checked_symbols=len(set(venue_positions) | mirror_symbols),
-            mismatches=mismatches,
+            raise
+
+        snapshot = snapshot_from_rows(
+            broker=self.adapter.venue,
+            account_id=self.oms.account_id,
+            mode=ReconciliationMode.FULL_SNAPSHOT,
+            positions=venue_positions,
+            adapter_version=PAPER_RECONCILIATION_ADAPTER,
+            # The paper venue reports positions only; it is not asked for, and
+            # therefore cannot be judged on, orders or executions.
+            covers_orders=False,
+            covers_executions=False,
+            covers_positions=True,
         )
-        if not report.ok:
-            await self.bus.publish(EventTopic.RECONCILIATION_FAILED, report)
-            await self.risk_governor.observe_reconciliation(report)
-            await self.kill_switch.trigger("reconciliation failed", triggered_by="reconciler")
-        return report
+        result = self.reconciliation.reconcile(snapshot)
+        self.reconciliation_runs += 1
+        if not result.requires_lockout:
+            return result
+
+        await self.bus.publish(EventTopic.RECONCILIATION_FAILED, result.run)
+        critical = result.critical()
+        await self.risk_governor.escalate(
+            EmergencyStateValue.EXECUTION_FAILURE,
+            f"reconciliation run {result.run.run_id} raised {len(critical)} critical "
+            f"finding(s); lockout scope {result.lockout_scope}",
+            triggered_by="reconciler",
+        )
+        await self.kill_switch.trigger("reconciliation failed", triggered_by="reconciler")
+        return result
 
     async def _on_data_quality(self, payload: Any) -> None:
         """Run anomaly detection + health tracking for every data arrival.
@@ -796,7 +911,6 @@ class ReplayRunner:
         taken - scoring them would corrupt calibration statistics.
         """
         self._receipts[receipt.execution_id] = receipt
-        self._fill_mirror[receipt.execution_id] = receipt.symbol
         self._filled_this_bar.add(receipt.execution_id)
         await self.kernel_bridge.on_receipt(receipt)
 
@@ -883,11 +997,52 @@ class ReplayRunner:
             exits.append((r, exit_price, reason))
         return exits
 
+    def _record_durable_exit(
+        self, receipt: TradeExecutionReceipt, exit_price: float, reason: str
+    ) -> None:
+        """Record the closing order + fill in durable state (spec §23, §27).
+
+        Bracket exits are decided by the venue simulation, but they are still
+        capital movements: without them the book would only ever see entries.
+        The paper venue charges the round trip on the entry fill, so the exit
+        leg carries no fee of its own (recorded, not guessed).
+        """
+        strategy = self._strategies.get(receipt.strategy_id)
+        entry_action = strategy.action if strategy else "BUY"
+        exit_side = OrderSide.SELL if entry_action == "BUY" else OrderSide.BUY
+        client_order_id = f"{receipt.symbol}:{receipt.strategy_id}:exit:{receipt.execution_id}"
+        try:
+            order = self.oms.prepare_order(
+                client_order_id=client_order_id,
+                strategy_id=receipt.strategy_id,
+                symbol=receipt.symbol,
+                side=exit_side,
+                quantity=receipt.filled_quantity,
+            )
+            self.oms.accept(order.internal_order_id)
+            self.oms.apply_fill(
+                Fill(
+                    fill_id=f"exit:{receipt.execution_id}",
+                    order_id=order.internal_order_id,
+                    broker_execution_id=f"exit:{receipt.execution_id}",
+                    symbol=receipt.symbol,
+                    side=exit_side,
+                    quantity=receipt.filled_quantity,
+                    price=exit_price,
+                    executed_at=self.fetcher.current_timestamp(),
+                )
+            )
+        except FinancialStoreError as exc:
+            logger.error(
+                "durable exit recording failed for %s: %s", receipt.execution_id, exc
+            )
+
     async def _settle(self, receipt: TradeExecutionReceipt, exit_price: float, reason: str) -> None:
         pnl_opt = self.paper.settle_position(receipt.execution_id, exit_price)
         if pnl_opt is None:
             logger.warning("Settlement skipped for unknown execution %s", receipt.execution_id)
             return
+        self._record_durable_exit(receipt, exit_price, reason)
 
         # C11 hooks: FIFO lot consumption + realized-pnl ledger legs
         disposals: list[Disposal] = []
@@ -1173,6 +1328,7 @@ class ReplayRunner:
             await self.bus.stop()
 
         summary.experiment_reproducibility_hash = self._experiment_repro_hash
+        self.run_summary = summary
         return summary
 
     async def _auto_research_cycle(self) -> int:
@@ -1264,6 +1420,9 @@ class ReplayRunner:
         if not result.get("trained"):
             return
         models = self.kernel_bridge.kernel.models
+        if models is None:  # pragma: no cover - composition root always attaches the registries
+            logger.warning("kernel has no model registry; skipping direction model registration")
+            return
         try:
             models.register(
                 model_id="direction_logreg",
@@ -1274,8 +1433,8 @@ class ReplayRunner:
             )
         except ValueError:
             return  # already registered this kernel (defensive; one run per kernel)
-        models.mark_trained("direction_logreg", "v1", str(result["artifact_hash"]))
-        models.mark_evaluated("direction_logreg", "v1", dict(result["metrics"]))  # type: ignore[arg-type]
+        models.mark_trained("direction_logreg", "v1", result["artifact_hash"])
+        models.mark_evaluated("direction_logreg", "v1", dict(result["metrics"]))
         self.store.append_event(
             "MODEL_TRAINED",
             "direction_logreg:v1",
@@ -1316,6 +1475,18 @@ class ReplayRunner:
         if equity and equity[0] > 0:
             our_return = round((equity[-1] - equity[0]) / equity[0] * 100.0, 2)
 
+        # V1-A financial kernel: prove the deterministic book is intact and that
+        # live positions equal the immutable fill ledger before we report.
+        invariants = self.financial_store.verify_invariants()
+        rebuild = self.ibor.rebuild()
+        if not invariants.ok:
+            logger.error(
+                "FINANCIAL INVARIANT VIOLATION: %s",
+                [c.name for c in invariants.failures()],
+            )
+        if not rebuild.ok:
+            logger.error("IBOR REBUILD DIVERGENCE: %s", rebuild.divergences)
+
         return RunSummary(
             symbols=self.symbols,
             total_bars=total_bars,
@@ -1337,6 +1508,12 @@ class ReplayRunner:
             research_mode_used=self._research_mode_used,
             benchmark_return_pct=bench_return,
             alpha_pct=round(our_return - bench_return, 2),
+            durable_orders=len(self.financial_store.orders()),
+            durable_fills=len(self.financial_store.fills()),
+            durable_open_orders=len(self.financial_store.open_orders()),
+            financial_invariants_ok=invariants.ok,
+            ibor_rebuild_ok=rebuild.ok,
+            outbox_backlog=self.financial_store.outbox_backlog(),
         )
 
 

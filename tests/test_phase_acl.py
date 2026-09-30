@@ -77,11 +77,14 @@ def test_listening_is_not_authority() -> None:
 
 @pytest.fixture()
 def ran(tmp_path: Path) -> ReplayRunner:
+    from core.config import Settings
+    settings = Settings(model_provider="none", autonomy_mode="AUTONOMOUS")
     write_dataset(tmp_path / "golden", symbols=["BTC/USD"], total_bars=120)
     runner = ReplayRunner(
         csv_path_by_symbol={"BTC/USD": tmp_path / "golden" / "BTC_USD_1d.csv"},
         store_path=tmp_path / "acl.db",
         initial_balance=100000.0,
+        settings=settings,
         slippage_pct=0.05,
     )
     summary = asyncio.run(runner.run())

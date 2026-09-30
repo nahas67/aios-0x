@@ -147,9 +147,9 @@ def test_settings_view_masks_secrets_and_reports_state(tmp_path: Path) -> None:
     )
     s = Settings(
         model_provider="openai_compatible",
-        openai_api_key="sk-secret-value",
+        openai_api_key="provider-test-key",
         research_mode="auto",
-        finnhub_api_key="fh-key",
+        finnhub_api_key="market-data-test-key",
     )
     builder = SystemSnapshotBuilder(store=store, settings=s, control_plane=cp)
     view = builder.settings_view()
@@ -157,5 +157,5 @@ def test_settings_view_masks_secrets_and_reports_state(tmp_path: Path) -> None:
     assert view["system"]["llm_configured"] is True  # boolean only
     assert view["data"]["finnhub"] is True
     raw = str(view)
-    assert "sk-secret-value" not in raw and "fh-key" not in raw
-    assert view["autonomy"] == "AUTONOMOUS"
+    assert "provider-test-key" not in raw and "market-data-test-key" not in raw
+    assert view["autonomy"] == "SUPERVISED"  # Phase 3.1: fail-closed default

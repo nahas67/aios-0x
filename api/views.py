@@ -5,12 +5,18 @@ export) consumes. No framework, no I/O; the HTTP server is a thin shell.
 """
 
 import json
+import os
 from collections import defaultdict
 from typing import Any
 
 from communities.c11_finance.audit_graph import decision_provenance
 from core.persistence import BaseMemoryStore
 from research.walkforward import calibration_report
+
+
+def _env_enabled(value: object) -> bool:
+    """Interpret an opt-in environment flag without treating ``0`` as true."""
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 class SystemSnapshotBuilder:
@@ -33,6 +39,12 @@ class SystemSnapshotBuilder:
         research_engine: Any = None,
         kernel_bridge: Any = None,
         ca_workflow: Any = None,
+        financial_store: Any = None,
+        ibor: Any = None,
+        safety_plane: Any = None,
+        reconciliation_engine: Any = None,
+        event_bus: Any = None,
+        consumer_lag_provider: Any = None,
     ) -> None:
         self.store = store
         self.ledger = ledger
@@ -49,6 +61,387 @@ class SystemSnapshotBuilder:
         self.research_engine = research_engine
         self.kernel_bridge = kernel_bridge
         self.ca_workflow = ca_workflow
+        self.financial_store = financial_store
+        self.ibor = ibor
+        self.safety_plane = safety_plane
+        self.reconciliation_engine = reconciliation_engine
+        # Durable event backbone (JetStream) and a lag probe for its durable
+        # consumers. Both are optional: the publishing process owns the consumer
+        # names, so a serving process that cannot see them must say "unknown"
+        # rather than report a reassuring zero.
+        self.event_bus = event_bus
+        self.consumer_lag_provider = consumer_lag_provider
+
+    # ------------------------------------------------- durable financial kernel
+
+    def _financial_unavailable(self, what: str) -> dict[str, Any]:
+        """Honest absence: the durable kernel is not wired in this process (§75).
+
+        Never fabricates an empty-but-plausible book, because "nothing is known"
+        and "we hold nothing" are very different statements to an operator.
+        """
+        return {
+            "available": False,
+            "reason": f"durable financial kernel not wired: {what} unavailable",
+        }
+
+    def ibor_view(self) -> dict[str, Any]:
+        """Canonical Investment Book of Record snapshot (§27)."""
+        if self.ibor is None:
+            return self._financial_unavailable("IBOR")
+        try:
+            snapshot = self.ibor.snapshot()
+        except Exception as exc:  # noqa: BLE001 - report, never invent
+            return {"available": False, "reason": f"IBOR snapshot failed: {exc}"}
+        return {"available": True, **snapshot.model_dump(mode="json")}
+
+    def financial_positions(self) -> dict[str, Any]:
+        if self.financial_store is None:
+            return self._financial_unavailable("positions")
+        try:
+            positions = self.financial_store.positions()
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "reason": str(exc)}
+        return {
+            "available": True,
+            "positions": [
+                {
+                    "account_id": p.account_id,
+                    "symbol": p.symbol,
+                    "quantity": p.quantity,
+                    "avg_cost": p.avg_cost,
+                    "realized_pnl": p.realized_pnl,
+                    "fees_paid": p.fees_paid,
+                    "updated_at": p.updated_at.isoformat(),
+                }
+                for p in positions
+            ],
+        }
+
+    def financial_cash(self) -> dict[str, Any]:
+        """Cash by account/currency: settled, reserved and therefore available."""
+        if self.financial_store is None:
+            return self._financial_unavailable("cash")
+        try:
+            postings = self.financial_store.cash_postings()
+            reservations = self.financial_store.reservations()
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "reason": str(exc)}
+        # Balances are derived from the posting ledger, not from a mutable
+        # "balance" column: the ledger is the authority (double-entry, §28).
+        pairs = sorted({(p.account_id, p.currency) for p in postings})
+        rows = [
+            {
+                "account_id": account_id,
+                "currency": currency,
+                "settled_minor": self.financial_store.cash_balance_minor(
+                    account_id, currency
+                ),
+                "reserved_minor": self.financial_store.reserved_cash_minor(
+                    account_id, currency
+                ),
+                "available_minor": self.financial_store.cash_balance_minor(
+                    account_id, currency
+                )
+                - self.financial_store.reserved_cash_minor(account_id, currency),
+            }
+            for account_id, currency in pairs
+        ]
+        return {
+            "available": True,
+            "cash": rows,
+            "reservations": [
+                {
+                    "reservation_id": r.reservation_id,
+                    "account_id": r.account_id,
+                    "currency": r.currency,
+                    "amount_minor": r.amount_minor,
+                    "reason": r.reason,
+                    "order_id": r.order_id,
+                    "active": r.released_at is None,
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in reservations
+            ],
+        }
+
+    def financial_orders(self, limit: int = 100) -> dict[str, Any]:
+        if self.financial_store is None:
+            return self._financial_unavailable("orders")
+        try:
+            orders = self.financial_store.orders()
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "reason": str(exc)}
+        return {
+            "available": True,
+            "orders": [
+                {
+                    "internal_order_id": o.internal_order_id,
+                    "client_order_id": o.client_order_id,
+                    "broker_order_id": o.broker_order_id,
+                    "strategy_id": o.strategy_id,
+                    "symbol": o.symbol,
+                    "side": str(o.side),
+                    "quantity": o.quantity,
+                    "filled_quantity": o.filled_quantity,
+                    "status": str(o.status),
+                    "version": o.version,
+                    "created_at": o.created_at.isoformat(),
+                }
+                for o in orders[-limit:]
+            ],
+        }
+
+    def financial_order_detail(self, order_id: str) -> dict[str, Any]:
+        """One order with its immutable transition history and fills."""
+        if self.financial_store is None:
+            return self._financial_unavailable("order")
+        order = self.financial_store.order(order_id)
+        if order is None:
+            raise KeyError(order_id)
+        transitions = self.financial_store.transitions(order_id)
+        fills = self.financial_store.fills(order_id)
+        return {
+            "available": True,
+            "order": {
+                "internal_order_id": order.internal_order_id,
+                "client_order_id": order.client_order_id,
+                "broker_order_id": order.broker_order_id,
+                "strategy_id": order.strategy_id,
+                "symbol": order.symbol,
+                "side": str(order.side),
+                "quantity": order.quantity,
+                "filled_quantity": order.filled_quantity,
+                "status": str(order.status),
+                "version": order.version,
+            },
+            "transitions": [
+                {
+                    "from_status": str(t.from_status),
+                    "to_status": str(t.to_status),
+                    "actor": t.actor,
+                    "reason": t.reason,
+                    "occurred_at": t.occurred_at.isoformat(),
+                }
+                for t in transitions
+            ],
+            "fills": [
+                {
+                    "fill_id": f.fill_id,
+                    "broker_execution_id": f.broker_execution_id,
+                    "quantity": f.quantity,
+                    "price": f.price,
+                    "fee": f.fee,
+                    "currency": f.currency,
+                    "executed_at": f.executed_at.isoformat(),
+                }
+                for f in fills
+            ],
+        }
+
+    def financial_fills(self, limit: int = 100) -> dict[str, Any]:
+        if self.financial_store is None:
+            return self._financial_unavailable("fills")
+        try:
+            fills = self.financial_store.fills()
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "reason": str(exc)}
+        return {
+            "available": True,
+            "fills": [
+                {
+                    "fill_id": f.fill_id,
+                    "order_id": f.order_id,
+                    "broker_execution_id": f.broker_execution_id,
+                    "account_id": f.account_id,
+                    "symbol": f.symbol,
+                    "side": str(f.side),
+                    "quantity": f.quantity,
+                    "price": f.price,
+                    "fee": f.fee,
+                    "strategy_id": f.strategy_id,
+                    "executed_at": f.executed_at.isoformat(),
+                }
+                for f in fills[-limit:]
+            ],
+        }
+
+    def financial_invariants(self) -> dict[str, Any]:
+        """Run the invariant suite live; a failure is reported, never hidden."""
+        if self.financial_store is None:
+            return self._financial_unavailable("invariants")
+        try:
+            report = self.financial_store.verify_invariants()
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "reason": f"invariant verification failed: {exc}"}
+        return {
+            "available": True,
+            "ok": report.ok,
+            "checked": len(report.checks),
+            "failures": [
+                {"name": c.name, "detail": c.detail} for c in report.failures()
+            ],
+        }
+
+    def financial_health(self) -> dict[str, Any]:
+        """Store identity, schema state, outbox backlog and dead letters."""
+        if self.financial_store is None:
+            return self._financial_unavailable("health")
+        try:
+            health = self.financial_store.health()
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "reason": str(exc)}
+        payload: dict[str, Any] = {"available": True, **health}
+        if self.safety_plane is not None:
+            payload["safety"] = self.safety_plane.state()
+        return payload
+
+    def event_backbone_view(self) -> dict[str, Any]:
+        """Durable event backbone health and consumer lag (§29).
+
+        Absence is reported as absence. A process that owns no JetStream
+        connection, or that cannot see the publishing consumer's durable name,
+        returns ``wired: False`` / ``consumer_lag: None`` — an operator deciding
+        whether the platform is keeping up must not be shown a fabricated zero.
+        """
+        if self.event_bus is None:
+            return {
+                "wired": False,
+                "reason": "no durable event backbone is wired into this process",
+                "consumer_lag": None,
+            }
+        health: dict[str, Any] = {}
+        health_fn = getattr(self.event_bus, "health", None)
+        if callable(health_fn):
+            try:
+                health = dict(health_fn())
+            except Exception as exc:  # noqa: BLE001 - report, never invent
+                return {
+                    "wired": True,
+                    "reachable": False,
+                    "error": str(exc),
+                    "consumer_lag": None,
+                }
+        lag: int | None = None
+        if self.consumer_lag_provider is not None:
+            try:
+                lag = self.consumer_lag_provider()
+            except Exception:  # noqa: BLE001 - unknown lag stays unknown
+                lag = None
+        return {"wired": True, **health, "consumer_lag": lag}
+
+    def financial_outbox(self, limit: int = 50) -> dict[str, Any]:
+        """Event delivery state: backlog, dead letters, recent publications."""
+        if self.financial_store is None:
+            return self._financial_unavailable("outbox")
+        try:
+            backlog = self.financial_store.outbox_backlog()
+            dead = self.financial_store.dead_letters()
+            pending = self.financial_store.outbox_pending(limit=limit)
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "reason": str(exc)}
+        return {
+            "available": True,
+            "backlog": backlog,
+            "dead_letter_count": len(dead),
+            "dead_letters": [
+                {
+                    "event_id": e.event_id,
+                    "event_type": str(e.event_type),
+                    "attempts": e.attempts,
+                    "last_error": e.last_error,
+                }
+                for e in dead
+            ],
+            "pending": [
+                {
+                    "event_id": e.event_id,
+                    "event_type": str(e.event_type),
+                    "status": str(e.status),
+                    "attempts": e.attempts,
+                    "claimed_by": e.claimed_by,
+                }
+                for e in pending
+            ],
+            "event_backbone": self.event_backbone_view(),
+        }
+
+    def financial_reconciliation(self, limit: int = 20) -> dict[str, Any]:
+        """Broker truth vs internal truth, with findings and resolution state."""
+        if self.financial_store is None:
+            return self._financial_unavailable("reconciliation")
+        try:
+            from core.financial_kernel import FindingStatus
+
+            runs = self.financial_store.reconciliation_runs(limit=limit)
+            open_findings = self.financial_store.findings(FindingStatus.OPEN)
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "reason": str(exc)}
+        latest = runs[0] if runs else None
+        return {
+            "available": True,
+            "last_run": (
+                {
+                    "run_id": latest.run_id,
+                    "mode": str(latest.mode),
+                    "broker": latest.broker,
+                    "adapter_version": latest.adapter_version,
+                    "window_start": (
+                        latest.window_start.isoformat() if latest.window_start else None
+                    ),
+                    "window_end": (
+                        latest.window_end.isoformat() if latest.window_end else None
+                    ),
+                    "cursor_token": latest.cursor_token,
+                    "queried_at": (
+                        latest.queried_at.isoformat() if latest.queried_at else None
+                    ),
+                    "started_at": latest.started_at.isoformat(),
+                    "finished_at": (
+                        latest.finished_at.isoformat() if latest.finished_at else None
+                    ),
+                    "matched_executions": latest.matched_executions,
+                    "broker_only_executions": latest.broker_only_executions,
+                    "internal_only_executions": latest.internal_only_executions,
+                    "finding_count": latest.finding_count,
+                    "ok": bool(latest.ok),
+                    "lockout_scope": str(latest.lockout_scope),
+                }
+                if latest is not None
+                else None
+            ),
+            "runs": [
+                {
+                    "run_id": r.run_id,
+                    "mode": str(r.mode),
+                    "started_at": r.started_at.isoformat(),
+                    "matched_executions": r.matched_executions,
+                    "finding_count": r.finding_count,
+                    "ok": bool(r.ok),
+                    "lockout_scope": str(r.lockout_scope),
+                }
+                for r in runs
+            ],
+            "open_findings": [
+                {
+                    "finding_id": f.finding_id,
+                    "run_id": f.run_id,
+                    "kind": str(f.kind),
+                    "severity": str(f.severity),
+                    "subject": f.subject,
+                    "detail": f.detail,
+                    "internal_value": f.internal_value,
+                    "broker_value": f.broker_value,
+                    "status": str(f.status),
+                    "scope": str(f.scope),
+                    "created_at": f.created_at.isoformat(),
+                }
+                for f in open_findings
+            ],
+            "lockouts": (
+                self.safety_plane.state() if self.safety_plane is not None else None
+            ),
+        }
 
     # ------------------------------------------------------------- executive
 
@@ -232,7 +625,9 @@ class SystemSnapshotBuilder:
 
         assert isinstance(self.store, SqliteMemoryStore), "calibration needs SQLite store"
         report = calibration_report(self.store._conn)  # noqa: SLF001 - same package family
-        return report.model_dump()
+        # mode="json" converts datetimes to ISO strings — raw datetime objects
+        # crash the HTTP JSON encoder (pre-existing 500 on /api/v1/research).
+        return report.model_dump(mode="json")
 
     # -------------------------------------------------------------- settings
 
@@ -243,6 +638,16 @@ class SystemSnapshotBuilder:
         def configured(value: Any) -> bool:
             return bool(value)
 
+        live_requested = _env_enabled(os.environ.get("AIOS_ALLOW_LIVE_EXECUTION"))
+        execution_environment = (
+            "SHADOW"
+            if bool(getattr(self.paper, "shadow_mode", False))
+            else "PAPER"
+        )
+        approval_recorded = bool(
+            self.control_plane is not None
+            and getattr(self.control_plane, "live_capital_approved_by", None)
+        )
         view: dict[str, Any] = {
             "system": {
                 "model_provider": getattr(s, "model_provider", "none"),
@@ -282,9 +687,14 @@ class SystemSnapshotBuilder:
                 else None,
             },
             "execution_rails": {
-                "live_execution_allowed_env": configured(
-                    __import__("os").environ.get("AIOS_ALLOW_LIVE_EXECUTION", "")
-                ),
+                "environment": execution_environment,
+                "paper_capability": self.paper is not None,
+                "testnet_capability": False,
+                "live_adapter_available": False,
+                "live_execution_allowed_env": live_requested,
+                "live_routing_enabled": False,
+                "live_capital_approval_recorded": approval_recorded,
+                "constitution_live_routing": False,
                 "micro_live_cap_usd": 100.0,
                 "constitution_pinned": True,
             },
@@ -632,22 +1042,21 @@ class SystemSnapshotBuilder:
         """
         import os
 
-        broker_ready = bool(
-            os.environ.get("AIOS_EXCHANGE_API_KEY")
-            and os.environ.get("AIOS_EXCHANGE_SECRET")
-        )
-        licensed_data = bool(
-            os.environ.get("MARKETSTACK_API_KEY") or os.environ.get("FINNHUB_API_KEY")
-        )
         ca_approved = False
         if self.ca_workflow is not None:
             try:
-                items = self.ca_workflow.items  # type: ignore[attr-defined]
+                items = self.ca_workflow.items
+                # ``state`` is optional on a workflow item, so the value is read
+                # through a guarded chain: a missing state is not an approval.
                 ca_approved = any(
-                    getattr(i, "state", None).value == "APPROVED_BY_CA" for i in items
+                    getattr(getattr(i, "state", None), "value", None) == "APPROVED_BY_CA"
+                    for i in items
                 )
             except Exception:  # noqa: BLE001 - view must not crash
                 ca_approved = False
+        execution_environment = (
+            "SHADOW" if bool(getattr(self.paper, "shadow_mode", False)) else "PAPER"
+        )
         capital_by = (
             self.control_plane.live_capital_approved_by
             if self.control_plane is not None
@@ -656,6 +1065,8 @@ class SystemSnapshotBuilder:
         autonomy = (
             self.control_plane.autonomy.value if self.control_plane is not None else "—"
         )
+        audit_valid, _ = self.store.verify_chain()
+        risk_healthy = bool(self.risk_governor is not None and not self.risk_governor.locked_out)
 
         def gate(gid: str, title: str, approved: bool | None, ready: bool, unblock: str) -> dict[str, Any]:
             status = "APPROVED" if approved else ("READY" if ready else "BLOCKED")
@@ -666,41 +1077,113 @@ class SystemSnapshotBuilder:
                 "how_to_unblock": "" if approved or ready else unblock,
             }
 
+        def recorded_gate(gid: str, title: str, recorded_by: str | None, detail: str) -> dict[str, Any]:
+            return {
+                "gate": gid,
+                "title": title,
+                "status": "RECORDED" if recorded_by else "BLOCKED",
+                "how_to_unblock": detail if not recorded_by else "Recorded for audit only; does not enable live routing.",
+            }
+
         gates = [
             gate(
-                "broker_testnet",
-                "Broker testnet execution",
+                "execution_environment",
+                f"Execution environment: {execution_environment}",
                 None,
-                broker_ready,
-                "Set AIOS_EXCHANGE_API_KEY + AIOS_EXCHANGE_SECRET (+ AIOS_EXCHANGE_TESTNET=1) in .env",
+                execution_environment in {"PAPER", "SHADOW"},
+                "Configure the composition root for paper or shadow mode.",
+            ),
+            gate(
+                "paper_capability",
+                "Paper/shadow execution capability",
+                None,
+                self.paper is not None,
+                "Wire the paper execution engine before running simulation.",
+            ),
+            gate(
+                "testnet_capability",
+                "Broker testnet adapter capability",
+                None,
+                False,
+                "The current composition root is paper-only; testnet adapter wiring is not verified.",
+            ),
+            gate(
+                "testnet_validation",
+                "Broker testnet validation",
+                None,
+                False,
+                "Complete authenticated sandbox order, cancel, fill, reconnect, and reconciliation tests.",
+            ),
+            gate(
+                "live_adapter",
+                "Live execution adapter",
+                None,
+                False,
+                "Live routing is unavailable in this release and is constitutionally disabled.",
+            ),
+            gate(
+                "risk_health",
+                "Risk subsystem healthy",
+                risk_healthy,
+                False,
+                "Restore the risk governor and clear any lockout through reviewed human action.",
+            ),
+            gate(
+                "audit_integrity",
+                "Audit chain integrity",
+                audit_valid,
+                False,
+                "Stop and investigate the first invalid audit sequence.",
+            ),
+            gate(
+                "broker_testnet",
+                "Broker testnet credentials",
+                None,
+                False,
+                "Credentials alone are insufficient; testnet adapter wiring and validation are still required.",
             ),
             gate(
                 "market_data_licensed",
                 "Licensed market data",
                 None,
-                licensed_data,
-                "Set MARKETSTACK_API_KEY (or FINNHUB_API_KEY); synthetic goldens remain default until then",
+                _env_enabled(os.environ.get("MARKETSTACK_API_KEY"))
+                or _env_enabled(os.environ.get("FINNHUB_API_KEY")),
+                "Configure and validate a licensed provider; synthetic replay remains non-production data.",
             ),
             gate(
                 "tax_signoff",
                 "Tax professional sign-off",
                 ca_approved,
                 False,
-                "A licensed professional must move the filing review to APPROVED_BY_CA",
+                "A licensed professional must move the filing review to APPROVED_BY_CA.",
+            ),
+            recorded_gate(
+                "human_live_approval",
+                "Human live-capital approval record",
+                capital_by,
+                "An ADMIN may record the approval through the audited control plane.",
+            ),
+            recorded_gate(
+                "live_capital",
+                "Live capital approval (record only)",
+                capital_by,
+                "An ADMIN may record the approval through the audited control plane; it cannot enable routing.",
             ),
             gate(
-                "live_capital",
-                "Live capital approval",
-                capital_by is not None,
+                "constitutional_live_routing",
+                "Constitutional live-routing authorization",
                 False,
-                "ADMIN action approve_live_capital (audited in CONTROL_ACTION)",
+                False,
+                "Requires a ratified constitutional amendment and a separate reviewed production composition root.",
             ),
         ]
         return {
+            "execution_environment": execution_environment,
             "autonomy": autonomy,
             "live_capital_approved_by": capital_by,
+            "live_routing_enabled": False,
             "gates": gates,
-            "production_allowed": all(g["status"] == "APPROVED" for g in gates),
+            "production_allowed": False,
         }
 
     # ------------------------------------------------- analytics (Phase: charts)
@@ -781,9 +1264,10 @@ class SystemSnapshotBuilder:
         ]
         all_pass = all(c["pass"] for c in criteria)
         return {
-            "ready_for_live": all_pass,
+            "ready_for_live": False,
+            "paper_criteria_pass": all_pass,
             "criteria": criteria,
-            "note": "All criteria must pass before live capital is unlocked (CONSTITUTION gate).",
+            "note": "Paper metrics are informational only; live routing is constitutionally disabled in this release.",
         }
 
     def _family_join(self) -> dict[str, dict[str, Any]]:

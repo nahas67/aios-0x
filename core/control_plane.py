@@ -4,8 +4,10 @@ Every action requires an operator identity and a role; every execution is
 appended to the audit store as a CONTROL_ACTION event. Role matrix:
 
     VIEWER      - read-only (no actions)
-    OPERATOR    - pause/resume trading, cancel orders, freeze/unfreeze symbols
-    RISK_ADMIN  - OPERATOR + set limits, trigger kill switch, reset lockout
+    OPERATOR    - pause/resume trading, cancel orders, freeze/unfreeze symbols,
+                  resolve non-critical reconciliation findings
+    RISK_ADMIN  - OPERATOR + set limits, trigger kill switch, reset lockout,
+                  release safety lockouts, resolve CRITICAL findings
     ADMIN       - RISK_ADMIN + approve live capital
 
 Actions delegate to components injected by the composition root; the plane
@@ -66,6 +68,10 @@ class ControlAction(StrEnum):
     APPROVE_PLAN = "approve_plan"
     REJECT_PLAN = "reject_plan"
     SET_RESEARCH_MODE = "set_research_mode"
+    # Reconciliation findings are operational evidence: clearing a non-critical
+    # one is an OPERATOR duty. Clearing a CRITICAL one additionally requires
+    # RESET_LOCKOUT (RISK_ADMIN), because it is also a capital-control decision.
+    RESOLVE_RECONCILIATION_FINDING = "resolve_reconciliation_finding"
 
 
 def _build_matrix() -> dict[OperatorRole, frozenset[ControlAction]]:
@@ -76,6 +82,7 @@ def _build_matrix() -> dict[OperatorRole, frozenset[ControlAction]]:
             ControlAction.CANCEL_OPEN_ORDERS,
             ControlAction.FREEZE_SYMBOL,
             ControlAction.UNFREEZE_SYMBOL,
+            ControlAction.RESOLVE_RECONCILIATION_FINDING,
         }
     )
     risk_admin = operator | {
@@ -141,7 +148,7 @@ class ControlPlane:
         self.kernel_bridge = kernel_bridge
         self.paused = False
         self.live_capital_approved_by: str | None = None
-        self.autonomy: AutonomyMode = AutonomyMode.AUTONOMOUS
+        self.autonomy: AutonomyMode = AutonomyMode.SUPERVISED  # fail-closed: no auto-execution by default
         self.pending_approvals: dict[str, dict[str, Any]] = {}  # plan_id -> plan dump
 
     # ------------------------------------------------------------------ authz
@@ -299,7 +306,12 @@ class ControlPlane:
         self.store.append_event(
             "LIVE_CAPITAL_APPROVAL", None, {"operator_id": operator_id, "note": note}
         )
-        return {"live_capital_approved_by": operator_id}
+        return {
+            "live_capital_approved_by": operator_id,
+            "approval_recorded": True,
+            "live_routing_enabled": False,
+            "note": "Approval is audit evidence only; this paper-only composition root cannot route live capital.",
+        }
 
     async def _do_promote_challenger(
         self, operator_id: str, trial_name: str = "", decision: str = "promote"

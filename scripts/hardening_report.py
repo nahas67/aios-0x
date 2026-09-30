@@ -4,11 +4,14 @@ Run:  python scripts/hardening_report.py
 Writes research/benchmarks/hardening_report.json with honest numbers.
 """
 
+import asyncio
 import json
 import pathlib
 import sys
 import tempfile
 import time
+from collections.abc import Coroutine
+from typing import Any, TypeVar
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
@@ -35,9 +38,10 @@ def measure_throughput(bars: int = 400) -> dict[str, float]:
     }
 
 
-def asyncio_run(coro):
-    import asyncio
+_T = TypeVar("_T")
 
+
+def asyncio_run(coro: Coroutine[Any, Any, _T]) -> _T:
     return asyncio.run(coro)
 
 

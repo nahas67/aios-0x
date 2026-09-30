@@ -194,9 +194,12 @@ def test_provenance_walk_over_full_replay(tmp_path: Path) -> None:
     from simulation.replay_runner import ReplayRunner
 
     write_dataset(tmp_path / "golden", symbols=["BTC/USD"], total_bars=40)
+    from core.config import Settings
+    _settings = Settings(model_provider="none", autonomy_mode="AUTONOMOUS")
     runner = ReplayRunner(
         csv_path_by_symbol={"BTC/USD": tmp_path / "golden" / "BTC_USD_1d.csv"},
         store_path=tmp_path / "audit.db",
+        settings=_settings,
     )
     summary = asyncio.run(runner.run())
     assert summary.trades_closed >= 1

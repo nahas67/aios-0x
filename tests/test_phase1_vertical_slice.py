@@ -27,11 +27,14 @@ def small_dataset(tmp_path: Path) -> dict[str, Path]:
 
 
 def _run(dataset: dict[str, Path], store_path: Path):
+    from core.config import Settings
+    settings = Settings(model_provider="none", autonomy_mode="AUTONOMOUS")
     runner = ReplayRunner(
         csv_path_by_symbol=dataset,
         store_path=store_path,
         initial_balance=100000.0,
         slippage_pct=0.05,
+        settings=settings,
     )
     summary = asyncio.run(runner.run())
     return runner, summary

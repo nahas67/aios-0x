@@ -13,7 +13,10 @@ import asyncio
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # pragma: no cover - typing only, never imported at runtime
+    from core.financial_kernel import BaseFinancialStore
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -255,6 +258,107 @@ def cmd_tail(args: argparse.Namespace) -> int:
     return 0
 
 
+# --------------------------------------------------------------- database
+
+
+def _open_financial_store(
+    args: argparse.Namespace, *, auto_migrate: bool = False
+) -> "BaseFinancialStore":
+    """Open the configured financial store (PostgreSQL DSN or local SQLite)."""
+    from core.financial_kernel import SqliteFinancialStore
+    from core.pg_financial_store import PostgresFinancialStore
+
+    dsn = args.dsn or ""
+    if dsn.startswith(("postgres://", "postgresql://")):
+        return PostgresFinancialStore(dsn, auto_migrate=auto_migrate)
+    return SqliteFinancialStore(args.sqlite)
+
+
+def cmd_db(args: argparse.Namespace) -> int:
+    """`aios db status|migrate`: versioned financial schema management.
+
+    Production never creates tables implicitly, so migration is an explicit,
+    auditable operator action; rollback is a restore-from-backup step (see
+    docs/DEVELOPMENT.md), because forward-only DDL cannot un-drop a column.
+    """
+    from core.migrations import (
+        apply_postgres_migrations,
+        apply_sqlite_migrations,
+        latest_version,
+        schema_status,
+    )
+
+    if args.db_command == "migrate":
+        if args.dsn.startswith(("postgres://", "postgresql://")):
+            import psycopg
+
+            with psycopg.connect(args.dsn) as conn:
+                applied = apply_postgres_migrations(conn)
+                conn.commit()
+                status = schema_status(conn, dialect="postgres")
+        else:
+            import sqlite3
+
+            # Separate names per dialect: the two driver connections are
+            # unrelated types, and reusing one name would make this branch a
+            # reassignment between them rather than a fresh local binding.
+            sqlite_conn = sqlite3.connect(args.sqlite)
+            sqlite_conn.row_factory = sqlite3.Row
+            applied = apply_sqlite_migrations(sqlite_conn)
+            status = schema_status(sqlite_conn, dialect="sqlite")
+            sqlite_conn.close()
+        print(f"applied migrations: {applied or 'none (already current)'}")
+        print(f"schema now at v{status['current']} (required v{latest_version()})")
+        return 0 if status["up_to_date"] else 1
+
+    # status
+    if args.dsn.startswith(("postgres://", "postgresql://")):
+        import psycopg
+
+        with psycopg.connect(args.dsn) as conn:
+            status = schema_status(conn, dialect="postgres")
+    else:
+        import sqlite3
+
+        sqlite_conn = sqlite3.connect(args.sqlite)
+        status = schema_status(sqlite_conn, dialect="sqlite")
+        sqlite_conn.close()
+    print(json.dumps(status, indent=2, default=str))
+    return 0 if status["up_to_date"] else 1
+
+
+def cmd_finance(args: argparse.Namespace) -> int:
+    """`aios finance recover|invariants`: cold-start recovery and proof."""
+    from core.financial_recovery import CapitalMode, FinancialRecovery
+    from core.safety_plane import SafetyPlane
+
+    store = _open_financial_store(args)
+    try:
+        if args.finance_command == "invariants":
+            invariants = store.verify_invariants()
+            for check in invariants.checks:
+                flag = "OK  " if check.ok else "FAIL"
+                print(f"  {flag} {check.name} {check.detail}".rstrip())
+            print("INVARIANTS OK" if invariants.ok else "INVARIANTS VIOLATED")
+            return 0 if invariants.ok else 1
+
+        try:
+            mode = CapitalMode(args.mode.upper())
+        except ValueError:
+            print(f"unknown capital mode {args.mode!r}", file=sys.stderr)
+            return 2
+        report = FinancialRecovery(
+            store,
+            account_id=args.account,
+            requested_mode=mode,
+            safety=SafetyPlane(store, account_id=args.account),
+        ).run()
+        print(json.dumps(report.as_dict(), indent=2, default=str))
+        return 0 if report.execution_permitted else 1
+    finally:
+        store.close()
+
+
 # ------------------------------------------------------------------ parser
 
 
@@ -304,6 +408,34 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="persist the cursor here so restarts resume exactly once",
     )
+
+    def _store_args(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--dsn", default="", help="PostgreSQL DSN (empty = local SQLite)")
+        p.add_argument("--sqlite", default="data/financial.db", help="SQLite path")
+
+    p_db = sub.add_parser("db", help="versioned financial schema: status | migrate")
+    db_sub = p_db.add_subparsers(dest="db_command", required=True)
+    for name, helptext in (
+        ("status", "report applied vs required schema version"),
+        ("migrate", "apply pending migrations (explicit, audited)"),
+    ):
+        child = db_sub.add_parser(name, help=helptext)
+        _store_args(child)
+
+    p_fin = sub.add_parser(
+        "finance", help="financial plane: cold-start recovery | invariant proof"
+    )
+    fin_sub = p_fin.add_subparsers(dest="finance_command", required=True)
+    p_rec = fin_sub.add_parser("recover", help="run the cold-start recovery sequence")
+    _store_args(p_rec)
+    p_rec.add_argument("--account", default="default")
+    p_rec.add_argument(
+        "--mode",
+        default="PAPER",
+        help="requested capital mode (AUTONOMOUS_LIVE is never granted here)",
+    )
+    p_inv = fin_sub.add_parser("invariants", help="verify financial invariants")
+    _store_args(p_inv)
     return parser
 
 
@@ -316,6 +448,8 @@ def main(argv: list[str] | None = None) -> int:
         "serve": cmd_serve,
         "events": cmd_events,
         "tail": cmd_tail,
+        "db": cmd_db,
+        "finance": cmd_finance,
     }
     return int(handlers[args.command](args))
 

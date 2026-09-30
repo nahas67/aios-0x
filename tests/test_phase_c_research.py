@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from core.config import Settings
 from core.research_store import (
     PostgresResearchStore,
     SqliteResearchStore,
@@ -189,6 +190,7 @@ def test_runner_persists_research_knowledge(tmp_path: Path) -> None:
             store_path=tmp_path / store_name,
             initial_balance=100000.0,
             slippage_pct=0.05,
+            settings=Settings(model_provider="none", autonomy_mode="AUTONOMOUS"),
         )
         summary = asyncio.run(runner.run())
         return runner, summary

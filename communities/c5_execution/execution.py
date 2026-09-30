@@ -16,7 +16,9 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from communities.c5_execution.adapters import BaseExecutionAdapter
+from communities.c5_execution.oms import DurableOrderManager
 from core.event_bus import BaseEventBus, EventTopic
+from core.financial_kernel import DurableOrder, Fill
 from schemas.contracts import (
     EmergencyStateValue,
     OrderRequest,
@@ -27,23 +29,57 @@ from schemas.contracts import (
 
 if TYPE_CHECKING:
     from core.risk_governor import RiskGovernor
+    from core.safety_plane import LockoutDecision, SafetyPlane
 
 logger = logging.getLogger(__name__)
 
 
 class OrderManager:
-    """Owns order state for one adapter; idempotent by client_order_id."""
+    """Owns order state for one adapter; idempotent by client_order_id.
+
+    When a :class:`DurableOrderManager` is injected the order is written
+    **before** it reaches a venue (write-ahead OMS, spec §23) and the resulting
+    execution is applied to durable state exactly once. The in-memory mirror is
+    kept for the read-only API and the control plane, but it is no longer the
+    only record of what is live.
+    """
 
     def __init__(
         self,
         event_bus: BaseEventBus,
         adapter: BaseExecutionAdapter,
         quantity_provider: Callable[[PortfolioAllocationPlan], float],
+        durable: DurableOrderManager | None = None,
+        safety: SafetyPlane | None = None,
     ) -> None:
         self.event_bus = event_bus
         self.adapter = adapter
         self._quantity_provider = quantity_provider
+        self._durable = durable
+        self._safety = safety
         self.orders: dict[str, OrderRequest] = {}
+
+    def safety_decision(self, plan: PortfolioAllocationPlan) -> LockoutDecision | None:
+        """Durable safety-plane verdict for this plan's account/venue/strategy.
+
+        The in-memory ``RiskGovernor`` lockout is a *separate* control that lives
+        only in this process. The safety plane reads restrictions from the
+        financial store, so a CRITICAL reconciliation discrepancy survives a
+        restart and still blocks the order. Consulted immediately before the
+        venue call, which is the last moment at which blocking is free.
+        """
+        if self._safety is None:
+            return None
+        return self._safety.is_blocked(
+            broker=getattr(self.adapter, "venue", None),
+            strategy_id=plan.strategy.strategy_id,
+        )
+
+    def _safety_block_reason(self, plan: PortfolioAllocationPlan) -> str | None:
+        decision = self.safety_decision(plan)
+        if decision is None or not decision.blocked:
+            return None
+        return "; ".join(decision.reasons) or "safety lockout engaged"
 
     def _client_order_id(self, plan: PortfolioAllocationPlan) -> str:
         return f"{plan.strategy.symbol}:{plan.strategy.strategy_id}"
@@ -67,6 +103,14 @@ class OrderManager:
             logger.warning(
                 "REJECTED order for %s: execution lockout engaged",
                 plan.strategy.symbol,
+            )
+            return None
+        block_reason = self._safety_block_reason(plan)
+        if block_reason is not None:
+            logger.warning(
+                "REJECTED order for %s: durable safety lockout (%s)",
+                plan.strategy.symbol,
+                block_reason,
             )
             return None
 
@@ -96,22 +140,123 @@ class OrderManager:
         self.orders[client_id] = order
         await self.event_bus.publish(EventTopic.ORDER_SUBMITTED, order)
 
-        receipt = await self.adapter.submit(plan, quantity)
+        durable_order = self._write_ahead(order)
+
+        # Re-check as late as possible: a lockout engaged while this order was
+        # being prepared must still stop it before the venue sees it. A suppressed
+        # order is *not* left ACCEPTED - it is durably rejected with the reason.
+        late_block = self._safety_block_reason(plan)
+        if late_block is not None:
+            order.status = OrderStatus.REJECTED
+            order.reject_reason = f"safety lockout: {late_block}"
+            self._durable_reject(durable_order, order.reject_reason)
+            logger.warning(
+                "REJECTED order for %s at submit boundary: %s",
+                plan.strategy.symbol,
+                late_block,
+            )
+            return None
+
+        try:
+            receipt = await self.adapter.submit(plan, quantity)
+        except Exception as exc:
+            # A venue exception must still leave durable state consistent: an
+            # order that never reached the venue can never stay "accepted".
+            order.status = OrderStatus.REJECTED
+            order.reject_reason = f"adapter error: {exc}"
+            self._durable_reject(durable_order, order.reject_reason)
+            raise
         if receipt is None:
             order.status = OrderStatus.REJECTED
             order.reject_reason = "venue rejected (funds/limits)"
             order.updated_at = order.created_at
+            self._durable_reject(durable_order, "venue rejected (funds/limits)")
             return None
 
         order.status = OrderStatus.FILLED
         order.filled_quantity = receipt.filled_quantity
         order.avg_fill_price = receipt.fill_price
         order.updated_at = order.created_at
+        self._durable_fill(durable_order, order, receipt)
 
         filled_view = order.model_copy()
         await self.event_bus.publish(EventTopic.ORDER_FILLED, filled_view)
         # TRADE_EXECUTED is emitted by the paper engine itself - single source.
         return receipt
+
+    # ------------------------------------------------------- durable write path
+
+    def _write_ahead(self, order: OrderRequest) -> DurableOrder | None:
+        """Persist the order before the venue sees it ("write-ahead OMS").
+
+        The durable idempotency key is scoped to the plan, not just the
+        strategy: an idempotency key identifies ONE order attempt forever, so a
+        genuine retry after a rejection (a new plan) must be a new attempt,
+        while a re-delivered plan stays a no-op.
+        """
+        if self._durable is None:
+            return None
+        key = order.client_order_id
+        if order.plan_id:
+            key = f"{key}#{order.plan_id}"
+        written = self._durable.prepare_order(
+            client_order_id=key,
+            strategy_id=order.strategy_id,
+            symbol=order.symbol,
+            side=order.side,
+            quantity=order.quantity,
+            order_type=order.order_type,
+            limit_price=order.limit_price,
+            plan_id=order.plan_id,
+        )
+        if written.status is not OrderStatus.PENDING_NEW:
+            # Same attempt already exists in durable state: never re-drive it.
+            logger.info(
+                "durable OMS: attempt %s already in state %s; not resubmitting",
+                key,
+                written.status,
+            )
+            return None
+        return self._durable.accept(written.internal_order_id)
+
+    def _durable_fill(
+        self,
+        durable_order: DurableOrder | None,
+        order: OrderRequest,
+        receipt: TradeExecutionReceipt,
+    ) -> None:
+        if self._durable is None or durable_order is None:
+            return
+        # The venue is authoritative for execution facts, including sizing: the
+        # durable order carries the plan estimate until the venue reports what it
+        # actually did. The amendment is recorded, never silent.
+        if receipt.filled_quantity > durable_order.quantity + 1e-9:
+            durable_order = self._durable.store.amend_order_quantity(
+                durable_order.internal_order_id,
+                receipt.filled_quantity,
+                actor=self._durable.actor,
+                reason="venue sizing supersedes plan estimate",
+            )
+        self._durable.apply_fill(
+            Fill(
+                # The venue's execution id is the fill identity: re-delivering the
+                # same callback can never double-count the position.
+                fill_id=receipt.execution_id,
+                order_id=durable_order.internal_order_id,
+                broker_execution_id=receipt.execution_id,
+                symbol=order.symbol,
+                side=order.side,
+                quantity=receipt.filled_quantity,
+                price=receipt.fill_price,
+                fee=receipt.fees,
+                executed_at=receipt.executed_at,
+            )
+        )
+
+    def _durable_reject(self, durable_order: DurableOrder | None, reason: str) -> None:
+        if self._durable is None or durable_order is None:
+            return
+        self._durable.reject(durable_order.internal_order_id, reason)
 
 
 class KillSwitch:

@@ -153,7 +153,11 @@ def authority_setup():
     identity.register("viewer-1", ActorType.HUMAN, roles={Role.VIEWER})
 
     class StrategyTransitionCap(ABC):
-        pass
+        """Marker capability used to exercise abstract capability handling."""
+
+        @abstractmethod
+        def authorize_transition(self) -> bool:
+            """Return whether the transition is authorized."""
 
     capabilities.declare("AIOS.transition.strategy", StrategyTransitionCap, "Strategy transitions")
     gateway.grant_role_capability(Role.ADMIN, "AIOS.transition.strategy")

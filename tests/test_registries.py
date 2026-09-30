@@ -190,7 +190,9 @@ def test_experiment_lifecycle(experiment_registry) -> None:
     assert completed.completed_at != ""
 
     # Cannot transition from terminal state
-    with pytest.raises(Exception):
+    from kernel.state_machine import TransitionError
+
+    with pytest.raises(TransitionError):
         experiment_registry.start("exp-lc", "system")
 
 
@@ -199,7 +201,7 @@ def test_experiment_provenance_link(experiment_registry, kernel) -> None:
     # Create a hypothesis node first
     kernel.provenance.add_node("hyp-test-1", NodeType.HYPOTHESIS, label="test hypothesis")
 
-    run = experiment_registry.create(
+    experiment_registry.create(
         experiment_id="exp-prov",
         hypothesis_id="hyp-test-1",
         strategy_version="s1",

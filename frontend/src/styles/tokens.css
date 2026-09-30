@@ -1,0 +1,111 @@
+/* AIOS-0X design tokens — extracted from the Figma prototype
+   (figma_full.json / figma_texts.json). Single source of truth. */
+
+:root {
+  /* surfaces */
+  --bg: #000000;
+  --panel: #080a0c;
+  --inset: #0e1114;
+  --inset-2: #101418;
+  --hairline: #1a2026;
+  --hairline-2: #232b33;
+
+  /* text */
+  --text: #eceff1;
+  --text-dim: #90a4ae;
+  --text-faint: #455a64;
+
+  /* accents (exact Figma palette) */
+  --cyan: #00e5ff;
+  --green: #00e676;
+  --amber: #ffc400;
+  --red: #ff1744;
+
+  --cyan-dim: rgba(0, 229, 255, 0.14);
+  --green-dim: rgba(0, 230, 118, 0.13);
+  --amber-dim: rgba(255, 196, 0, 0.13);
+  --red-dim: rgba(255, 23, 68, 0.13);
+
+  /* type */
+  --font-ui: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+
+  /* geometry */
+  --r: 8px;
+  --r-sm: 6px;
+  --gap: 14px;
+
+  /* status */
+  --ok: var(--green);
+  --warn: var(--amber);
+  --bad: var(--red);
+
+  --ok-bg: var(--green-dim);
+  --warn-bg: var(--amber-dim);
+  --bad-bg: var(--red-dim);
+  --info-bg: var(--cyan-dim);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+::selection {
+  background: var(--cyan-dim);
+}
+
+a {
+  color: var(--cyan);
+  text-decoration: none;
+}
+
+/* ---------- scrollbars ---------- */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e262e;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a343e;
+}
+
+/* ---------- focus ---------- */
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001s !important;
+    transition-duration: 0.001s !important;
+  }
+}

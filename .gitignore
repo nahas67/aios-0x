@@ -25,6 +25,13 @@ data/
 *.db
 *.sqlite3
 
+# Local tooling and verification artifacts (nats-server binary, junit/xml evidence)
+.tools/
+.evidence/
+
+# Vendored study clones (reference repos inspected, not part of the build)
+.vt-study/
+
 # OS noise
 Thumbs.db
 .DS_Store

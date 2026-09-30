@@ -10,9 +10,190 @@
 
 ---
 
-## Current Status: REAL SYSTEM BUILD — KERNEL WIRED + PG DATA LAYER · 181 tests green
+## Current Status: V1-A.2 LANDED — PostgreSQL tier, JetStream backbone, safety plane · mypy strict over the whole tree · 467 tests (427 pass / 40 service-gated)
 
 **Master System Navigation Map**: [docs/00_system_map.md](docs/00_system_map.md)
+
+---
+
+### TYPE GATE WIDENED — mypy strict across the whole tree (2026-09-20)
+
+The type gate now covers every shipped module, not just the kernel-facing ones:
+`aios api communities core evaluation kernel research schemas simulation scripts`
+— **123 files strict-clean** (CI still runs the narrower
+`core api communities schemas` scope, 80 files; widening CI is open).
+
+The sweep surfaced real defects rather than annotation noise:
+
+- `aios finance` reused ONE `report` name for an `InvariantReport` and then a
+  `RecoveryReport` — the second meaning silently inherited the first's type.
+  Distinct names now, so narrowing on `invariants.ok` cannot mask the recovery
+  verdict.
+- `_open_financial_store` was untyped (→ `Any`), so every `aios db` / `aios
+  finance` call site was unchecked. It now returns `BaseFinancialStore`, which
+  is what exposed the name collision above.
+- `ReplayRunner` demanded `dict[str, str | Path]` although it only reads and
+  copies its input → `Mapping[...]`. Dict invariance had been forcing every
+  caller (CLI, scripts, tests) to build an exactly-typed dict for no reason.
+- `train_pooled` returned `dict[str, object]`, which forced
+  `dict(result["metrics"])` plus a stale `# type: ignore[arg-type]` at the
+  registry call → `TrainResult` TypedDict; the ignore comment is deleted.
+- Benchmark lambdas binding loop values as default arguments are untypeable
+  (`Cannot infer type of lambda`) → `functools.partial`, which binds at
+  call-creation time too; re-verified against a real store (p50 0.61 ms order
+  transaction, 0.69 ms fill application).
+- Hand-rolled `asyncio_run` helpers in `scripts/` were untyped, so callers got
+  `Any` back from a replay run → generic `Coroutine[Any, Any, T] -> T`.
+- Dialect dispatch in `core/store_factory.py` / `core/research_store.py` and
+  `cur.fetchone()[0]` in `core/pg_store.py` assumed things the types did not
+  say (a constructor shape, a row that exists) — explicit `Any`-typed
+  dispatchers where the postgres subclass genuinely takes a DSN, and a scalar
+  helper that raises instead of coercing a missing row into existence.
+
+Gates re-run after the sweep: **ruff clean · mypy strict clean (123 files;
+`--python-version 3.12` override still needed for the installed numpy stubs) ·
+467 tests collected — 427 passed, 40 skipped (live PostgreSQL, JetStream,
+network and legacy gates), 0 failed**.
+
+Honest residual: the widened gate is a *manual* sweep (CI runs the narrow
+scope), so it can regress silently until CI is widened.
+
+---
+
+### V1-A.2 DETERMINISM UNDER REAL CONCURRENCY — server tier, durable transport, safety plane (2026-09-18; tracker entry recorded 2026-09-20)
+
+Every guarantee V1-A proved against one SQLite file now has to survive a real
+server, real processes and a real broker — or it is not a guarantee.
+
+- `core/pg_financial_store.py` (NEW): PostgreSQL tier of the financial state
+  plane, same semantics as the SQLite store but built on native concurrency
+  instead of a process-wide mutex — `SELECT … FOR UPDATE` version hops,
+  `UNIQUE(fill_id)` + partial unique index on `(account_id, broker_execution_id)`
+  with `ON CONFLICT DO NOTHING` (a replayed execution becomes "already
+  applied"), `FOR UPDATE` over reservations before reading settled/reserved
+  totals, `FOR UPDATE SKIP LOCKED` outbox claiming, `PRIMARY KEY (consumer_name,
+  event_id)` inbox, partial unique index on active lockouts (one incident cannot
+  double-engage), and a refusal to open an unmigrated schema.
+- `core/migrations.py` (NEW, §64): versioned DDL for both dialects with a
+  recorded SHA-256 per migration — a checksum that disagrees with the code makes
+  the store refuse to start rather than run on a schema it cannot explain.
+  Production never creates tables implicitly; `python -m aios db status|migrate`
+  is the operator action.
+- `core/jetstream_bus.py` (NEW, §29–§31): durable streams with a duplicate
+  window keyed on the outbox envelope's idempotency key, durable pull consumers
+  with explicit acks / `ack_wait` redelivery / bounded `max_deliver` → DLQ,
+  replay via `DeliverPolicy`, backpressure by construction (no unbounded
+  in-process queue), honest health when the broker is unreachable.
+  `JetStreamOutboxSink` publishes the *committed* envelope — a broker outage can
+  delay publication, never lose or duplicate economic state — and
+  `DurableInboxConsumer` records `(consumer, event_id)` in the same transaction
+  as the effect: at-least-once delivery, exactly-once effects.
+- `core/safety_plane.py` (NEW, §33): capital changes are gated on durable state
+  by a component no agent can reach — CRITICAL finding → scope via
+  `LOCKOUT_SCOPE_BY_KIND`, release human-and-role gated through the ONE RBAC
+  matrix (`RESET_LOCKOUT`: RISK_ADMIN/ADMIN), every engage/release audited, and
+  the restriction consulted at the last moment before a venue call.
+- `communities/c5_execution/broker_reconciliation.py` (NEW, §25/§26): the
+  adapter side of the window contract — FULL_SNAPSHOT / BOUNDED_WINDOW / CURSOR
+  capability declarations, mandatory provenance, broker state never discarded
+  during normalization.
+- Corrected reconciliation semantics (found by the V1-A.2 tests): matching is
+  set algebra over execution identities. The V1-A.1 engine counted fills and
+  called a correct broker/internal match a `DUPLICATE_FILL`; economics conflicts
+  are their own anomaly, and absence is only asserted when the requested window
+  supports it.
+- Cold start: `core/financial_recovery.py` — ordered recovery steps and
+  `CapitalMode`, with reconciliation required before capital is permitted.
+- Operator/production tooling: `scripts/production_check.py`,
+  `scripts/backup_sqlite.py`, `scripts/repair_chain.py` (content-preserving
+  chain relink + manifest), `scripts/lock_dependencies.py` → `requirements.lock`,
+  `scripts/package_release.py`; `docs/PRODUCTION_RUNBOOK.md`.
+- Frontend: `frontend/` TypeScript app (Vite) built to `ui/dist` and served by
+  the stdlib server; tokens are header-only, never persisted to browser storage.
+
+Measured evidence (`research/benchmarks/v1a2/financial_kernel.json`, this
+workstation, SQLite + real PostgreSQL + real JetStream):
+
+| Operation | SQLite p50 | PostgreSQL p50 |
+|---|---|---|
+| order transaction | 0.66 ms | 4.61 ms |
+| fill application | 0.86 ms | 9.00 ms |
+| cash reserve/release | 1.15 ms | 8.29 ms |
+| IBOR snapshot | 8.79 ms | 21.47 ms |
+| reconciliation pass | 16.38 ms | 28.77 ms |
+| outbox throughput | 1,741 ev/s | 985 ev/s |
+
+- **4-process contention race** (independent OS processes, shared barrier):
+  200 targeted fills → 200 applied, 50 per worker, invariants hold, 0 errors —
+  no lost update, no double application.
+- **JetStream**: 2,000 messages, 3,240 msg/s, 0 publish failures, 2,000 distinct
+  payloads stored.
+
+Suites (env-gated for live services, hermetic otherwise):
+`test_v1a2_postgres.py` (16) · `test_v1a2_concurrency.py` (12 collected: 6 races
+× sqlite/postgres, real OS processes) · `test_v1a2_chaos.py` (8, failure
+injection at commit boundaries) · `test_v1a2_jetstream.py` (13, 6 of them live) ·
+`test_v1a2_reconciliation.py` (28) · `test_v1a2_lockout_gate.py` (12, drives a
+broker mismatch all the way to a refused order) · `test_v1a2_api.py` (27,
+visibility + authority; unwired endpoints report `available: false` rather than
+a plausible empty book, ×9 routes).
+CI grew real service jobs (PostgreSQL, JetStream), a frontend typecheck + build
+job, a secrets scan, and a container smoke test; `docker-compose.test.yml`
+stands the services up locally.
+
+---
+
+### V1-A DETERMINISTIC FINANCIAL KERNEL — durable truth, exactly-once effects (2026-09-15)
+
+Master-spec §23/§26/§27/§29–§31/§61 implemented as working code. Order state is no
+longer process memory; financial mutation and its event commit together; a fill
+can never be applied twice; the book is reconstructible from the ledger.
+
+- `core/financial_kernel.py` (NEW, ADR-005): `BaseFinancialStore` + SQLite tier —
+  durable `orders` / `order_transitions` / `fills` / `cash_postings` /
+  `cash_reservations` / `positions` / `event_outbox` / `consumer_inbox` /
+  `reconciliation_runs` + `reconciliation_findings`. One-transaction mutation for
+  state + outbox envelope; optimistic `version` on every order hop; legal-hop
+  map (`ORDER_TRANSITIONS`); integer-minor-unit cash postings that must balance
+  to zero per transaction; reservations gate buying power;
+  `OutboxPublisher` with retry/backoff/DEAD_LETTER; `verify_invariants()` proves
+  seven §61 invariants (cash balance, fills↔order state, no over-fill, legal
+  hops, version↔history, payload hashes, positions reconstructible).
+- `core/ibor.py` (NEW, ADR-006): `InvestmentBookOfRecord` — exactly-once ingest,
+  reserved-vs-available cash, honest marks (NAV `None` when a mark is missing),
+  `rebuild()` proof against the immutable fill ledger.
+- `communities/c5_execution/oms.py` (NEW): `DurableOrderManager` — write-ahead
+  orders, plan-scoped idempotency keys, venue-authoritative quantity amendment,
+  restart recovery of live orders, every hop emitted as a canonical
+  `aios.platform.*` envelope with a deterministic idempotency key.
+- `communities/c5_execution/reconciliation.py` (NEW): typed `BrokerSnapshot` vs
+  internal state → the full §26 taxonomy (`UNKNOWN_BROKER_ORDER`, `MISSING_ORDER`,
+  `QUANTITY_MISMATCH`, `STALE_STATUS`, `DUPLICATE_FILL`, `MISSING_FILL`,
+  `POSITION_MISMATCH`, `CASH_MISMATCH`), persisted runs/findings, human-only
+  resolution, `requires_lockout` signal for the safety plane.
+- `communities/c5_execution/execution.py`: `OrderManager` writes ahead of the
+  venue call, marks durable rejection on venue refusal **and** on adapter
+  exceptions (an order can never stay "accepted" with no outcome), and records
+  the venue's own sizing as an audited amendment.
+- `simulation/replay_runner.py`: builds the financial store, injects the durable
+  OMS, records bracket exits as closing orders/fills, and reports
+  `durable_orders` / `durable_fills` / `durable_open_orders` /
+  `financial_invariants_ok` / `ibor_rebuild_ok` / `outbox_backlog` on every
+  `RunSummary`. **No new bus topic and no new audit event** — determinism and
+  existing audit semantics unchanged.
+- `schemas/contracts.py`: `OrderStatus.EXPIRED` added (spec §23 "Expiration").
+- Real defects found and fixed by the new tests: fee capitalisation sign on short
+  positions; venue dust remainders leaving phantom live orders; idempotency keys
+  reused across attempts; venue fills exceeding a plan-derived order quantity.
+
+Tests: **351 passed · 8 skipped (live-PG + live-network gated) · ruff clean ·
+`mypy` clean on all new/changed modules** (`--python-version 3.12` override needed
+in this environment: the installed numpy stubs use PEP 695 syntax that the
+configured 3.11 target rejects — unrelated to AIOS code).
+
+Not yet wired (honest residuals): PostgreSQL tier for `BaseFinancialStore`;
+runner reads the financial store directly (no API/UI surface yet); the legacy
+per-bar `ReconciliationReport` still runs alongside the durable workflow.
 
 ---
 

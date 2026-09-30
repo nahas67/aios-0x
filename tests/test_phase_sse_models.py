@@ -64,7 +64,9 @@ def test_sse_stream_pushes_live_snapshots(tmp_path: Path) -> None:
         conn.request("GET", "/api/v1/stream")
         resp = conn.getresponse()
         assert resp.status == 200
-        assert resp.getheader("Content-Type") == "text/event-stream"
+        # The media type is what matters; the charset parameter is optional.
+        content_type = resp.getheader("Content-Type") or ""
+        assert content_type.split(";")[0].strip() == "text/event-stream"
 
         received: list[dict] = []
         assert resp.fp is not None

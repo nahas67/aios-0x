@@ -29,6 +29,18 @@ from schemas.contracts import (
 _GENESIS_HASH = "0" * 64
 
 
+def _scalar_int(row: tuple[Any, ...] | None) -> int:
+    """Read one integer from a query expected to return exactly one row.
+
+    ``fetchone`` is typed optional, so an unchecked ``row[0]`` is an unchecked
+    assumption. A missing row here means the statement did not do what it
+    claimed, which is a defect rather than a value to coerce into existence.
+    """
+    if row is None:  # pragma: no cover - COUNT()/RETURNING always yield a row
+        raise RuntimeError("expected exactly one row from a scalar query")
+    return int(row[0])
+
+
 class PostgresMemoryStore(BaseMemoryStore):
     """Server-grade memory store: PostgreSQL + identical hash-chain semantics."""
 
@@ -127,7 +139,7 @@ class PostgresMemoryStore(BaseMemoryStore):
                     "VALUES (%s, %s, %s, %s, %s, %s) RETURNING seq",
                     (ts, kind, ref_id, body, prev, digest),
                 )
-                seq = int(cur.fetchone()[0])
+                seq = _scalar_int(cur.fetchone())
             self._conn.commit()
             return seq
 
@@ -235,7 +247,7 @@ class PostgresMemoryStore(BaseMemoryStore):
             with self._conn.cursor() as cur:
                 for table in ("event_log", "predictions", "observations", "postmortems"):
                     cur.execute(f"SELECT COUNT(*) FROM {table}")  # noqa: S608 - fixed table list
-                    result[table] = int(cur.fetchone()[0])
+                    result[table] = _scalar_int(cur.fetchone())
             return result
 
     def iter_event_payloads(self, kind: str) -> list[dict[str, Any]]:

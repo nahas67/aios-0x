@@ -8,7 +8,7 @@ capability.
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +19,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     # ---------------------------------------------------------------- gateway
@@ -41,6 +42,20 @@ class Settings(BaseSettings):
     fred_api_key: str | None = Field(default=None, repr=False)
     telegram_bot_token: str | None = Field(default=None, repr=False)
     telegram_chat_id: str | None = Field(default=None, repr=False)
+    api_auth_token: str | None = Field(default=None, repr=False)
+
+    # ------------------------------------------------------- server identity
+    # These values are server-side configuration only. They are never sent to
+    # the browser as credentials; the API resolves the bearer token to them.
+    server_operator_id: str = Field(
+        default="principal", validation_alias="AIOS_OPERATOR_ID"
+    )
+    server_default_role: str = Field(
+        default="VIEWER", validation_alias="AIOS_DEFAULT_ROLE"
+    )
+    server_token_map: str | None = Field(
+        default=None, validation_alias="AIOS_TOKEN_MAP", repr=False
+    )
 
     # ------------------------------------------------------------- routing
     research_model_cheap: str = Field(
@@ -52,6 +67,10 @@ class Settings(BaseSettings):
     verification_model: str = Field(default="gpt-4o-mini")
 
     # ------------------------------------------------------------ behaviour
+    autonomy_mode: str = Field(
+        default="SUPERVISED",
+        description="Production execution mode: MANUAL | ASSISTED | SUPERVISED | AUTONOMOUS",
+    )
     research_mode: str = Field(
         default="auto",
         description="'deterministic' forces template research; 'auto' uses debate when models available",
@@ -91,6 +110,37 @@ class Settings(BaseSettings):
     # Cost table USD per 1M tokens (input, output); extend per provider pricing
     cost_usd_per_mtok_input: float = Field(default=0.15)
     cost_usd_per_mtok_output: float = Field(default=0.60)
+
+    @field_validator("autonomy_mode", mode="before")
+    @classmethod
+    def validate_autonomy_mode(cls, value: object) -> str:
+        """Reject unsafe/unknown execution modes during configuration load."""
+        mode = str(value).strip().upper()
+        allowed = {"MANUAL", "ASSISTED", "SUPERVISED", "AUTONOMOUS"}
+        if mode not in allowed:
+            raise ValueError(
+                f"invalid autonomy_mode {value!r}; expected one of {sorted(allowed)}"
+            )
+        return mode
+
+    @field_validator("server_default_role", mode="before")
+    @classmethod
+    def validate_server_default_role(cls, value: object) -> str:
+        role = str(value).strip().upper()
+        allowed = {"VIEWER", "OPERATOR", "RISK_ADMIN", "ADMIN"}
+        if role not in allowed:
+            raise ValueError(
+                f"invalid server_default_role {value!r}; expected one of {sorted(allowed)}"
+            )
+        return role
+
+    @field_validator("server_operator_id", mode="before")
+    @classmethod
+    def validate_server_operator_id(cls, value: object) -> str:
+        operator_id = str(value).strip()
+        if not operator_id or len(operator_id) > 128:
+            raise ValueError("server_operator_id must be 1-128 non-whitespace characters")
+        return operator_id
 
 
 @lru_cache(maxsize=1)

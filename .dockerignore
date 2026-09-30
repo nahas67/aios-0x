@@ -1,30 +1,47 @@
+# Secrets
 .env
+.env.example
+
+# Data / state (not needed in image)
 data/*.db
 data/*.log
+data/command_center_server.log
+data/command_center_server.pid
+data/command_center_status.json
+data/ui_audit/
+data/pytest_*.txt
+
+# Python caches
 __pycache__
 *.pyc
-.git
-.github
+*.pyo
+*.egg-info
 .pytest_cache
 .mypy_cache
 .ruff_cache
-*.egg-info
-.venv
-venv
-node_modules
+
+# Node caches (not needed — npm ci installs fresh)
+frontend/node_modules
+frontend/.cache
+
+# Git / CI
+.git
+.github
+
+# Dev / test
+tests/
+docs/
 *.md
 !README.md
-ui/
-scripts/
-research/
-evaluation/
-docs/
-tests/
-Dockerfile
-docker-compose.yml
-.dockerignore
+
+# Dev config
 .env.example
 .gitattributes
 .gitignore
 .cursorrules
 TAG
+
+# Docker self
+Dockerfile
+docker-compose.yml
+.dockerignore

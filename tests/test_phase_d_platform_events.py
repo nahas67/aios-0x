@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from core.config import Settings
 from core.event_bus import InMemoryEventBus
 from core.platform_events import (
     PlatformEvent,
@@ -35,11 +36,14 @@ def small_dataset(tmp_path: Path) -> dict[str, Path]:
 
 
 def _run(dataset: dict[str, Path], store_path: Path) -> tuple[ReplayRunner, object]:
+    from core.config import Settings
+    settings = Settings(model_provider="none", autonomy_mode="AUTONOMOUS")
     runner = ReplayRunner(
         csv_path_by_symbol=dataset,
         store_path=store_path,
         initial_balance=100000.0,
         slippage_pct=0.05,
+        settings=settings,
     )
     summary = asyncio.run(runner.run())
     return runner, summary
@@ -162,6 +166,7 @@ def test_consumer_can_subscribe_to_platform_topics(small_dataset, tmp_path) -> N
             initial_balance=100000.0,
             slippage_pct=0.05,
             bus=bus,
+            settings=Settings(model_provider="none", autonomy_mode="AUTONOMOUS"),
         )
         await runner.run()
         await bus.stop()

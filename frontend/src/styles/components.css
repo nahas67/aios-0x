@@ -1,0 +1,464 @@
+/* Component styles: tables, pills, buttons, forms, modals, toasts, skeletons */
+
+/* ---------------- data table ---------------- */
+.dtable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.dtable th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+.dtable td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: middle;
+}
+.dtable tbody tr:hover {
+  background: var(--inset);
+}
+.dtable tbody tr.clickable {
+  cursor: pointer;
+}
+.dtable .num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+.dtable .sym {
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+/* ---------------- pills / badges ---------------- */
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.pill.ok {
+  color: var(--ok);
+  background: var(--ok-bg);
+  border-color: rgba(0, 230, 118, 0.35);
+}
+.pill.warn {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: rgba(255, 196, 0, 0.35);
+}
+.pill.bad {
+  color: var(--bad);
+  background: var(--bad-bg);
+  border-color: rgba(255, 23, 68, 0.35);
+}
+.pill.info {
+  color: var(--cyan);
+  background: var(--info-bg);
+  border-color: rgba(0, 229, 255, 0.35);
+}
+.pill.dim {
+  color: var(--text-dim);
+  background: var(--inset);
+  border-color: var(--hairline-2);
+}
+.pill.flat {
+  border: 0;
+  padding: 2px 4px;
+  background: transparent;
+}
+
+/* side color dot */
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.dot.ok {
+  background: var(--ok);
+}
+.dot.warn {
+  background: var(--warn);
+}
+.dot.bad {
+  background: var(--bad);
+}
+.dot.info {
+  background: var(--cyan);
+}
+
+/* ---------------- buttons ---------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--inset);
+  color: var(--text);
+  border: 1px solid var(--hairline-2);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.btn:hover {
+  background: #161c22;
+  border-color: #2e3944;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn.primary {
+  background: var(--cyan-dim);
+  border-color: rgba(0, 229, 255, 0.4);
+  color: var(--cyan);
+}
+.btn.primary:hover {
+  background: rgba(0, 229, 255, 0.22);
+}
+.btn.ok {
+  background: var(--ok-bg);
+  border-color: rgba(0, 230, 118, 0.4);
+  color: var(--ok);
+}
+.btn.ok:hover {
+  background: rgba(0, 230, 118, 0.22);
+}
+.btn.danger {
+  background: var(--bad-bg);
+  border-color: rgba(255, 23, 68, 0.4);
+  color: var(--bad);
+}
+.btn.danger:hover {
+  background: rgba(255, 23, 68, 0.22);
+}
+.btn.warn {
+  background: var(--warn-bg);
+  border-color: rgba(255, 196, 0, 0.4);
+  color: var(--warn);
+}
+.btn.sm {
+  font-size: 11px;
+  padding: 3px 9px;
+}
+
+/* ---------------- forms ---------------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.03em;
+}
+.field input,
+.field select,
+.field textarea {
+  background: var(--inset);
+  border: 1px solid var(--hairline-2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: 1px solid var(--cyan);
+  outline-offset: 0;
+}
+.field .hint {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.field textarea {
+  font-family: var(--font-mono);
+  resize: vertical;
+  min-height: 70px;
+}
+
+/* ---------------- modal ---------------- */
+.modal-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--hairline-2);
+  border-radius: 10px;
+  max-width: 460px;
+  width: 100%;
+  padding: 18px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+}
+.modal h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.modal p {
+  margin: 0 0 12px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.modal .row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.modal .danger-zone {
+  border: 1px solid rgba(255, 23, 68, 0.3);
+  background: var(--bad-bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.modal .danger-zone p {
+  color: var(--text);
+  margin: 0;
+}
+
+/* ---------------- toast ---------------- */
+.toasts {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 120;
+  max-width: 380px;
+}
+.toast {
+  background: #0d1216;
+  border: 1px solid var(--hairline-2);
+  border-left: 3px solid var(--cyan);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  animation: toast-in 0.18s ease;
+}
+.toast.ok {
+  border-left-color: var(--ok);
+}
+.toast.warn {
+  border-left-color: var(--warn);
+}
+.toast.bad {
+  border-left-color: var(--bad);
+}
+.toast .t {
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------------- skeleton / empty / error ---------------- */
+.skel {
+  background: linear-gradient(90deg, #0d1216 25%, #141b21 50%, #0d1216 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s infinite;
+  border-radius: 5px;
+  height: 13px;
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.empty {
+  color: var(--text-faint);
+  font-size: 12.5px;
+  text-align: center;
+  padding: 26px 10px;
+}
+.error-box {
+  background: var(--bad-bg);
+  border: 1px solid rgba(255, 23, 68, 0.35);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  font-size: 12.5px;
+}
+.error-box .t {
+  color: var(--bad);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.error-box code {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* ---------------- misc ---------------- */
+/* Compact list used by kernel panels (e.g. invariant failures). */
+.kv-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  font-size: 12px;
+}
+
+.kv-list li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--hairline);
+  overflow-wrap: anywhere;
+}
+
+.kv-list li:last-child {
+  border-bottom: none;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.dim {
+  color: var(--text-dim);
+}
+.faint {
+  color: var(--text-faint);
+}
+.pos {
+  color: var(--ok);
+}
+.neg {
+  color: var(--bad);
+}
+.big-num {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 12.5px;
+}
+.kv:last-child {
+  border-bottom: 0;
+}
+.kv .k {
+  color: var(--text-dim);
+}
+.toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.toolbar input[type="search"],
+.toolbar input[type="text"] {
+  background: var(--inset);
+  border: 1px solid var(--hairline-2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  min-width: 200px;
+}
+.toolbar .grow {
+  flex: 1;
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+.tabs button {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.tabs button.active {
+  background: var(--inset);
+  color: var(--text);
+  border-color: var(--hairline-2);
+}
+.progress {
+  height: 6px;
+  background: var(--inset);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress > i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.chip {
+  background: var(--inset);
+  border: 1px solid var(--hairline-2);
+  border-radius: 6px;
+  font-size: 11px;
+  padding: 3px 8px;
+  color: var(--text-dim);
+}
+pre.code {
+  background: var(--inset);
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  overflow-x: auto;
+  margin: 0;
+  max-height: 420px;
+}

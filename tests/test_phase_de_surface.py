@@ -19,6 +19,8 @@ from simulation.replay_runner import ReplayRunner
 
 @pytest.fixture()
 def ran_runner(tmp_path: Path) -> ReplayRunner:
+    from core.config import Settings
+    settings = Settings(model_provider="none", autonomy_mode="AUTONOMOUS")
     write_dataset(tmp_path / "golden", symbols=["BTC/USD", "ETH/USD"], total_bars=120)
     runner = ReplayRunner(
         csv_path_by_symbol={
@@ -28,6 +30,7 @@ def ran_runner(tmp_path: Path) -> ReplayRunner:
         store_path=tmp_path / "surface.db",
         initial_balance=100000.0,
         slippage_pct=0.05,
+        settings=settings,
     )
     asyncio.run(runner.run())
     return runner

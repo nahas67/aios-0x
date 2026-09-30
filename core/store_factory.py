@@ -8,6 +8,7 @@ rewrite of callers.
 """
 
 from pathlib import Path
+from typing import Any
 
 from core.persistence import BaseMemoryStore, SqliteMemoryStore
 
@@ -26,7 +27,10 @@ def build_memory_store(
     database_url: str | None = None,
 ) -> BaseMemoryStore:
     """Build the configured memory store. Connections fail closed on error."""
-    store_cls = select_store_class(database_url)
+    store_cls: Any = select_store_class(database_url)
     if store_cls is SqliteMemoryStore:
         return SqliteMemoryStore(store_path)
-    return store_cls(database_url or "")
+    # The Postgres subclass takes a DSN where the SQLite one takes a path; the
+    # base ABC declares no constructor, so the dispatcher is typed Any.
+    built: BaseMemoryStore = store_cls(database_url or "")
+    return built

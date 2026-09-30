@@ -10,15 +10,26 @@ from communities.c5_execution.adapters import (
     ExecutionUnavailableError,
     PaperExecutionAdapter,
 )
+from communities.c5_execution.broker_reconciliation import snapshot_from_rows
 from communities.c5_execution.execution import KillSwitch, OrderManager
+from communities.c5_execution.oms import DurableOrderManager, OrderBlocked
+from communities.c5_execution.reconciliation import ReconciliationEngine
 from core.event_bus import EventTopic, InMemoryEventBus
+from core.financial_kernel import (
+    AnomalyKind,
+    CashPosting,
+    Fill,
+    ReconciliationMode,
+    SqliteFinancialStore,
+)
 from core.persistence import SqliteMemoryStore
 from core.risk_governor import RiskGovernor, load_lockout_from_store
+from core.safety_plane import SafetyPlane
 from core.security import ACLBus, AgentPrincipal
 from schemas.contracts import (
     EmergencyStateValue,
+    OrderSide,
     PortfolioAllocationPlan,
-    ReconciliationReport,
     StrategySpecification,
 )
 
@@ -186,25 +197,109 @@ def test_lockout_persists_across_restart_until_human_reset(tmp_path: Path) -> No
     assert load_lockout_from_store(store) is False
 
 
-def test_reconciliation_failure_escalates_to_execution_failure() -> None:
-    async def _run():
-        bus = InMemoryEventBus()
-        await bus.start()
-        governor = RiskGovernor(bus)
-        report_ok = ReconciliationReport(checked_symbols=2)
-        allowed_after_ok = await governor.observe_reconciliation(report_ok)
+def _positions_only_snapshot(positions: dict[str, float]):
+    """What the paper venue can actually answer: positions, and nothing else."""
+    return snapshot_from_rows(
+        broker="paper",
+        account_id="default",
+        mode=ReconciliationMode.FULL_SNAPSHOT,
+        positions=positions,
+        adapter_version="paper-positions-only-1.0",
+        covers_orders=False,
+        covers_executions=False,
+    )
 
-        bad = ReconciliationReport(
-            checked_symbols=2, mismatches=["BTC/USD: venue 0.5 vs internal none"]
+
+def test_reconciliation_failure_engages_durable_lockout_and_escalates(tmp_path: Path) -> None:
+    """§26: a venue/IBOR divergence restricts the account AND escalates.
+
+    This replaces the retired per-bar `ReconciliationReport` path. The signal is
+    no longer a boolean assembled from free-text mismatch strings; it is a
+    CRITICAL finding persisted by the durable engine, which engages a
+    safety-plane restriction through the same store the API and the operator
+    surface read.
+    """
+    store = SqliteFinancialStore(tmp_path / "recon.db")
+    try:
+        safety = SafetyPlane(store, broker="paper")
+        engine = ReconciliationEngine(store, account_id="default", safety=safety)
+
+        # A clean pass over an empty book engages nothing.
+        clean = engine.reconcile(_positions_only_snapshot({}))
+        assert clean.requires_lockout is False
+        assert clean.critical() == []
+        assert safety.is_blocked(account_id="default", broker="paper").blocked is False
+
+        # Now internal state holds a position the venue does not report.
+        store.post_cash(
+            [
+                CashPosting(transaction_id="seed", account_id="default", amount_minor=100_000),
+                CashPosting(transaction_id="seed", account_id="counterparty", amount_minor=-100_000),
+            ]
         )
-        allowed_after_bad = await governor.observe_reconciliation(bad)
-        await bus.stop()
-        return allowed_after_ok, allowed_after_bad, governor.state
+        oms = DurableOrderManager(store, account_id="default", safety=safety)
+        order = oms.accept(
+            oms.prepare_order(
+                client_order_id="recon-order",
+                strategy_id="s1",
+                symbol="BTC/USD",
+                side=OrderSide.BUY,
+                quantity=5.0,
+            ).internal_order_id
+        )
+        store.apply_fill(
+            Fill(
+                fill_id="f-recon",
+                order_id=order.internal_order_id,
+                broker_execution_id="exec-recon",
+                symbol="BTC/USD",
+                side=OrderSide.BUY,
+                quantity=5.0,
+                price=100.0,
+            )
+        )
 
-    ok_allowed, bad_allowed, state = asyncio.run(_run())
-    assert ok_allowed is True
-    assert bad_allowed is False
-    assert state == EmergencyStateValue.EXECUTION_FAILURE
+        result = engine.reconcile(_positions_only_snapshot({}))
+        assert result.requires_lockout is True
+        assert [f.kind for f in result.critical()] == [AnomalyKind.POSITION_MISMATCH]
+        # The restriction is durable and consultable before any venue call.
+        assert safety.is_blocked(account_id="default", broker="paper").blocked is True
+        with pytest.raises(OrderBlocked):
+            oms.prepare_order(
+                client_order_id="recon-order-2",
+                strategy_id="s1",
+                symbol="BTC/USD",
+                side=OrderSide.BUY,
+                quantity=1.0,
+            )
+
+        async def _escalate() -> tuple[bool, EmergencyStateValue]:
+            bus = InMemoryEventBus()
+            await bus.start()
+            governor = RiskGovernor(bus)
+            allowed_before = not governor.locked_out
+            # Exactly what the composition root does with the durable verdict.
+            if result.requires_lockout:
+                await governor.escalate(
+                    EmergencyStateValue.EXECUTION_FAILURE,
+                    f"reconciliation run {result.run.run_id} raised "
+                    f"{len(result.critical())} critical finding(s); scope "
+                    f"{result.lockout_scope}",
+                    triggered_by="reconciler",
+                )
+            await bus.stop()
+            return allowed_before, governor.state
+
+        allowed_before, state = asyncio.run(_escalate())
+        assert allowed_before is True
+        assert state == EmergencyStateValue.EXECUTION_FAILURE
+
+        # Once the venue reports the position too, the book is consistent again
+        # and a fresh pass raises nothing.
+        consistent = engine.reconcile(_positions_only_snapshot({"BTC/USD": 5.0}))
+        assert consistent.critical() == []
+    finally:
+        store.close()
 
 
 def test_drawdown_halt_via_governor() -> None:

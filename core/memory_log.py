@@ -48,7 +48,6 @@ class TradingMemoryLog:
 
     def store_decision(self, symbol: str, trade_date: str, action: str, decision: str) -> None:
         """Phase A: store a pending decision. Idempotent per symbol+date."""
-        tag = f"[{trade_date} | {symbol} | {action} | pending]"
         for e in self._entries:
             if e.symbol == symbol and e.date == trade_date and e.status == "pending":
                 return  # idempotent

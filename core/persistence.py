@@ -93,6 +93,9 @@ class SqliteMemoryStore(BaseMemoryStore):
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        # Wait (instead of failing) when another process holds the write lock,
+        # so cross-process appenders serialize rather than interleave.
+        self._conn.execute("PRAGMA busy_timeout = 10000")
         self._conn.row_factory = sqlite3.Row
         self._ensure_schema()
 
@@ -148,20 +151,32 @@ class SqliteMemoryStore(BaseMemoryStore):
     def append_event(self, kind: str, ref_id: str | None, payload: dict[str, Any]) -> int:
         with self._lock:
             cur = self._conn.cursor()
-            prev_row = cur.execute(
-                "SELECT hash FROM event_log ORDER BY seq DESC LIMIT 1"
-            ).fetchone()
-            prev = prev_row["hash"] if prev_row else _GENESIS_HASH
-            ts = _utc_now_iso()
-            body = _canonical(payload)
-            digest = hashlib.sha256(f"{ts}|{kind}|{ref_id}|{body}|{prev}".encode()).hexdigest()
-            cur.execute(
-                "INSERT INTO event_log (ts, kind, ref_id, payload_json, prev_hash, hash) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (ts, kind, ref_id, body, prev, digest),
-            )
-            self._conn.commit()
-            return int(cur.lastrowid or 0)
+            # BEGIN IMMEDIATE takes the database write lock BEFORE reading the
+            # previous hash. Without it, two writers (separate processes or
+            # store instances) could both read the same tail hash and interleave
+            # their inserts, leaving a gap in the hash chain (a real incident:
+            # seq 4507 chained from 4505 while 4506 was written between them).
+            cur.execute("BEGIN IMMEDIATE")
+            try:
+                prev_row = cur.execute(
+                    "SELECT hash FROM event_log ORDER BY seq DESC LIMIT 1"
+                ).fetchone()
+                prev = prev_row["hash"] if prev_row else _GENESIS_HASH
+                ts = _utc_now_iso()
+                body = _canonical(payload)
+                digest = hashlib.sha256(
+                    f"{ts}|{kind}|{ref_id}|{body}|{prev}".encode()
+                ).hexdigest()
+                cur.execute(
+                    "INSERT INTO event_log (ts, kind, ref_id, payload_json, prev_hash, hash) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (ts, kind, ref_id, body, prev, digest),
+                )
+                self._conn.commit()
+                return int(cur.lastrowid or 0)
+            except BaseException:
+                self._conn.rollback()
+                raise
 
     def verify_chain(self) -> tuple[bool, int | None]:
         with self._lock:

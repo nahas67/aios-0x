@@ -11,11 +11,13 @@ import pathlib
 import sys
 import threading
 import time
+from collections.abc import Coroutine
+from typing import Any, TypeVar
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from api.server import CommandCenterServer  # noqa: E402
+from api.server import CommandCenterServer, ServerIdentity, parse_token_map  # noqa: E402
 from simulation.generate_golden_data import write_dataset  # noqa: E402
 from simulation.replay_runner import ReplayRunner  # noqa: E402
 
@@ -23,6 +25,11 @@ from simulation.replay_runner import ReplayRunner  # noqa: E402
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8787)
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="bind address; use 0.0.0.0 only inside a container/reverse-proxy boundary",
+    )
     parser.add_argument("--bars", type=int, default=240)
     parser.add_argument("--symbols", default="BTC/USD,ETH/USD")
     parser.add_argument("--balance", type=float, default=100000.0)
@@ -37,7 +44,7 @@ def main() -> None:
 
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
     data_dir = ROOT / "data" / "golden"
-    dataset = {}
+    dataset: dict[str, pathlib.Path] = {}
     for symbol in symbols:
         path = data_dir / f"{symbol.replace('/', '_')}_1d.csv"
         if not path.exists():
@@ -63,8 +70,22 @@ def main() -> None:
     )
 
     plane = runner.build_control_plane()
+    from core.control_plane import AutonomyMode
+
+    plane.autonomy = AutonomyMode(settings.autonomy_mode.upper())
     builder = runner.build_snapshot_builder()
-    server = CommandCenterServer(builder, plane, port=args.port)
+    server = CommandCenterServer(
+        builder,
+        plane,
+        port=args.port,
+        host=args.host,
+        auth_token=settings.api_auth_token,
+        default_identity=ServerIdentity(
+            operator_id=settings.server_operator_id,
+            role=settings.server_default_role,
+        ),
+        identity_map=parse_token_map(settings.server_token_map),
+    )
     server.start()
 
     def _replay() -> None:
@@ -100,9 +121,10 @@ def main() -> None:
         time.sleep(3600)
 
 
-def asyncio_run(coro):
-    import asyncio
+_T = TypeVar("_T")
 
+
+def asyncio_run(coro: Coroutine[Any, Any, _T]) -> _T:
     return asyncio.run(coro)
 
 

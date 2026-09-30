@@ -786,10 +786,11 @@ class OrderStatus(StrEnum):
     FILLED = "FILLED"
     CANCELLED = "CANCELLED"
     REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
 
 
 _TERMINAL_ORDER_STATES = frozenset(
-    {OrderStatus.FILLED, OrderStatus.CANCELLED, OrderStatus.REJECTED}
+    {OrderStatus.FILLED, OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.EXPIRED}
 )
 
 
@@ -820,22 +821,6 @@ class OrderRequest(BaseModel):
     def validate_limit(self) -> "OrderRequest":
         if self.order_type == OrderType.LIMIT and self.limit_price is None:
             raise ValueError("LIMIT orders require limit_price")
-        return self
-
-
-class ReconciliationReport(BaseModel):
-    """Broker-vs-internal position comparison (Directive 41)."""
-
-    report_id: str = Field(default_factory=generate_uuid)
-    created_at: datetime = Field(default_factory=generate_utc_now)
-    checked_symbols: int
-    mismatches: list[str] = Field(default_factory=list)
-    ok: bool = True
-
-    @model_validator(mode="after")
-    def derive_ok(self) -> "ReconciliationReport":
-        if "ok" not in self.model_fields_set:
-            self.ok = not self.mismatches
         return self
 
 

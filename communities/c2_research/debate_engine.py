@@ -249,7 +249,7 @@ class DebateEngine:
                     for _, pid in personality_ids
                 ]
             )
-            for (role, _pid), (raw, resp) in zip(personality_ids, personality_results):
+            for (role, _pid), (raw, resp) in zip(personality_ids, personality_results, strict=True):
                 assessment: PersonalityAssessment = raw  # type: ignore[assignment]
                 self._record(
                     transcript,
