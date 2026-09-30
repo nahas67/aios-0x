@@ -199,6 +199,22 @@ class StateMachineEngine:
         key = f"{object_type}:{object_id}"
         return [t for t in self._transitions if f"{t.object_type}:{t.object_id}" == key]
 
+    def check_transition(
+        self, object_type: str, object_id: str, requested_state: str
+    ) -> None:
+        """Validate legality without mutating anything.
+
+        Same validation :meth:`transition` performs, minus the receipt, the
+        state change, and the history entry. Exists so a caller with a
+        fallible step after the state change — notably a durable write to an
+        append-only log, which cannot be un-written — can fail before doing
+        anything irreversible rather than after. Raises :class:`TransitionError`
+        exactly as :meth:`transition` would.
+        """
+        definition = self._get_definition(object_type)
+        current = self.get_state(object_type, object_id)
+        definition.validate(current, requested_state)
+
     def _get_definition(self, object_type: str) -> StateMachineDefinition:
         definition = self._definitions.get(object_type)
         if definition is None:
