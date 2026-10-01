@@ -408,7 +408,7 @@
       "depends_on": [
         "G090"
       ],
-      "summary": "RegimeState from trend, volatility and liquidity inputs via an online regime labeller, with change detection (two-sided CUSUM plus Bai-Perron offline segmentation) supplying dated, confidence-bearing shift events.",
+      "summary": "RegimeState from trend, volatility and liquidity inputs via an online regime labeller, with change detection (two-sided CUSUM plus Bai-Perron offline segmentation) supplying dated, confidence-bearing shift events, and a per-strategy DomainOfCompetence refusing a playbook outside the regimes its strategy declared itself valid in.",
       "gates": [
         {
           "check": "test:tests/test_regime_engine.py",
@@ -421,14 +421,20 @@
         {
           "check": "test:tests/test_change_detection.py",
           "statement": "No alarm fires inside burn-in, output is deterministic, and detections convert to available_at-stamped features."
+        },
+        {
+          "check": "test:tests/test_domain_of_competence.py",
+          "statement": "Competence is opt-in: a regime in neither the valid nor the invalid set is refused, and the permitted set equals exactly what was declared; the two lists cannot overlap and valid cannot be empty; a strategy with no declaration may register no playbook at all; a playbook activating in a regime its strategy recorded as unsafe is refused by name; and a registration that is refused leaves nothing behind."
         }
       ],
       "evidence": [
-        "communities/c10_world/regime_engine.py",
         "communities/c10_world/change_detection.py",
-        "tests/test_change_detection.py"
+        "communities/c10_world/regime_engine.py",
+        "kernel/playbook.py",
+        "tests/test_change_detection.py",
+        "tests/test_domain_of_competence.py"
       ],
-      "notes": "Detection replaces labelling: two-sided online CUSUM with an explicit burn-in that cannot alarm by construction (baseline frozen, sums reset per alarm imposing a refractory period), plus Bai-Perron-style offline segmentation whose breaks are honestly dated at the sample end with delay recorded. Every detection carries index, detected_at, available_at, delay, confidence, and direction, and converts to point-in-time features for RegimeCondition consumption - never bare labels. Two module defects caught by tests: the break estimate pointed at bar 0 across the burn-in boundary (fixed), and a noiseless step scored confidence 0 on a 0/0 fallback (infinite contrast now maps to 1.0). The 88-line EMA labelling engine remains in regime_engine.py for its existing consumers; the detector is the path new code takes. SCOPE CORRECTION (registry audit): this objective previously read \"RegimeSnapshot ... plus a per-strategy domain of competence\". Neither existed -- the engine has always exposed RegimeState, and the word \"competence\" appears nowhere in the tree. The change-detection work this goal actually delivered is real and is described above, so the objective now names what exists rather than the goal being downgraded. OUTSTANDING, NOT DELIVERED: a per-strategy domain of competence, where a strategy is refused outside its regime. Architecture section 2 Layer 9 mandates it (\"Every strategy/model has: DomainOfCompetence\") and no goal currently claims it. Recorded here so it is not silently lost, and so this goal's LANDED status is read as covering regime detection only. GATE REMOVED (registry audit): a third gate asserted \"a strategy declares a domain of competence and is refused outside it\". That capability does not exist and never has, so the gate was deleted rather than repointed at an unrelated test. The gate count for G100 is now four: two on the regime engine and two on change detection."
+      "notes": "Detection replaces labelling: two-sided online CUSUM with an explicit burn-in that cannot alarm by construction (baseline frozen, sums reset per alarm imposing a refractory period), plus Bai-Perron-style offline segmentation whose breaks are honestly dated at the sample end with delay recorded. Every detection carries index, detected_at, available_at, delay, confidence, and direction, and converts to point-in-time features for RegimeCondition consumption - never bare labels. Two module defects caught by tests: the break estimate pointed at bar 0 across the burn-in boundary (fixed), and a noiseless step scored confidence 0 on a 0/0 fallback (infinite contrast now maps to 1.0). The 88-line EMA labelling engine remains in regime_engine.py for its existing consumers; the detector is the path new code takes. DOMAIN OF COMPETENCE (delivered): architecture section 2 Layer 9 requires \"Every strategy/model has: DomainOfCompetence\". This was the one Layer 9 clause with no implementation anywhere in the tree, and the registry audit recorded it as an outstanding gap rather than letting this goal read as fully landed. It is now implemented in kernel/playbook.py as DomainOfCompetence (frozen; valid must be non-empty; valid and invalid required disjoint) plus StrategyCompetence (one immutable declaration per (strategy_id, strategy_version), matching the certification oracle's identity). PlaybookRouter enforces it once at admission. Competence is OPT-IN: an unlisted regime is refused, because permitting it would make `valid` decorative and would widen every strategy's permissions silently each time a Regime member was added. `invalid` is not redundant with that -- it makes a refusal say whether the regime was recorded unsafe or simply never claimed, which are different problems for whoever is debugging. Enforced against the strategy rather than the playbook, because a per-playbook declaration would leave \"may this strategy trade in a crisis?\" with no single answer. TWO THINGS A READER SHOULD NOT OVERSTATE. Enforcement is OPT-IN at the router: PlaybookRouter(competence=None) enforces no competence, which is what every existing caller does, so the feature is available and correct but not universally switched on. And a competence declaration is checked once at admission, not on every selection, because it is immutable where a verdict is revocable -- widening what a strategy may trade in requires a new strategy version."
     },
     {
       "id": "G110",
