@@ -14,34 +14,34 @@ tracked, and every section reference to those resolves.
 and is deliberately *not* authoritative — where the two disagree, the registry
 and the tests win.
 
-**Last verified**. Measured on the working tree that became the most recent commit, which added this block and the row below it; the last commit *before* that change is `85163ba` (135 commits, 497 tracked files, working tree clean).
+**Last verified**. Measured on the working tree that became the most recent commit,
+which added this block and the close-out below; the last commit *before* that change is
+`5442949` (140 commits, 497 tracked files, working tree clean).
 
 The block cannot name its own commit, and an earlier version pretended to: it said
-`git rev-parse HEAD` = `75d3d5c` while reporting the figure measured after that commit, which
-was impossible for the tree it named. Stating what was measured is worth more than a hash
-that is stale by one commit, and defect #56's rule -- this block is what a reader checks
-first, so a wrong one is worse than none -- is the reason it is said in words rather than
-approximated. Last verified at `85163ba` plus this block.
+`git rev-parse HEAD` = `75d3d5c` while reporting the figure measured after that commit,
+which was impossible for the tree it named. Stating what was measured is worth more than a
+hash that is stale by one commit, and defect #56's rule -- this block is what a reader
+checks first, so a wrong one is worse than none -- is the reason it is said in words.
 
 - **Full suite hermetic** (no `AIOS_TEST_PG_DSN` / `AIOS_TEST_NATS_URL`) —
-  `1612 passed, 12 skipped, 76 deselected` (exit 0). Of the 1700 tests collected with no
-  live backend, the hermetic selection collects 1623 (`--collect-only`; the run's junit `tests`
-  attribute reads 1624, since one collected test is itself a skip).
-  This is the authoritative current number, and it is the one CI runs.
+  `1612 passed, 12 skipped, 76 deselected` (exit 0, 4:55). Of the 1700 tests collected with
+  no live backend, the hermetic selection collects 1623. This is the authoritative current
+  number, and it is the one CI runs.
 - **Full suite with PostgreSQL *and* NATS JetStream up** — `1750 passed, 1 skipped`
-  (exit 0, 6:11), measured on the tree this block describes. **Replaces the previous
-  `1646 passed, 1 skipped`, which was labelled as measured before this cycle's additions**
-  — the block said so itself, which is the right way to record a figure you know is behind.
-  Re-run with `docker compose -f docker-compose.test.yml up -d` plus `AIOS_TEST_PG_DSN`.
-  Counts read from junit-xml rather than scraped from stdout, because `addopts = "-q"`
-  in `pyproject.toml` combines with an explicit `-q` into `-qq`, which prints no summary
-  line at all — a figure scraped that way is a figure nobody read.
+  (exit 0, 7:11), measured on this same tree rather than carried forward from an earlier
+  one. Replaces `1646 passed, 1 skipped`, which the block itself had labelled as measured
+  before this cycle's additions. Re-run with
+  `docker compose -f docker-compose.test.yml up -d` plus `AIOS_TEST_PG_DSN`. Counts are
+  read from junit-xml rather than scraped from stdout, because `addopts = "-q"` combines
+  with an explicit `-q` into `-qq`, which prints no summary line at all -- and a figure
+  scraped that way is a figure nobody read.
 
-  The gap between the two figures is **not** just the marker. Of 1751 collected with a live backend, 76 are excluded by `-m "not integration"` and
-  **51 are not collected at all without a live backend** — they are the parity suites,
-  which is the same shape as defects #33–#36 and #52: a test that cannot run on one tier
-  quietly stops being the test its name claims. Verified by diffing collected ids with
-  and without the two environment variables, not inferred from the counts.
+  The gap between the two figures is **not** just the marker. Of 1751 collected with a live
+  backend, 76 are excluded by `-m "not integration"` and **51 are not collected at all
+  without one** -- they are the parity suites, which is the same shape as defects
+  #33-#36 and #52: a test that cannot run on one tier quietly stops being the test its name
+  claims. Verified by diffing collected ids with and without the two variables.
 
 - ruff clean · mypy clean on 145 source files · anti-pattern lint clean (6 rules) ·
   constitution pin verifies at boot · architecture boundaries and goal registry pass ·
@@ -1031,3 +1031,48 @@ These hold regardless of which workstream is next.
   the document, which is where a skimming reader lands. A status line decays exactly
   as a figure does (#56); the difference is that nobody re-measures either unless
   something forces them to.*
+
+---
+
+## 7. Cycle close-out
+
+Written to be read on its own, by someone who has not read the rest of this document.
+
+**Where the program stands.** 13 workstreams, 25 goals: **23 `LANDED`, 2 `BLOCKED`, zero
+`PARTIAL`, zero `NOT_STARTED`.** 92 test gates, every one on a `LANDED` goal naming a file
+that exists and contains tests. 68 defects recorded this cycle, each recorded with the
+mechanism rather than the symptom.
+
+**What is finished.** Every workstream's engineering. The last capability gap the cycle
+found -- a strategy's domain of competence, mandated by the architecture, implemented but
+wired nowhere in production -- is closed. Closing it took two independent reviews and seven
+further defects, two of which had shipped inside the fix itself.
+
+**What is blocked, and why engineering cannot move it.** G240 (Long Shadow) needs a
+validated broker testnet connection, a full shadow cycle against it, and five human-held
+Phase 5.0 gates. G250 (Canary Capital) needs `approve_live_capital` recorded and
+`CONSTITUTION.md` §1 amended by ADR. Both are decisions rather than work, and they stay
+`BLOCKED` with their blockers named instead of being marked `LANDED` by redefinition --
+that distinction is the whole difference between a registry and a wishlist.
+
+**What is outstanding.** Two items, both requiring a human: those decisions, and
+`gh auth login` followed by
+`pwsh -ExecutionPolicy Bypass -File scripts\publish_private.ps1` to publish the private
+repository. The repository exists and no GitHub action has been taken.
+
+**What is UNVERIFIED rather than done, and named as such.** The CI workflow has not been
+executed here, because executing it means GitHub activity. Every gate it runs has been run
+locally and every step's reasoning is in the step comment where a failure would be
+diagnosable. Release signing is applied in CI over the manifested bytes, so it is
+unverified for the same reason -- and the SHA256 manifest that *is* in the tree is
+integrity, not authenticity. Both are recorded rather than omitted, because an omitted
+claim and a passing claim look identical to a reader going quickly, which is the subject of
+defect #66.
+
+**The one engineering item left open,** restated precisely because the original wording
+overstated it: `reconcileExecutive` has a carry-through branch its production caller never
+reaches, because `useLiveExecutive` always passes a constant. The branch is covered by
+tests; what is true is the narrower claim. Left recorded rather than churned, since
+threading real state would change no behaviour today.
+
+---
