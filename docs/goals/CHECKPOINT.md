@@ -252,8 +252,8 @@ is removed.
 
 ## 3. Defects found and fixed in this cycle
 
-Forty-four. Twenty-seven were found by a test written to assert the property, not by
-inspection — the point of writing the test first. The other seventeen (#28–#44)
+Forty-five. Twenty-seven were found by a test written to assert the property, not by
+inspection — the point of writing the test first. The other eighteen (#28–#45)
 were found by *running the artifact* rather than reading it: building the image,
 starting the container, calling the release packager, standing up PostgreSQL and
 NATS, model-checking the TLA+ specs, and diffing the frozen architecture against
@@ -321,6 +321,7 @@ and a suite that only tests the former will never notice the latter.
 | 42 | `ModelGovernanceWorkspace.tsx` rendered a wholly fabricated registry | Four invented models, weights hashes, latencies, context lengths, evaluation dates, a system prompt hash, a sampling temperature, and **"BENCHMARK ACCURACY: 92.6% AVERAGE"** — with no backend call behind any of it. `modelsApi`/`evaluationsApi` existed, were typed, and were served on two routes; neither was called. That is a direct breach of architecture §11 (a claim needs 14 companions), of `core/claim_gate.py` (the implementation of exactly that rule), and of §3 Honesty Law 1. The backend was already honest — `models_registry_view` returns `{available: false, models: []}`, documented *"never a fabricated roster"* — so the lie was entirely client-side, which is the more expensive kind: a lying server can be diffed, and a lying client looks exactly like a working feature. Rewritten to read the endpoint, with `tests/test_model_governance_contract.py` pinning the backend side so a future "helpful" placeholder roster cannot be added silently |
 | 43 | The goal registry asserted five dead gates and one artifact that does not exist | The registry is what the project defers to — this file says so: *"where the two disagree, the registry and the tests win"* — so a discrepancy in it is not a documentation nit. Five gates on **LANDED** goals named test files that never existed (G010, G170, G110 ×3, G100), and G100's objective read *"RegimeSnapshot ... plus a per-strategy domain of competence"* when the engine has always exposed `RegimeState` and "competence" appears nowhere in the tree. The existing rule only checked the path ended in `.py`, and its docstring said unwritten goals may name missing files — right for BLOCKED work, exactly wrong for finished work. Four gates repointed at the tests that actually own the property; the domain-of-competence gate **deleted** rather than repointed, and the gap recorded as outstanding. Two new derived rules now prevent recurrence: LANDED gates must exist on disk, and CamelCase identifiers in any objective must appear in source. **The second rule generalises a test that already guarded this exact failure mode but hardcoded two goals, so only two were ever checked** |
 | 44 | The new registry rule passed its own mutation | `_source_blob()` read every `*.py`, including the test whose docstrings quote `RegimeSnapshot` to explain what it is checking — so reintroducing that name into G100 satisfied the lookup with the rule's own explanation. Found only because the rule was mutation-checked. The blob now excludes `tests/` and `docs/`, as the sibling rule already did, and the docstring records that the exclusion is load-bearing rather than tidiness. The same failure had already appeared twice this cycle as a shipped tautology (`HashBindsKey`, `FlattenPrecedesHalt`) and once as an unawaited coroutine in a passing test |
+| 45 | A vacuity harness destroyed the implementation it was testing | The harness ended each mutation with `git checkout -- kernel/playbook.py`, which is correct hygiene when the edits are committed and a deletion when they are not. The competence work was uncommitted, so the first mutation's revert erased every change to the file - the classes, the import, the gate method, the `__all__` entries - and the run then reported the mutation *caught* because the suite failed against a file that no longer contained the feature at all. **A vacuity check that destroys its subject will always report success.** Two changes of method followed: the implementation was committed before mutating, and every mutation now also asserts the suite failed for a reason other than a syntax error, so a botched edit cannot masquerade as a caught mutation. Fourth such defect this cycle after #44, the `HashBindsKey` tautology and `FlattenPrecedesHalt` - which is why the harness itself is now treated as something to verify |
 
 Three of these deserve emphasis. **#10** is the class of bug that makes a
 statistic meaningless while looking perfectly healthy: PBO returned 1.0 for
@@ -841,10 +842,19 @@ at the top; the list below is what is genuinely outstanding.
    `pwsh -ExecutionPolicy Bypass -File scripts\publish_private.ps1`. The
    repository exists and is empty; the script reuses it and refuses rather than
    guessing. No GitHub action has been taken.
-4. **Per-strategy domain of competence** — architecture §2 Layer 9 mandates it
-   ("Every strategy/model has: DomainOfCompetence"), nothing implements it, and
-   no goal claims it. Recorded in G100's notes so it is not silently lost. The
-   one genuine capability gap this cycle found and did **not** close.
+4. ~~Per-strategy domain of competence~~ - **delivered** at `6b80af2`, and it
+   was the one genuine capability gap the previous cycle found and did not
+   close. Architecture section 2 Layer 9 mandates it ("Every strategy/model
+   has: DomainOfCompetence") and nothing implemented it. Now
+   `DomainOfCompetence` + `StrategyCompetence` in `kernel/playbook.py`,
+   enforced once at admission by `PlaybookRouter`, with 28 mutation-checked
+   tests. **Kept on this list because of how it is wired, not because it is
+   missing:** enforcement is opt-in at the router, so
+   `PlaybookRouter(competence=None)` enforces nothing, and every existing
+   caller constructs it exactly that way. The capability is available and
+   correct but not switched on. Declaring competence for the real strategies
+   and wiring it at the composition roots is the outstanding part, and it is
+   a decision about which strategies are competent where rather than a build.
 5. **SSE is unconsumed.** `api/stream.ts` is complete and correct — it uses
    `fetch` + `ReadableStream` precisely because `EventSource` cannot send an
    `Authorization` header — and the server streams at `/api/v1/stream`, but
