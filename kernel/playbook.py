@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -54,7 +54,10 @@ __all__ = [
     "AbstentionReason",
     "CandidatePlaybook",
     "CertificationOracle",
+    "CompetenceNotDeclared",
     "DerivationRefused",
+    "DomainOfCompetence",
+    "InconsistentCompetence",
     "FeatureObservation",
     "Playbook",
     "PlaybookAction",
@@ -64,6 +67,8 @@ __all__ = [
     "Regime",
     "RegimeCondition",
     "Selection",
+    "StrategyCompetence",
+    "StrategyIncompetent",
     "SizingBasis",
     "UndeclaredFeature",
     "build_measured_playbook",
@@ -677,9 +682,19 @@ class PlaybookRouter:
     new verdict.
     """
 
-    def __init__(self, oracle: CertificationOracle) -> None:
+    def __init__(
+        self,
+        oracle: CertificationOracle,
+        competence: StrategyCompetence | None = None,
+    ) -> None:
         self._oracle = oracle
         self._playbooks: dict[str, Playbook] = {}
+        #: ``None`` disables the competence gate entirely, which is what every
+        #: existing caller does. That is recorded rather than hidden: a router
+        #: with no competence registry enforces no competence, and the flag is
+        #: here so a composition root that meant to wire one cannot do so
+        #: silently and believe it is enforcing one.
+        self._competence = competence
 
     # ------------------------------------------------------------- registration
 
@@ -696,6 +711,7 @@ class PlaybookRouter:
                 "which is not certified. A playbook is the operational form of a verdict; "
                 "without one it is a preference."
             )
+        self._check_competence(playbook)
         if playbook.ref in self._playbooks:
             raise ValueError(
                 f"{playbook.ref} is already registered. A playbook version is immutable: "
@@ -703,6 +719,48 @@ class PlaybookRouter:
             )
         self._playbooks[playbook.ref] = playbook
         return playbook
+
+    def _check_competence(self, playbook: Playbook) -> None:
+        """Refuse a playbook whose strategy is not competent in its own regime.
+
+        Checked once, at admission, and not again on selection. That asymmetry is
+        deliberate and differs from the certification check above: a verdict can
+        be revoked by the oracle at any instant, so re-checking is the only thing
+        that stops a revoked strategy staying tradable. A competence declaration
+        cannot change -- :class:`StrategyCompetence` is immutable, and amending
+        one means declaring a new strategy version. So the admission-time check
+        cannot be invalidated by the passage of time, and a second identical
+        check on every selection would be a second guard with no additional
+        failure mode behind it. One check, placed where the failure can occur.
+        """
+        if self._competence is None:
+            return
+        domain = self._competence.for_strategy(
+            playbook.strategy_id, playbook.strategy_version
+        )
+        if domain is None:
+            raise CompetenceNotDeclared(
+                f"{playbook.ref} binds to {playbook.strategy_id}:"
+                f"{playbook.strategy_version}, which has declared no domain of "
+                f"competence. Architecture section 2 Layer 9 requires every "
+                f"strategy to have one. A strategy with no declaration is not "
+                f"competent everywhere -- competence is opt-in, because an "
+                f"undeclared strategy treated as universally competent would "
+                f"make the declaration decorative and would silently widen with "
+                f"every new {Regime.__name__} member."
+            )
+        regime = playbook.condition.regime
+        if not domain.is_competent(regime):
+            raise StrategyIncompetent(
+                f"{playbook.ref} activates in {regime.value!r}, which is outside "
+                f"the declared competence of {playbook.strategy_id}:"
+                f"{playbook.strategy_version} (valid: "
+                f"{sorted(r.value for r in domain.valid)}; invalid: "
+                f"{sorted(r.value for r in domain.invalid)}). A playbook that "
+                f"activates where its strategy declared itself incompetent is a "
+                f"strategy being asked to do the one thing it recorded that it "
+                f"cannot do."
+            )
 
     def registered(self) -> tuple[str, ...]:
         return tuple(self._playbooks)
@@ -1125,3 +1183,203 @@ def build_measured_playbook(
         evidence=sources,
         sizing_basis=basis,
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Domain of competence  (architecture section 2, Layer 9)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# "Every strategy/model has: DomainOfCompetence" -- with the worked example
+#
+#     valid:   TREND_UP  NORMAL_VOL  HIGH_LIQUIDITY
+#     invalid: EARNINGS  FLASH_CRASH  LIQUIDITY_CRISIS
+#
+# This is the one clause of Layer 9 with no implementation anywhere in the tree,
+# which the goal registry audit recorded as an outstanding gap under G100 rather
+# than letting it pass as claimed. It is built here.
+#
+# The clause is NOT satisfied by `RegimeCondition`, which is the tempting thing
+# to point at. The two answer different questions:
+#
+#   RegimeCondition       WHEN does this playbook fire?  bounds arithmetic,
+#                         evaluated per observation, one playbook.
+#   DomainOfCompetence    WHERE is this strategy valid?  membership in a named
+#                         set, one strategy across every playbook it owns.
+#
+# So a competence declaration is deliberately *not* a field on `Playbook`. If it
+# were, two playbooks binding the same strategy could declare different
+# competences, and the question "may this strategy trade in a crisis?" would have
+# no single answer -- it would depend which playbook the router happened to be
+# holding. A strategy has one competence or the concept is not a concept.
+
+
+class CompetenceNotDeclared(RuntimeError):
+    """A playbook bound to a strategy that has declared no competence."""
+
+
+class StrategyIncompetent(RuntimeError):
+    """A playbook would activate outside its strategy's declared competence."""
+
+
+class InconsistentCompetence(ValueError):
+    """A competence declaration that contradicts itself."""
+
+
+class DomainOfCompetence(BaseModel):
+    """The named states in which one strategy is permitted to operate.
+
+    Competence is **opt-in**: :meth:`is_competent` is true only for a regime the
+    strategy explicitly listed. A regime that appears in neither list is
+    incompetent.
+
+    That is the load-bearing decision, and it is the opposite of the intuitive
+    one. If an unlisted regime were treated as permitted, then `valid` would be
+    decorative and `invalid` would be the only real contract -- and the set of
+    regimes a strategy may trade in would silently widen every time a new
+    `Regime` member was added to this module. A refusal is not the absence of a
+    permission, so the safe reading is that nothing is permitted.
+
+    Why `invalid` exists at all, given unlisted is already a refusal: it makes
+    the refusal *specific*. Without it, a refusal in CRISIS and a refusal in an
+    unrelated regime are indistinguishable in the operator's log, which is the
+    "nothing happened is a finding" problem this module treats as a defect. An
+    explicitly invalid regime is one the strategy has recorded going wrong, and
+    saying so is worth more than a generic "not permitted".
+    """
+
+    model_config = {"frozen": True}
+
+    #: Regimes the strategy operates in. Must be non-empty.
+    valid: frozenset[Regime]
+    #: Regimes the strategy has recorded as unsafe for itself. Disjoint from
+    #: `valid`; a regime cannot be both.
+    invalid: frozenset[Regime] = frozenset()
+
+    @model_validator(mode="after")
+    def _must_claim_something(self) -> DomainOfCompetence:
+        """A strategy competent in no state is a different claim, and is refused.
+
+        ``valid=()`` with an empty ``invalid`` describes a strategy that is
+        everywhere forbidden. That is a legitimate thing to want, but it is not
+        a domain of competence, and letting it through would mean an empty
+        declaration could not be distinguished from a forgotten one.
+        """
+        if not self.valid:
+            raise InconsistentCompetence(
+                "a domain of competence must name at least one valid regime. An "
+                "empty valid set describes a strategy forbidden everywhere, "
+                "which is a different statement from one that was never written."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _must_not_contradict_itself(self) -> DomainOfCompetence:
+        """A regime cannot be both valid and invalid.
+
+        Rejected at declaration rather than resolved at use. If `invalid` were
+        allowed to override `valid`, a typo in either list would resolve silently
+        to the more permissive reading, and a self-contradicting declaration
+        would be indistinguishable from a coherent one. Failing here means the
+        contradiction is reported where it can still be fixed.
+        """
+        both = self.valid & self.invalid
+        if both:
+            raise InconsistentCompetence(
+                f"regime(s) {sorted(r.value for r in both)} declared both valid "
+                "and invalid. Competence cannot be both permitted and refused; "
+                "a declaration that says so is a contradiction, not a priority."
+            )
+        return self
+
+    def is_competent(self, regime: Regime) -> bool:
+        """True only for an explicitly valid regime."""
+        return regime in self.valid
+
+    def refusal(self, regime: Regime) -> str:
+        """Why this strategy may not operate in ``regime``.
+
+        Distinct messages for the two refusal kinds, because the operator
+        reading them is debugging different problems: "I said this was unsafe"
+        is a strategy that has learned something, and "I never claimed this" is
+        a gap in coverage. Both refuse, and both say which.
+        """
+        if regime in self.invalid:
+            return (
+                f"{regime.value} is explicitly outside this strategy's "
+                "competence, having been recorded as unsafe for it"
+            )
+        if regime not in self.valid:
+            unclaimed = sorted(r.value for r in self.unaddressed())
+            return (
+                f"{regime.value} is not a regime this strategy declared "
+                f"competence for; unaddressed regimes: {unclaimed}"
+            )
+        return ""  # not a refusal
+
+    def unaddressed(self) -> frozenset[Regime]:
+        """Regimes this declaration is silent about.
+
+        Exposed so coverage can be audited rather than assumed. A declaration
+        naming one of five regimes is not wrong, but it is worth being able to
+        see that it is silent about the other four.
+        """
+        return frozenset(Regime) - self.valid - self.invalid
+
+    def coverage(self) -> tuple[frozenset[Regime], frozenset[Regime]]:
+        """``(valid, unaddressed)`` -- what is permitted and what is silent."""
+        return self.valid, self.unaddressed()
+
+
+class StrategyCompetence:
+    """One :class:`DomainOfCompetence` per strategy, immutable once declared.
+
+    Keyed by ``(strategy_id, strategy_version)`` because that is the identity the
+    certification oracle uses, and competence must not be looser than
+    certification. A strategy's competence is fixed at declaration and never
+    amended: changing it is declaring a new strategy version, exactly as changing
+    a playbook's policy is a new playbook version with a new verdict. That is
+    what lets `PlaybookRouter._check_competence` run once at admission and stay
+    correct.
+    """
+
+    def __init__(
+        self, declarations: Mapping[tuple[str, str], DomainOfCompetence] | None = None
+    ) -> None:
+        self._by_strategy: dict[tuple[str, str], DomainOfCompetence] = dict(
+            declarations or {}
+        )
+
+    def declare(
+        self,
+        strategy_id: str,
+        strategy_version: str,
+        domain: DomainOfCompetence,
+    ) -> DomainOfCompetence:
+        """Record a strategy's competence, or refuse to change it."""
+        key = (strategy_id, strategy_version)
+        existing = self._by_strategy.get(key)
+        if existing is not None and existing != domain:
+            raise InconsistentCompetence(
+                f"{strategy_id}:{strategy_version} already declared competence "
+                f"valid={sorted(r.value for r in existing.valid)} / "
+                f"invalid={sorted(r.value for r in existing.invalid)}, and a "
+                "different one cannot replace it. Widening or narrowing what a "
+                "strategy may trade in is a new strategy version with a new "
+                "verdict, not an edit -- otherwise the same strategy_id would "
+                "mean two different things at two points in one replay."
+            )
+        self._by_strategy[key] = domain
+        return domain
+
+    def for_strategy(
+        self, strategy_id: str, strategy_version: str
+    ) -> DomainOfCompetence | None:
+        """The declared competence, or ``None`` if never declared.
+
+        ``None`` is meaningful and not a lookup miss: it is the answer that
+        makes the router refuse, because competence is opt-in.
+        """
+        return self._by_strategy.get((strategy_id, strategy_version))
+
+    def declared(self) -> tuple[tuple[str, str], ...]:
+        return tuple(sorted(self._by_strategy))
