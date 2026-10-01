@@ -8,6 +8,16 @@ dist/
 .venv/
 venv/
 
+# Generated supply-chain artifact. `scripts/sbom.py` writes it to the repository
+# root; it is derived entirely from requirements.lock, and
+# tests/test_supply_chain.py asserts both that its component set matches the lock
+# exactly and that its output is byte-stable. Committing it would be a derived
+# duplicate that no reader needs, so it is generated on demand instead. Ignored
+# rather than committed for a second reason: the release archive ships
+# `scripts/sbom.py` and not `sbom.json`, so the generator travels and the product is
+# rebuilt.
+sbom.json
+
 # Caches
 .pytest_cache/
 .mypy_cache/
