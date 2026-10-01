@@ -31,6 +31,7 @@ import type {
   MarketCandles,
   MarketInstrument,
   ModelVersion,
+  RegistryModel,
   Order,
   Pnl,
   PlatformEvent,
@@ -161,6 +162,18 @@ export const intelligenceApi = {
 
 export const modelsApi = {
   models: () => http.get<{ available: boolean; models: ModelVersion[] }>(`${v1}/models`),
+  /**
+   * The governance view's endpoint.
+   *
+   * `/models` returns raw ModelRegistry.list_versions() output, which does not
+   * carry `evaluation_metrics` -- the field the claim gate reads. `/models/registry`
+   * is reshaped for exactly this purpose and returns
+   * `{available: false, models: []}` rather than a fabricated roster.
+   */
+  registry: () =>
+    http.get<{ available: boolean; models: RegistryModel[]; reason?: string }>(
+      `${v1}/models/registry`,
+    ),
   evaluations: () => http.get<{ evaluations: EvaluationRecord[] }>(`${v1}/evaluations`),
 };
 

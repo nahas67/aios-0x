@@ -356,6 +356,27 @@ export interface ModelVersion {
   per_symbol?: Record<string, unknown>;
 }
 
+/**
+ * A row from `/api/v1/models/registry`.
+ *
+ * Distinct from `ModelVersion` because it is a different endpoint's shape, not
+ * a rename: the registry view reshapes `list_versions()` into an id/name pair
+ * and answers `{available: false, models: []}` when nothing is wired. The
+ * governance view reads this one, because `/models` does not carry
+ * `evaluation_metrics`, which is the field the claim gate needs.
+ */
+export interface RegistryModel {
+  id: string;
+  name: string;
+  version: string;
+  status?: string | null;
+  model_type?: string | null;
+  artifact_hash?: string;
+  created_at?: string | null;
+  evaluation_metrics?: Record<string, unknown>;
+  walk_forward?: Record<string, unknown>;
+}
+
 export interface EvaluationRecord {
   evaluation_id: string;
   subject_type: string;

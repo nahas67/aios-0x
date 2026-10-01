@@ -245,19 +245,28 @@ is removed.
 
 ## 3. Defects found and fixed in this cycle
 
-Forty. Twenty-seven were found by a test written to assert the property, not by
-inspection — the point of writing the test first. The other thirteen (#28–#40)
+Forty-two. Twenty-seven were found by a test written to assert the property, not by
+inspection — the point of writing the test first. The other fifteen (#28–#42)
 were found by *running the artifact* rather than reading it: building the image,
 starting the container, calling the release packager, standing up PostgreSQL and
-NATS, and model-checking the TLA+ specs.
+NATS, model-checking the TLA+ specs, and diffing the frozen architecture against
+the tree.
 
 That split is the finding worth carrying forward. A green Python suite says
 nothing about whether a Dockerfile flattens your package layout, whether your
 interpreter was the one the code actually has to run on, whether a second
-process can see what you wrote, or whether the specification you shipped is the
-one the model checker accepts. Every defect from #28 on was invisible to the
-suite — not because the suite was weak, but because the suite could not see
-those dimensions.
+process can see what you wrote, whether the specification you shipped is the
+one the model checker accepts, or whether a dashboard is showing you numbers
+anyone measured. Every defect from #28 on was invisible to the suite — not
+because the suite was weak, but because the suite could not see those
+dimensions.
+
+**#42 is the sharpest version of that.** A 92.6% benchmark accuracy sat in the
+product's own UI, in a view that called no endpoint, while the API it needed was
+implemented, typed, and served. Nothing in CI could catch it: the backend tests
+passed because the backend was honest, and there are no component or view tests
+in the frontend at all. **An honest backend does not make an honest frontend**,
+and a suite that only tests the former will never notice the latter.
 
 | # | Defect | Consequence had it shipped |
 |---|---|---|
@@ -301,6 +310,8 @@ those dimensions.
 | 38 | No durable sink actually committed | All four PostgreSQL sinks wrapped their INSERT in `conn.transaction()` and returned without committing. `transaction()` brackets a statement; it does not commit it. With autocommit off, each row stayed inside its connection's open transaction — visible to that store's own reads, invisible to every other connection, and discarded on close. The playbook store's docstring promises "a restart loses the router's memory, not its policies"; a restart lost every policy. Every in-process test passed because every in-process test read through the same connection that wrote — **the one vantage point that cannot observe this defect.** `tests/test_pg_durability.py` counts rows from a second connection |
 | 39 | Every TLA+ property was mis-shaped for TLC, and two were unsound | G220 recorded that TLC "could not be run here" because no JVM existed. True, and avoidable — TLC runs in a container, so no Java toolchain needs admitting to a Python project. Running it refuted the specs: an `INVARIANT` must be a state predicate (four were not), `[]` demands an action of the form `[A]_v` (two were not), and **"every event eventually reaches an ending" is simply false** — because `Spec` uses `[Next]_vars`, an infinite stuttering trace is legal, so no liveness property holds. That claim is removed rather than repaired. Replaced by what a bounded-retry queue actually guarantees and TLC can check: retries are capped. `ENABLED` replaced the terminality claims, which is also stronger — it covers an action added later |
 | 40 | A vacuity check found `HashBindsKey` weaker than it looked | Removing the `hashOk` guard from `FailPermanent` left it satisfied, because that action never sets `applied`. It asserted a mismatched event is not applied *if it happens to be dead lettered*, not that it can never be applied. `MismatchIsNeverApplied` carries the real weight. A second mutation (requeueing a dead letter) was caught by `DeadLetterTerminal`, confirming that one is not vacuous. **A property that cannot fail is not evidence** — both mutations were reverted after the check |
+| 41 | The kill switch never cancelled open orders | `CONSTITUTION.md` §2.2 mandates **cancel → flatten → halt**; the code did two of the three. `DurableOrderManager.cancel` and `cancel_all_orders` both existed and both were reachable from the runner (`self.oms`, built at `replay_runner.py:409`) — nothing invoked them. An order placed before the emergency could still fill, `apply_fill` has no emergency guard, and `locked_out` gates only *new* submissions (`execution.py:130`). So the system could take on exposure after an emergency stop. Found by reading §2.2 against the implementation, after the architecture named `kill switch` as a required assurance target that had no spec |
+| 42 | `ModelGovernanceWorkspace.tsx` rendered a wholly fabricated registry | Four invented models, weights hashes, latencies, context lengths, evaluation dates, a system prompt hash, a sampling temperature, and **"BENCHMARK ACCURACY: 92.6% AVERAGE"** — with no backend call behind any of it. `modelsApi`/`evaluationsApi` existed, were typed, and were served on two routes; neither was called. That is a direct breach of architecture §11 (a claim needs 14 companions), of `core/claim_gate.py` (the implementation of exactly that rule), and of §3 Honesty Law 1. The backend was already honest — `models_registry_view` returns `{available: false, models: []}`, documented *"never a fabricated roster"* — so the lie was entirely client-side, which is the more expensive kind: a lying server can be diffed, and a lying client looks exactly like a working feature. Rewritten to read the endpoint, with `tests/test_model_governance_contract.py` pinning the backend side so a future "helpful" placeholder roster cannot be added silently |
 
 Three of these deserve emphasis. **#10** is the class of bug that makes a
 statistic meaningless while looking perfectly healthy: PBO returned 1.0 for
