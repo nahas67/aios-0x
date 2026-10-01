@@ -908,7 +908,7 @@
         "G050",
         "G210"
       ],
-      "summary": "OPA/Rego policy, sandboxed AI zones, OpenBao secrets, SBOM, vulnerability scanning, and signed releases.",
+      "summary": "Signed policy bundles in place of OPA/Rego (G050), a byte-stable CycloneDX SBOM covering exactly the resolved lock, releases self-verifying by SHA256 manifest, and secret hygiene pinned by tests (no tracked .env, no key material, valueless secret-named example vars). Named here because the previous summary listed them as delivered: OPA/Rego was deliberately REPLACED rather than implemented, and live vulnerability scanning, OpenBao, and sandbox zones have no implementation in this tree. Release signing is a third thing again and is deliberately not called either: signatures are applied in CI over the manifested bytes, and that pipeline has not been executed here, so signing is UNVERIFIED rather than absent. The SHA256 manifest in the tree is integrity, not authenticity. A registry that names a capability the tree does not contain is a wishlist; see defects #48 and #65.",
       "gates": [
         {
           "check": "lint:scripts/anti_pattern_lint.py",

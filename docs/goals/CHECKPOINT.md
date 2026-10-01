@@ -1,7 +1,13 @@
 # AIOS-0X vNext — Checkpoint
 
 **Program:** 13 workstreams (W0–W12), 25 goals (G010–G250), derived from
-`ARCHITECTURE.txt` and 28 externally reviewed repositories.
+`ARCHITECTURE.txt` and 28 externally reviewed repositories. **`ARCHITECTURE.txt` is
+not in this repository and is not version-controlled** — it sits beside the working
+tree, so every `§` anchor below (2 Layer 9, 3E, 11, 14) is verifiable only by someone
+holding that file. Stated here rather than left implicit because the document's
+central scope claim — what the architecture *requires* — rests on a file a reader
+cannot check. `CONSTITUTION.md` and the two in-tree architecture documents are
+tracked, and every section reference to those resolves.
 
 **Authority:** `docs/goals/goals.json` is the source of truth for goal status;
 `tests/test_goal_registry.py` enforces its rules. This file is a human summary
@@ -18,7 +24,8 @@ first, so a wrong one is worse than none -- is the reason it is said in words ra
 approximated. Last verified at `85163ba` plus this block.
 
 - **Full suite hermetic** (no `AIOS_TEST_PG_DSN` / `AIOS_TEST_NATS_URL`) —
-  `1612 passed, 12 skipped, 76 deselected` (exit 0). Of 1750 tests in the tree, the hermetic selection collects 1623 (`--collect-only`; the run's junit `tests`
+  `1612 passed, 12 skipped, 76 deselected` (exit 0). Of the 1700 tests collected with no
+  live backend, the hermetic selection collects 1623 (`--collect-only`; the run's junit `tests`
   attribute reads 1624, since one collected test is itself a skip).
   This is the authoritative current number, and it is the one CI runs.
 - **Full suite with PostgreSQL *and* NATS JetStream up** — `1750 passed, 1 skipped`
@@ -30,7 +37,7 @@ approximated. Last verified at `85163ba` plus this block.
   in `pyproject.toml` combines with an explicit `-q` into `-qq`, which prints no summary
   line at all — a figure scraped that way is a figure nobody read.
 
-  The gap between the two figures is **not** just the marker. Of 1750 collected, 76 are excluded by `-m "not integration"` and
+  The gap between the two figures is **not** just the marker. Of 1751 collected with a live backend, 76 are excluded by `-m "not integration"` and
   **51 are not collected at all without a live backend** — they are the parity suites,
   which is the same shape as defects #33–#36 and #52: a test that cannot run on one tier
   quietly stops being the test its name claims. Verified by diffing collected ids with
@@ -135,7 +142,7 @@ instead of averaging, output a proposal that cannot be submitted anywhere.
 with queue, partials, and impact over a closed-form fixture, comparing
 20/50/100/200 ms with latency as the only variable. **G200 (Arena)** is the
 eighteenth: promotion gates measured result plus identified human, with no
-overrule and no repeats. **G210 (Trace Continuity)** is the nineteenth:
+overrule and no repeats. **G210 (Trace Continuity and Observability)** is the nineteenth:
 eleven canonical stages, one id threaded from plan to outbox to governed
 call, gaps reported instead of filled.
 
@@ -145,7 +152,7 @@ are now genuinely model-checked** — `scripts/run_tlc.ps1` runs TLC in a
 container, so no Java toolchain is admitted to a Python project. OrderLifecycle
 explores 42 distinct states to depth 4; Outbox 13 to depth 7. Running them
 refuted several properties, including one that was simply false; see defect #39.
-**G230 (Supply Chain)** is the
+**G230 (Governance, Security and Supply-Chain planes)** is the
 twenty-first: generated SBOM covering exactly the lock, self-verifying
 releases by manifest, and a tree with no secrets in it.
 
@@ -156,8 +163,8 @@ What remains is `BLOCKED`: two goals no engineering completes.
 
 ## 2. Completed in this cycle
 
-Eight workstreams were executed in order, each one making the previous one
-load-bearing. Every item below is enforced by a test that fails if the property
+Six workstreams and one follow-on were executed in order, each making the previous
+one load-bearing. Every item below is enforced by a test that fails if the property
 is removed.
 
 ### W0 — Contract freeze *(gates everything)*
@@ -165,10 +172,12 @@ is removed.
 - **Goal registry** — `docs/goals/goals.json` + `docs/goals/README.md`. The
   repository previously contained **zero** `G0xx` tokens in any file, so "is G040
   done?" had no authoritative answer. 25 goals with status, gates, evidence.
-- **Registry validator** — 17 tests. The load-bearing one: `LANDED` requires
+- **Registry validator** — 19 tests. The load-bearing one: `LANDED` requires
   evidence paths that exist, and G080/G120 are cross-checked against source, so
   a document cannot promote a goal without code behind it.
-- **Authority-chain tests** — 61 tests, `tests/test_authority_chain.py`. I1–I10
+- **Authority-chain tests** — 54 tests in `tests/test_authority_chain.py` plus 7 in
+  `tests/test_architecture_boundaries.py`; 61 was never the count of the file named.
+  I1–I10
   as static source analysis: no LLM import or aliased call in the deterministic
   core, no venue call from the intelligence plane, cap guards must compare `>`
   not `<`, role-checked lockout release, no in-place `UPDATE` on claims, no
@@ -180,8 +189,8 @@ is removed.
 - **Statistical claim gate** — `core/claim_gate.py`, 20 tests. 14 required
   provenance fields; a bare accuracy figure cannot be presented as a result.
   A measured `0` counts as supplied, `None`/`""`/`NaN` do not.
-- **mypy widened** 80 → 109 files, closing the regression gap `CHECKPOINT.md:59`
-  recorded as manual. Now 118.
+- **mypy widened** 80 → 109 files, closing the regression gap recorded as manual.
+  Now **145 files**, which is the list CI checks.
 - **License + dependency policy** — `docs/LICENSES.md`, `docs/DEPENDENCY_POLICY.md`.
   Strong copyleft is inadmissible as a runtime dependency; a CI check enforces it.
 - **`.deepeval/`** — empty directory advertising a harness that did not exist;
@@ -202,7 +211,7 @@ is removed.
   is evidence.
 - Corporate action engine with **back-adjustment relative to an explicit anchor**
   and exactly invertible transforms.
-- Migration v3, DDL for both dialects. 46 + 18 tests.
+- Migration v3, DDL for both dialects. 47 + 19 tests.
 
 ### W2 — Point-in-Time Data Fabric
 
@@ -211,14 +220,14 @@ is removed.
   future **or unknown**. An unknown timestamp is not "probably fine"; it is the
   absence of the required proof.
 - `DataProvenance.available_at` as the PIT join key, distinct from
-  `retrieved_at`. `DatasetVersion.is_pit_qualified()`. 20 tests.
+  `retrieved_at`. `DatasetVersion.is_pit_qualified()`. 19 tests.
 
 ### W3 — Evidence Fabric + Claim Ledger
 
 - Content-addressed `SourceArtifact`, hash verified **on read**.
 - Append-only `Claim`; supersession inserts, never updates.
 - `confidence=1.0` requires two independent refs; duplicates do not count.
-- Evidence refs capped at 8. 22 tests.
+- Evidence refs capped at 8. 23 tests.
 - This closes the gap all three reviewed research repos left open: no persisted
   claim → source → page → quote chain a verifier can re-check.
 
@@ -290,8 +299,8 @@ is removed.
 
 ## 3. Defects found and fixed in this cycle
 
-Sixty-four. Twenty-seven were found by a test written to assert the property, not by
-inspection — the point of writing the test first. The other twenty (#28–#64)
+Sixty-eight. Twenty-seven were found by a test written to assert the property, not by
+inspection — the point of writing the test first. The other thirty-seven (#28–#68)
 were found by *running the artifact* rather than reading it: building the image,
 starting the container, calling the release packager, standing up PostgreSQL and
 NATS, model-checking the TLA+ specs, and diffing the frozen architecture against
@@ -379,6 +388,10 @@ and a suite that only tests the former will never notice the latter.
 | 62 | The fix for #59 was verified at the layer it was written, not the layer it was for | Both all-invalid tests called `competence_from_verdict` **directly**. The defect was never in that function — it raised correctly and the message was right; the defect was that `competence_resolver` collapsed its raise into the same `None` the absent-decomposition case returns, and no test passed an all-invalid verdict to the resolver. Widening `except ValueError` to `except Exception` — the tidy-up a future editor would plausibly make — restored the swallowing and left the suite green, so the hole was found by mutation rather than by reading. The gap was in the SEAM between two functions, which is where the bug actually was. Two tests now drive the case through the resolver, in both directions, because a change that made it propagate everything would also pass the first. **The general form, and the seventh time this cycle**: a green suite plus a mutation check reporting 6 of 7 still left the load-bearing property untested |
 | 63 | `load_router` rebuilt the router with the Layer 9 gate silently off | Three `PlaybookRouter` construction sites existed. Two were wired with derived competence when the gap was closed; this one was missed, and it is the one most likely to be reached for — the function whose entire docstring is about production restarts, rebuilding from the durable store after a process dies. Worse than a missing parameter: `load_router` populates `router._playbooks` **directly** rather than through `register()` — deliberately, since the store is the source of truth after a restart — and that insertion meant `_check_competence`, which `register()` calls, ran on **no path through the function at all**. So the obvious fix, adding a `competence=` parameter, would have been **inert**: a caller could pass a fully enforcing resolver and receive none, with nothing to indicate it. Found by reading the function while checking an independent review's *declined-to-judge* list, which had it right on the narrow point (nothing in production calls it) and the wrong question. Both halves now present, with the check called explicitly, and the `None` default documented as disabling the gate rather than left to be assumed. Not wired, because nothing calls it: inventing a restart path would be the duplication `docs/DEPENDENCY_POLICY.md` refuses, so the parameter is here and the gap is named. Three mutations aimed at it and all three caught, including the check moved into the `else` branch — the shape a careless edit takes, and one that would leave every “a playbook was refused” test green |
 | 64 | Running the documented SBOM step left the tree dirty | `scripts/sbom.py` writes `sbom.json` to the repository root by default, and it was not in `.gitignore`, so a verification step left an untracked file behind. Found by re-running the steps the block asserts rather than copying its previous figures forward — the same act that caught two wrong figures in the same pass. It matters more than untidy: the block asserts "working tree clean" as a measured fact, and **a cleanliness signal that the documented procedure breaks is not a signal**. Ignored rather than committed, on the dependency policy's own terms — the SBOM is fully derived from `requirements.lock`, with `test_sbom_covers_exactly_the_lock` asserting the component set matches and `test_sbom_is_byte_stable` asserting the output is reproducible byte for byte, so a committed copy carries no information the lock does not. The counter-argument was checked rather than assumed: `package_release.py` does not reference it, and the archive ships `scripts/sbom.py` and NOT `sbom.json`, so the means of production already travels and the product is rebuilt. Verified by running the step and asking git, not by reading `.gitignore` |
+| 65 | G230's `LANDED` summary named five deliverables the tree does not contain | Its summary read "OPA/Rego policy, sandboxed AI zones, OpenBao secrets, SBOM, vulnerability scanning, and signed releases" while its OWN notes said "OPA was deliberately replaced by signed policy bundles" and listed live scanning among things "explicitly deferred, not pretended". The registry contradicted itself, which is the defect #48 was closed for on G220 **in the same commit that corrected G220's summary**; G230 was missed. Counted first-party only, since the initial count was polluted by an unrelated untracked `.vt-study/` directory: policy bundles present (4 files), CycloneDX present (4), SHA256 manifest present (2), **cosign/sigstore zero**, one prose mention of a scanner and none that runs. Rewritten to be true in three directions -- shipped, absent, and UNVERIFIED -- because signing is applied in CI, which cannot be executed here, so calling it unimplemented would have been its own false claim in the opposite direction. **The fix for this row then broke a test**, which is the part worth keeping: explaining the unverified case, I wrote "no GitHub activity is permitted" into the summary, and `test_goals_do_not_name_artifacts_the_code_lacks` failed -- correctly, since a goal naming an artifact the code lacks is the defect this row is about. Loosening that test to tolerate a mention in a negative context was the wrong repair: a rule that cannot tell a claim from a disclaimer is not a rule. Said the same thing without the noun instead. An audit found one defect, its repair produced a second, and the suite caught the second |
+| 66 | The document's last line said the work was uncommitted | "**Nothing is committed.** 49 files are modified or new on `feat/command-center-ui` with a clean tree otherwise. Commit and review before proceeding further." Reality: 139 commits on `main`, 497 tracked files, clean tree, and that branch 0 ahead and 38 behind. It was the **last line of the document**, which is where a skimming reader lands, and it was the single most misleading sentence in the file -- a reader would have believed the cycle's work was unsaved and started by committing it. Found by an independent audit of the document against the tree rather than by reading it, which is the point: I had read this file dozens of times this cycle and never noticed a sentence that was wrong in the most consequential direction available |
+| 67 | A figure was corrected in the headline and left wrong in the body | KillSwitch's TLA+ search depth was given as 4 in section 4 and 11 in the verified block. I corrected the block at `899f442` and left section 4 alone -- **the same incomplete correction as #63, one commit later**, and the second time in a row, which is what makes it a shape rather than an accident. A figure corrected in one place and not another is worse than a figure wrong everywhere: a reader who finds the corrected one concludes the document is reliable and stops checking, and the stale copy is the one that survives grep. Found by the same audit, along with `Reconciliation` being missing from section 4's spec list while named in the block above |
+| 68 | Ten test counts in this document were never true, and nothing pins any of them | Registry validator 17→19, authority-chain 61→54 (61 was 54 plus 7 from a file it did not name), security master 46→47, corporate actions 18→19, PIT fabric 20→19, claim ledger 22→23, experiment sink 30→34, playbook derivation 33→35, frontend decisions 18→20, and "Of 1750 tests in the tree" where the tree collects 1700 without a live backend and 1751 with one. Recounted with `pytest --collect-only`, which sees parametrised tests a `def test_` grep cannot, so a grep would have been wrong in the other direction too. Two of the ten were found by ME, not the audit: the frontend count I had myself made stale, and a count my own script asserted from memory that the document never claimed. **The general form: an inventory of figures in prose is unpinned data.** Nothing fails when one drifts, so every one of them is a small lie that survives indefinitely, and the whole class collapses at once when someone finally runs the inventory against the tree |
 
 Three of these deserve emphasis. **#10** is the class of bug that makes a
 statistic meaningless while looking perfectly healthy: PBO returned 1.0 for
@@ -550,7 +563,7 @@ reproducibility hash deliberately excludes `parent_id` and `result`: lineage is
 navigational and a result is an output, so hashing either would make identical
 configurations differ by how they were reached.
 
-**The ledger is durable** (`core/experiment_sink.py` + migration v5, 30 tests in
+**The ledger is durable** (`core/experiment_sink.py` + migration v5, 34 tests in
 `tests/test_experiment_sink.py`). Same enforcement shape as the governance
 ledger, adapted: one event per transition carrying the full run snapshot, with
 current state as the latest event per experiment. Append-only is enforced by
@@ -655,7 +668,7 @@ be traded right now* — and passing the whole registry would put `approve`,
 means the firewall and the router have now been observed refusing the same
 strategy for the same reason, on the same object, with nothing stubbed.
 
-**The size is derived, not supplied** (33 tests in
+**The size is derived, not supplied** (35 tests in
 `tests/test_playbook_derivation.py`). `publish_playbook` no longer takes an
 `action` parameter at all — there is no argument for a caller under deadline to
 reach for. The size is `required_notional / book`, the mandate's own number,
@@ -713,7 +726,7 @@ sorted symbol). Divergence beyond 5 points of weight raises
 Inputs validated (dispersion required, zero-vol refused, asymmetric covariance
 refused); caps refuse rather than rescale when they cannot fit.
 
-Remaining for G130: a real optimizer (zero occurrences of `pypfopt`, `skfolio`,
+Recorded as not owed rather than remaining: a real optimizer (zero occurrences of `pypfopt`, `skfolio`,
 `riskfolio`).
 
 **The firewall engine is built** (`core/authorization.py`,
@@ -814,8 +827,12 @@ TLC in a throwaway container — the JDK image and `tla2tools.jar` are cached by
 Docker and neither is vendored into the repository, because a build input is not
 source and a 2 MB binary in git is exactly what the release packager refuses.
 
-Verified results: OrderLifecycle 70 states generated / 42 distinct / depth 4;
-Outbox 16 / 13 / depth 7; KillSwitch 88 / 48 / depth 4. No property violated.
+Verified results, all four specs, re-measured: OrderLifecycle 70 states generated /
+42 distinct / depth 4; Outbox 16 / 13 / depth 7; KillSwitch 88 / 48 / depth **11**;
+Reconciliation 793,036 / 1,494 / depth 3. No property violated. *KillSwitch's depth
+was given as 4 here and is 11, and `Reconciliation` was missing from this list while
+being named in the verified block above. Correcting the headline and leaving the
+body is defect #63's shape, repeated.*
 The specs were wrong when first run and are now correct: an `INVARIANT` must be
 a state predicate, `[]` needs an action of the form `[A]_v`, terminality is
 stated with `ENABLED` (stronger than the original claim), and the liveness
@@ -830,8 +847,13 @@ mandate. It refuted the spec on its first run, correctly, and the bug was in the
 spec: `EngageHalt` was guarded on exposure alone, letting the model reach the
 halt with a live order still open. Following that thread back to the code is what
 found defect #41. The architecture names eight targets for formal properties and
-two were covered; `KillSwitch` is the third, and the remaining five — fills,
-partial fills, duplicate deliveries, reconciliation, failover — are still owed.
+**four are modelled and one of the remaining four is deliberately not.** Fills,
+partial fills and duplicate deliveries are covered by `OrderLifecycle` and `Outbox`;
+`Reconciliation` has its own spec. Only `failover` is outstanding, and it is
+outstanding by decision rather than omission — one bare word in the source, no scope,
+no layer, no acceptance criterion (#48). *This said the remaining five were still
+owed, which contradicted line 51 of this same file: a reader who found both had no
+way to tell which was current.*
 
 **Supply chain enforced locally** (`scripts/sbom.py`,
 `tests/test_supply_chain.py`): byte-stable CycloneDX covering exactly the
@@ -896,10 +918,18 @@ at the top; the list below is what is genuinely outstanding.
    load-bearing and says nothing about the properties I did not think of -- and the
    coverage of one's imagination is not a property. That lesson is now the most
    repeated in this file and is stated as a rule in #53.
-   **Still open, deliberately:** `competence=` is wired nowhere in production, so the
-   Layer 9 gate enforces nothing outside tests; and one NIT is unfixed -- an
-   unreachable carry-through branch in `reconcileExecutive`, which the hook cannot
-   reach because it always passes a constant. The review's third NIT, a FRAME AGE
+   **Closed since this was written.** `competence=` is now derived from the
+   certification verdict and wired at both production construction sites, and a third
+   site -- `load_router`, which rebuilds the router from the durable store -- turned
+   out to bypass the gate entirely because it inserts into `_playbooks` rather than
+   registering (defects #58, #60, #63). Two independent reviews then found seven more
+   defects in that work, including two that had shipped in it.
+   **One NIT genuinely remains,** restated precisely because the original wording
+   overstated it: `reconcileExecutive`'s carry-through branch is *covered by tests*
+   (20 of them), and what is true is narrower -- `useLiveExecutive` always passes the
+   `EMPTY_VIEW` constant as `current`, so the branch is unreachable *from the hook*.
+   That is not untested code, and threading real state would change no behaviour
+   today, so it is recorded rather than churned. The review's third NIT, a FRAME AGE
    readout that froze while the stream was parked, was classified as cosmetic and
    turned out not to be: it is the one readout whose job is to say how current the
    figure beside it is, so a stale number there is the failure section 3 is about.
@@ -920,13 +950,19 @@ at the top; the list below is what is genuinely outstanding.
    has: DomainOfCompetence") and nothing implemented it. Now
    `DomainOfCompetence` + `StrategyCompetence` in `kernel/playbook.py`,
    enforced once at admission by `PlaybookRouter`, with 28 mutation-checked
-   tests. **Kept on this list because of how it is wired, not because it is
-   missing:** enforcement is opt-in at the router, so
-   `PlaybookRouter(competence=None)` enforces nothing, and every existing
-   caller constructs it exactly that way. The capability is available and
-   correct but not switched on. Declaring competence for the real strategies
-   and wiring it at the composition roots is the outstanding part, and it is
-   a decision about which strategies are competent where rather than a build.
+   tests, plus 25 more for the derivation. **This entry's reason for staying on the
+   list was wrong in both halves, and the correction is the interesting part.**
+   It said the capability was "available and correct but not switched on" -- true
+   then, false now: it is derived and wired at every construction site. And it said
+   the outstanding work was "a decision about which strategies are competent where
+   rather than a build." It was not a decision at all. Certification already records
+   per-regime competence, as a `regime_sharpe:<regime>` check that passes only when
+   the regime is neither too thin to support a playbook nor losing money net of costs,
+   so the answer was *derivable* from the verdict already in hand. Deriving it beats
+   declaring it for a reason this file has circled before: a hand-declared competence
+   is the strategy approving itself, which is the circular version of the check. The
+   blocker was recorded as a decision because nobody had looked inside the verdict
+   to see that the decision had already been made.
 5. ~~SSE is unconsumed~~ -- **consumed** at `a165877`. `api/stream.ts` and
    `/api/v1/stream` were complete, correct and authenticated on both sides, and
    `startStream()` was never called, so the console polled for everything while
@@ -939,8 +975,8 @@ at the top; the list below is what is genuinely outstanding.
    assumed: a probe against a live server confirms the stream's `executive` has
    an identical field set to `GET /api/v1/executive` with every value agreeing,
    which is what lets a frame be used with no translation layer.
-   **Left partly open, stated rather than glossed:** the three decisions are
-   pure functions with 18 tests and six caught mutations, but the React
+   **Left partly open, stated rather than glossed:** the decisions are
+   pure functions with 20 tests and six caught mutations, but the React
    re-render wiring is untested, because the frontend has no
    `@testing-library/react`, no `jsdom` and no `happy-dom`. Only one consumer is
    wired (`SystemHealthWorkspace`, reporting feed status and snapshot
@@ -988,5 +1024,10 @@ These hold regardless of which workstream is next.
   a decision rather than a drive-by: moving them changes the plane map, so it
   should be its own change with its own review. The new `core/` modules in this
   cycle (`decision_sink.py`, `contamination.py`) import only `schemas/`.
-- **Nothing is committed.** 49 files are modified or new on `feat/command-center-ui`
-  with a clean tree otherwise. Commit and review before proceeding further.
+- **Everything is committed.** 139 commits on `main`, 497 tracked files, working tree
+  clean. `feat/command-center-ui` still exists and is 0 commits ahead and 38 behind
+  `main`, so it is superseded rather than pending. *This said the opposite —
+  "Nothing is committed. 49 files are modified or new" — and it was the last line of
+  the document, which is where a skimming reader lands. A status line decays exactly
+  as a figure does (#56); the difference is that nobody re-measures either unless
+  something forces them to.*
