@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 # Publish AIOS-0X to a PRIVATE GitHub repository, then verify the remote.
 #
-# Run this AFTER `gh auth login`. It performs the whole remaining Phase 5-8
-# sequence and refuses to proceed rather than guess if anything is unexpected.
+# Run this AFTER `gh auth login`. It performs the whole remaining publish and
+# verification sequence and refuses to proceed rather than guess.
 #
 # Safe by construction:
-#   - refuses to overwrite or delete an existing repository
-#   - refuses to replace an existing remote
+#   - refuses to overwrite a repository that already has content
+#   - refuses to replace a remote that already points elsewhere
 #   - no force-push anywhere
 #   - prints what it did at every step
+#
+# Idempotent: an empty repository that is already the origin is reused rather
+# than re-created, and a second run does nothing but re-verify. That matters
+# because a repository may legitimately have been created by hand beforehand --
+# creating `aios-0x-vnext` next to an existing empty `aios-0x` would leave two
+# half-populated repositories and a permanently confusing remote.
 #
 # Usage:  bash scripts/publish_private.sh [repo-name]
 
@@ -32,44 +38,53 @@ gh auth status >/dev/null 2>&1 || { echo "  REFUSING: gh not authenticated. Run:
 ACCOUNT="$(gh api user --jq .login)"
 echo "  authenticated as: $ACCOUNT"
 
-say "repository name"
-# Never overwrite. If the preferred name is taken, fall back to an unambiguous
-# variant rather than picking a name that might collide with something else.
-if gh repo view "$ACCOUNT/$REPO_NAME" >/dev/null 2>&1; then
-  REPO_NAME="${REPO_NAME}-vnext"
-  if gh repo view "$ACCOUNT/$REPO_NAME" >/dev/null 2>&1; then
-    echo "  REFUSING: both aios-0x and aios-0x-vnext already exist in $ACCOUNT."
-    echo "  Pass an explicit name: bash scripts/publish_private.sh <name>"
-    exit 1
+# Is the candidate repository already present, and does it hold anything?
+repo_state() {  # echoes: absent | empty | populated
+  if ! gh repo view "$ACCOUNT/$1" >/dev/null 2>&1; then echo absent; return; fi
+  if [ -z "$(git ls-remote --heads "https://github.com/$ACCOUNT/$1.git" 2>/dev/null)" ]; then
+    echo empty
+  else
+    echo populated
   fi
-  echo "  $ACCOUNT/aios-0x already exists; using $REPO_NAME instead"
-else
-  echo "  using $REPO_NAME"
-fi
+}
 
-say "remotes (refusing to replace one)"
-EXISTING="$(git remote)"
-if [ -n "$EXISTING" ]; then
-  echo "  existing remotes:"; git remote -v | sed 's/^/    /'
-  echo "  REFUSING: origin is already taken. Add the new repo under another"
-  echo "  remote name yourself, then push to it. Nothing was changed."
-  exit 1
-fi
-echo "  none; origin is free"
+say "destination repository"
+STATE="$(repo_state "$REPO_NAME")"
+case "$STATE" in
+  absent)
+    echo "  $ACCOUNT/$REPO_NAME does not exist; creating it PRIVATE"
+    gh repo create "$ACCOUNT/$REPO_NAME" \
+      --private \
+      --source=. \
+      --remote=origin \
+      --description "Investment operating system: authority chain, evidence fabric, deterministic quant core"
+    ;;
+  empty)
+    echo "  $ACCOUNT/$REPO_NAME already exists and is empty; reusing it"
+    CURRENT="$(git remote get-url origin 2>/dev/null || true)"
+    if [ -z "$CURRENT" ]; then
+      git remote add origin "https://github.com/$ACCOUNT/$REPO_NAME.git"
+      echo "  added origin"
+    elif [ "$CURRENT" != "https://github.com/$ACCOUNT/$REPO_NAME.git" ]; then
+      echo "  REFUSING: origin already points at $CURRENT. Nothing changed."
+      exit 1
+    else
+      echo "  origin already correct"
+    fi
+    ;;
+  populated)
+    echo "  REFUSING: $ACCOUNT/$REPO_NAME already has commits."
+    echo "  Pushing here would either collide or require a force-push. Neither"
+    echo "  happens. Choose another name if you really mean a second repository:"
+    echo "    bash scripts/publish_private.sh ${REPO_NAME}-vnext"
+    exit 1
+    ;;
+esac
 
-say "create (PRIVATE)"
-gh repo create "$ACCOUNT/$REPO_NAME" \
-  --private \
-  --source=. \
-  --remote=origin \
-  --description "Investment operating system: authority chain, evidence fabric, deterministic quant core" \
-  --push
-echo "  created and pushed"
-
-say "push remaining local refs (no force)"
-git push origin main --set-upstream
-git push origin feat/command-center-ui || echo "  note: feature branch push skipped"
-git push origin master       || echo "  note: master push skipped (pre-existing history, non-blocking)"
+say "push"
+git push --set-upstream origin main
+git push origin master              || echo "  note: master push skipped (non-blocking)"
+git push origin feat/command-center-ui || echo "  note: feature branch push skipped (non-blocking)"
 
 say "visibility (must be PRIVATE)"
 VIS="$(gh repo view "$ACCOUNT/$REPO_NAME" --json visibility --jq .visibility)"
@@ -77,16 +92,20 @@ echo "  visibility: $VIS"
 [ "$VIS" = "PRIVATE" ] || { echo "  REFUSING: repository is not private."; exit 1; }
 
 say "remote verification"
-echo "  local HEAD:            $(git rev-parse HEAD)"
-echo "  remote refs/heads/main: $(git ls-remote origin refs/heads/main | cut -f1)"
-if [ "$(git rev-parse HEAD)" = "$(git ls-remote origin refs/heads/main | cut -f1)" ]; then
+LOCAL_HEAD="$(git rev-parse HEAD)"
+REMOTE_MAIN="$(git ls-remote origin refs/heads/main | cut -f1)"
+echo "  local HEAD:             $LOCAL_HEAD"
+echo "  remote refs/heads/main: $REMOTE_MAIN"
+if [ "$LOCAL_HEAD" = "$REMOTE_MAIN" ]; then
   echo "  MATCH: local HEAD is on remote main"
 else
   echo "  MISMATCH: investigate before trusting the remote."; exit 1
 fi
 gh repo view "$ACCOUNT/$REPO_NAME" \
-  --json nameWithOwner,visibility,defaultBranchRef,url,isPrivate \
-  --jq '"  repo:        \(.nameWithOwner)\n  private:     \(.isPrivate)\n  default:     \(.defaultBranchRef.name)\n  url:         \(.url)"'
+  --json nameWithOwner,isPrivate,defaultBranchRef,url \
+  --jq '"  repo:    \(.nameWithOwner)\n  private: \(.isPrivate)\n  default: \(.defaultBranchRef.name)\n  url:     \(.url)"'
+echo "  remote refs:"
+git ls-remote origin | sed 's/^/    /'
 
 say "today's contributions"
 gh api graphql -f query='
