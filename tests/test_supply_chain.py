@@ -12,9 +12,11 @@ than pretended.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import io
 import json
 import re
+import shutil
 import tarfile
 from pathlib import Path
 
@@ -398,3 +400,290 @@ def test_env_example_carries_no_secret_values() -> None:
         assert value.strip().strip("\"'") in allowed, (
             f".env.example:{lineno} assigns {name.strip()} what looks like a real value"
         )
+
+# ══════════════════════════════════════════════════════════════════════════
+# Dependency lock gate (environment-independent)
+# ══════════════════════════════════════════════════════════════════════════
+
+
+ROOT = Path(__file__).resolve().parents[1]
+LOCK = ROOT / "requirements.lock"
+
+
+def _load_module():
+    """Import scripts/lock_dependencies.py as a module.
+
+    It is a script, not a package module, so it is loaded by path. Loading it once
+    per module keeps the tests honest about it being importable at all.
+    """
+    path = ROOT / "scripts" / "lock_dependencies.py"
+    spec = importlib.util.spec_from_file_location("_lockdep_under_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+lockdep = _load_module()
+EXTRAS = lockdep.DEFAULT_EXTRAS
+
+
+@pytest.fixture
+def sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A repository copy where the lock and pyproject can be corrupted freely.
+
+    `verify_lock` reads pyproject through a module-level constant, so it is
+    redirected rather than the real file being touched. The real `requirements.lock`
+    is never written by any test here.
+    """
+    (tmp_path / "requirements.lock").write_text(
+        LOCK.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    shutil.copy(ROOT / "pyproject.toml", tmp_path / "pyproject.toml")
+    monkeypatch.setattr(lockdep, "ROOT", tmp_path)
+    monkeypatch.setattr(lockdep, "PYPROJECT", tmp_path / "pyproject.toml")
+    monkeypatch.setattr(lockdep, "LOCK", tmp_path / "requirements.lock")
+    return tmp_path
+
+
+def _split_lock(text: str) -> tuple[list[str], list[str]]:
+    """(header lines, package lines).
+
+    `verify_lock` digests the PACKAGE lines only, so any test that rebuilds a lock
+    has to hash the same lines. An earlier version of the version-violation test
+    hashed the headers too, so its digest never matched and the test passed because
+    of a digest mismatch rather than because it detected the thing it names.
+    """
+    header, packages = [], []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        (header if line.startswith("#") else packages).append(line)
+    return header, packages
+
+
+def _rebuild(header: list[str], packages: list[str]) -> str:
+    """A well-formed lock from parts, digest computed exactly as verify_lock does.
+
+    `digest_of` hashes `\n`.join(packages) over lines sorted by `str.lower`. Matching
+    that exactly is what makes "the digest is correct" mean something here rather
+    than meaning "a different digest, also wrong".
+    """
+    ordered = sorted(packages, key=str.lower)
+    digest = hashlib.sha256("\n".join(ordered).encode()).hexdigest()
+    head = [line for line in header if not line.startswith("# resolved-digest")]
+    return "\n".join(head + [f"# resolved-digest: {digest}"] + ordered) + "\n"
+
+
+def _rewrite(sandbox: Path, transform) -> None:
+    text = (sandbox / "requirements.lock").read_text(encoding="utf-8")
+    (sandbox / "requirements.lock").write_text(transform(text), encoding="utf-8")
+
+
+def _verify(sandbox: Path):
+    lines, extras, digest = lockdep.parse_lock(
+        (sandbox / "requirements.lock").read_text(encoding="utf-8")
+    )
+    return lockdep.verify_lock(lines, extras, digest, EXTRAS)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# The committed lock passes. Everything below is about failing.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def test_the_committed_lock_agrees_with_pyproject(sandbox: Path) -> None:
+    """The actual repository lock, checked with the actual pyproject.
+
+    Read as bytes rather than generated, so this cannot pass by the test and the
+    script agreeing on a bug.
+    """
+    assert _verify(sandbox) == [], "the committed lock must satisfy the new gate"
+
+
+def test_the_gate_is_environment_independent(sandbox: Path) -> None:
+    """The verdict must not depend on what is installed here.
+
+    This is the property the old gate lacked and the whole reason for the rewrite.
+    It is asserted structurally -- `verify_lock` takes no environment input at all
+    -- rather than by simulating another machine, which is not expressible here. The
+    companion assertion is that the module no longer imports `importlib.metadata`
+    on the check path.
+    """
+    import inspect
+
+    source = inspect.getsource(lockdep.verify_lock)
+    assert "md." not in source and "importlib" not in source, (
+        "verify_lock must not consult the installed environment; that is what made "
+        "the previous gate machine-dependent"
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# A dependency declared in pyproject but missing from the lock
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def test_a_declared_dependency_missing_from_the_lock_fails(sandbox: Path) -> None:
+    """The drift the gate exists to catch: pyproject moved, the lock did not."""
+
+    def drop_pydantic(text: str) -> str:
+        header, packages = _split_lock(text)
+        packages = [line for line in packages if not line.startswith("pydantic==")]
+        return _rebuild(header, packages)
+
+    _rewrite(sandbox, drop_pydantic)
+
+    problems = _verify(sandbox)
+    assert problems, "a missing declared dependency must fail"
+    assert any("pydantic" in p and "absent" in p for p in problems), problems
+
+
+def test_a_locked_version_violating_pyproject_fails(sandbox: Path) -> None:
+    """The property the OLD gate could not detect at all.
+
+    The previous implementation asked only whether the lock matched what was
+    installed, so a lock pinning a version outside the declared range passed as
+    long as that version happened to be installed. Here the lock is internally
+    consistent -- digest recomputed so it is a plausible-looking lock -- and still
+    wrong, because it contradicts pyproject.
+    """
+
+    def pin_illegal(text: str) -> str:
+        # A version pyproject forbids, in a lock that is otherwise internally
+        # perfect: correct digest, correct extras header, everything pinned.
+        # The only thing wrong with it is that it contradicts the declaration,
+        # which is the property the OLD gate could not detect at all.
+        header, packages = _split_lock(text)
+        packages = [line for line in packages if not line.startswith("pydantic==")]
+        packages.append("pydantic==1.0.0")
+        return _rebuild(header, packages)
+
+    _rewrite(sandbox, pin_illegal)
+
+    problems = _verify(sandbox)
+    assert problems, "a version violating pyproject must fail"
+    assert any("pydantic" in p and "disagree" in p for p in problems), problems
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# A lock that is not a lock
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def test_an_unpinned_entry_is_refused() -> None:
+    """A bare name is not a pin, and a lock of bare names installs whatever it finds.
+
+    The SBOM builder refuses these too (`sbom.parse_lock`); the gate must agree,
+    because a lock that the SBOM refuses and the gate accepts is a gate that is not
+    reading the same file.
+    """
+    with pytest.raises(ValueError, match="unpinned lock entry"):
+        lockdep.parse_lock("aiohttp==3.14.3\nrequests\n")
+
+
+def test_a_duplicate_package_is_refused(sandbox: Path) -> None:
+    """Two versions of one package make the install order decide which wins."""
+
+    def duplicate(text: str) -> str:
+        header, packages = _split_lock(text)
+        packages.append("packaging==1.0")  # a second version of one package
+        return _rebuild(header, packages)
+
+    _rewrite(sandbox, duplicate)
+
+    problems = _verify(sandbox)
+    assert any("appears 2 times" in p for p in problems), problems
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Hand-editing the lock
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def test_a_hand_edited_lock_fails_on_the_digest(sandbox: Path) -> None:
+    """Changing a version without regenerating must be caught.
+
+    The digest covers the package lines, so an edit that leaves the digest alone is
+    detectable without knowing anything about the environment -- which is what makes
+    it useful in CI.
+    """
+
+    def bump_one(text: str) -> str:
+        # Change a version WITHOUT touching the digest: the hand-edit case.
+        header, packages = _split_lock(text)
+        bumped = [
+            line.replace("packaging==", "packaging==9", 1)
+            if line.startswith("packaging==")
+            else line
+            for line in packages
+        ]
+        return "\n".join(header + bumped) + "\n"
+
+    _rewrite(sandbox, bump_one)
+
+    problems = _verify(sandbox)
+    assert any("resolved-digest does not match" in p for p in problems), problems
+
+
+def test_a_lock_without_a_digest_fails(sandbox: Path) -> None:
+    """A missing digest means no tamper evidence at all, so it is a failure rather
+    than a pass-with-one-less-check."""
+
+    def strip_digest(text: str) -> str:
+        return "\n".join(
+            line for line in text.splitlines() if not line.startswith("# resolved-digest")
+        )
+
+    _rewrite(sandbox, strip_digest)
+
+    problems = _verify(sandbox)
+    assert any("no # resolved-digest" in p for p in problems), problems
+
+
+def test_an_extras_header_mismatch_fails(sandbox: Path) -> None:
+    """A lock generated for fewer extras is missing those packages.
+
+    Reported rather than silently accepted, because the omission is invisible
+    otherwise: the file looks complete, and `pip install -r` would install a
+    closure that lacks, say, the database driver.
+    """
+
+    def drop_an_extra(text: str) -> str:
+        return text.replace("# extras: dev,postgres,nats,ccxt", "# extras: dev")
+
+    _rewrite(sandbox, drop_an_extra)
+
+    problems = _verify(sandbox)
+    assert any("extras" in p for p in problems), problems
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# The reported problems are actionable
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def test_all_problems_are_reported_not_just_the_first(sandbox: Path) -> None:
+    """A contributor fixing a lock should see the whole list once.
+
+    The previous gate printed one word, "stale", which is why the file became
+    unreadable when it started failing -- there was nothing to act on.
+    """
+
+    def break_several(text: str) -> str:
+        header, packages = _split_lock(text)
+        packages = [line for line in packages if not line.startswith("pydantic==")]
+        packages.append("packaging==1.0")  # a duplicate of packaging==26.0
+        header = [
+            "# extras: dev" if line.startswith("# extras:") else line
+            for line in header
+        ]
+        return _rebuild(header, packages)
+
+    _rewrite(sandbox, break_several)
+
+    problems = _verify(sandbox)
+    assert len(problems) >= 3, f"expected several problems, got {problems}"
+    assert any("pydantic" in p for p in problems)
+    assert any("extras" in p for p in problems)
+    assert any("appears 2 times" in p for p in problems)

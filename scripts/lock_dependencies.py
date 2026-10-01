@@ -9,15 +9,56 @@ Resolution is offline and deterministic: it walks `importlib.metadata` starting
 from the requirement names declared in pyproject (including the selected extras)
 and records the installed version of every distribution reachable that way.
 Unrelated packages that happen to live in the same environment are deliberately
-excluded — a lock file that contains a developer's personal tooling is not
+excluded -- a lock file that contains a developer's personal tooling is not
 reproducible anywhere else.
 
-    python scripts/lock_dependencies.py            # write requirements.lock
-    python scripts/lock_dependencies.py --check    # fail if the lock is stale
+    python scripts/lock_dependencies.py                   # write requirements.lock
+    python scripts/lock_dependencies.py --check           # the CI gate
+    python scripts/lock_dependencies.py --check-installed # local drift report
 
-`--check` is what CI runs: a dependency that changes without the lock being
-regenerated is a build failure, not a deploy-time surprise.
-"""
+WHAT `--check` VERIFIES, AND WHY IT IS NOT WHAT IT WAS
+
+It used to compare the committed lock against a closure recomputed from
+`importlib.metadata` -- that is, it asserted "the versions pip resolved on the
+machine that generated the lock equal the versions in the lock". CI installs
+whatever pip resolves *today* and then ran that comparison, so the gate could only
+ever pass on one machine, and it began failing the moment any package in the closure
+published a release. It was left failing for exactly that reason, and the one word
+it printed gave nobody anything to act on.
+
+It now verifies the lock against `pyproject.toml`, which is the declared source of
+truth and does not vary by machine:
+
+  1. every distribution pyproject declares is present in the lock;
+  2. every locked version satisfies the specifier pyproject declares for it;
+  3. every line is pinned with a double-equals version;
+  4. no package appears twice;
+  5. the resolved-digest line matches the digest of the package lines, so a
+     hand-edited lock is caught;
+  6. the extras line names the extras that were requested.
+
+(2) is the one the old gate could not do at all: it asked only whether the lock
+matched what was installed, so a lock pinning a version pyproject FORBIDS passed as
+long as that version happened to be installed. (3), (4) and (6) are new.
+
+NOT CHECKED, AND WHY
+
+Whether the lock's transitive closure is COMPLETE. That cannot be verified without
+the metadata of the packages in it, which is exactly the environment dependence this
+rewrite removes. A lock missing a transitive dependency therefore passes.
+
+This is a real narrowing of the old gate's APPARENT coverage -- it appeared to cover
+this because it recomputed the closure. It is stated here rather than left for a
+reader to assume, because a gate whose real scope is wider than what it checks is
+read as assurance it does not provide.
+
+WHY BOTH MODES EXIST
+
+`--check-installed` keeps the environment comparison, because "does my environment
+match the lock?" is a real question. It is simply not a CI gate: asking it in CI
+asserts that one machine's resolution reproduces everywhere. It reports drift rather
+than failing on it, so a local run says what changed instead of demanding a
+regeneration."""
 
 from __future__ import annotations
 
@@ -130,6 +171,132 @@ def resolve_closure(roots: list[str]) -> tuple[list[str], list[str]]:
     return sorted(locked, key=str.lower), sorted(missing)
 
 
+def parse_lock(text: str) -> tuple[list[str], str | None, str | None]:
+    """Split a lock file into (package lines, extras header, digest header).
+
+    Refuses anything it cannot read unambiguously. A lock this function silently
+    misparses would produce a verdict about a file nobody wrote -- the failure mode
+    is a gate that passes, which is worse than one that fails noisily.
+    """
+    lines: list[str] = []
+    extras: str | None = None
+    digest: str | None = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            if line.startswith("# extras:"):
+                extras = line[len("# extras:"):].strip()
+            elif line.startswith("# resolved-digest:"):
+                digest = line[len("# resolved-digest:"):].strip()
+            continue
+        if "==" not in line:
+            raise ValueError(f"unpinned lock entry: {line!r}")
+        lines.append(line)
+    return lines, extras, digest
+
+
+def _normalize(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def declared_specifiers(
+    extras: tuple[str, ...],
+) -> dict[str, list[str]]:
+    """Distribution name -> the requirement strings pyproject declares for it.
+
+    Keyed by normalized name so `PyJWT`, `pyjwt` and `py_jwt` are one entry; a
+    lookup that missed those would report a satisfied dependency as absent.
+    """
+    data = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
+    project = data.get("project", {})
+    specs = list(project.get("dependencies", []))
+    optional = project.get("optional-dependencies", {})
+    for extra in extras:
+        specs.extend(optional.get(extra, []))
+
+    table: dict[str, list[str]] = {}
+    for spec in specs:
+        try:
+            requirement = Requirement(spec)
+        except Exception:  # noqa: BLE001 - an unparseable spec keeps its name only
+            base = requirement_name(spec)
+            if base:
+                table.setdefault(_normalize(base), []).append(spec)
+            continue
+        if requirement.marker is not None and not requirement.marker.evaluate({"extra": ""}):
+            continue
+        table.setdefault(_normalize(requirement.name), []).append(spec)
+    return table
+
+
+def verify_lock(
+    lines: list[str],
+    extras_header: str | None,
+    digest_header: str | None,
+    extras: tuple[str, ...],
+) -> list[str]:
+    """Every reason the lock does not match pyproject, or [] if it does.
+
+    Returns ALL problems rather than the first, because a contributor fixing a
+    lock should see the whole list once. The old gate reported only "stale", which
+    is what made this file unreadable when it started failing.
+    """
+    problems: list[str] = []
+
+    # (4) no duplicates
+    seen: dict[str, int] = {}
+    for line in lines:
+        name = _normalize(line.split("==", 1)[0])
+        seen[name] = seen.get(name, 0) + 1
+    for name, count in sorted(seen.items()):
+        if count > 1:
+            problems.append(f"{name} appears {count} times; a lock lists each package once")
+
+    # (1) and (2) every declared dependency present, at a satisfying version
+    locked = {_normalize(line.split("==", 1)[0]): line.split("==", 1)[1] for line in lines}
+    for name, specs in sorted(declared_specifiers(extras).items()):
+        version = locked.get(name)
+        if version is None:
+            problems.append(f"{name} is declared in pyproject but absent from the lock")
+            continue
+        try:
+            requirement = Requirement(specs[0])
+        except Exception:  # noqa: BLE001 - name-only entries cannot be range-checked
+            continue
+        if requirement.specifier and not requirement.specifier.contains(
+            version, prereleases=True
+        ):
+            wanted = ", ".join(specs)
+            problems.append(
+                f"{name}=={version} does not satisfy pyproject ({wanted}); "
+                "the lock and the declaration disagree"
+            )
+
+    # (5) the digest must match the lines it claims to cover
+    if digest_header is None:
+        problems.append("the lock has no # resolved-digest line")
+    else:
+        actual = digest_of(sorted(lines, key=str.lower))
+        if actual != digest_header:
+            problems.append(
+                "the resolved-digest does not match the package lines; the lock "
+                "was edited without being regenerated"
+            )
+
+    # (6) the extras header must name what was requested
+    if extras_header is None:
+        problems.append("the lock has no # extras line")
+    elif tuple(e.strip() for e in extras_header.split(",") if e.strip()) != tuple(extras):
+        problems.append(
+            f"the lock was generated for extras {extras_header!r}, not "
+            f"{','.join(extras)!r}"
+        )
+
+    return problems
+
+
 def render(packages: list[str], digest: str, extras: tuple[str, ...]) -> str:
     return (
         f"{HEADER}# extras: {','.join(extras)}\n"
@@ -143,7 +310,16 @@ def digest_of(packages: list[str]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="verify the lock is current")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="verify the lock agrees with pyproject (environment-independent; this is the CI gate)",
+    )
+    parser.add_argument(
+        "--check-installed",
+        action="store_true",
+        help="report how this environment's installed versions differ from the lock",
+    )
     parser.add_argument(
         "--extras",
         default=",".join(DEFAULT_EXTRAS),
@@ -152,19 +328,73 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     extras = tuple(e.strip() for e in args.extras.split(",") if e.strip())
+
+    if args.check:
+        # The environment-independent gate: pyproject is the declared source of
+        # truth, and this check must give the same verdict on every machine.
+        if not LOCK.exists():
+            print("requirements.lock is missing; run scripts/lock_dependencies.py")
+            return 1
+        try:
+            lines, extras_header, digest_header = parse_lock(
+                LOCK.read_text(encoding="utf-8")
+            )
+        except ValueError as exc:
+            print(f"requirements.lock is not readable: {exc}")
+            return 1
+        problems = verify_lock(lines, extras_header, digest_header, extras)
+        if problems:
+            print(f"requirements.lock does not match pyproject ({len(problems)}):")
+            for problem in problems:
+                print(f"  - {problem}")
+            print("  regenerate it: python scripts/lock_dependencies.py")
+            return 1
+        print(
+            f"requirements.lock agrees with pyproject ({len(lines)} package(s), "
+            f"digest {(digest_header or '')[:12]})"
+        )
+        return 0
+
     roots = declared_requirements(extras)
     packages, missing = resolve_closure(roots)
     digest = digest_of(packages)
     expected = render(packages, digest, extras)
 
-    if args.check:
+    if args.check_installed:
+        # Kept, and kept separate. "Does my environment match the lock?" is a real
+        # question, but it is not a CI gate: CI installs whatever pip resolves
+        # today, so asking it there asserts that one machine's resolution
+        # reproduces everywhere. Drift is reported, not failed on -- a local run
+        # should tell you what changed, not demand a regeneration.
         if not LOCK.exists():
             print("requirements.lock is missing; run scripts/lock_dependencies.py")
             return 1
-        if LOCK.read_text(encoding="utf-8") != expected:
-            print("requirements.lock is stale; regenerate it")
-            return 1
-        print(f"requirements.lock is current ({len(packages)} package(s), {digest[:12]})")
+        lines, _, _ = parse_lock(LOCK.read_text(encoding="utf-8"))
+        locked = {
+            _normalize(line.split("==", 1)[0]): line.split("==", 1)[1]
+            for line in lines
+        }
+        here = {line.split("==", 1)[0].lower(): line.split("==", 1)[1] for line in packages}
+        drifted = [
+            f"{name}: locked {locked[name]} installed {here[name]}"
+            for name in sorted(set(locked) & set(here))
+            if locked[name] != here[name]
+        ]
+        absent = sorted(set(locked) - set(here))
+        present = sorted(set(here) - set(locked))
+        if drifted or absent or present:
+            print(f"environment differs from the lock ({len(drifted)} version(s)):")
+            for line in drifted:
+                print(f"  - {line}")
+            for name in absent:
+                print(f"  - {name} is locked but not installed here")
+            for name in present:
+                print(f"  - {name} is installed here but not locked")
+            if missing:
+                print(f"  not installed locally: {', '.join(missing)}")
+            print("  this is drift, not a lock failure -- `--check` is the gate")
+            return 0
+        print(f"environment matches the lock ({len(locked)} package(s))")
         return 0
 
     LOCK.write_text(expected, encoding="utf-8")

@@ -22,10 +22,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
           pip check
+      # The gate compares requirements.lock against pyproject.toml and needs no
+      # installed packages, so it gives the same verdict on every runner. It
+      # previously primed the environment with unpinned ranges and compared against
+      # a closure recomputed from it -- which meant the gate passed only on the
+      # machine that generated the lock and broke whenever anything in the closure
+      # was released.
       - name: Lock file is current
-        run: |
-          pip install "psycopg[binary]>=3.3,<4" "nats-py>=2.15,<3" "ccxt>=4.5,<5"
-          python scripts/lock_dependencies.py --check
+        run: python scripts/lock_dependencies.py --check
       - name: Lint (ruff)
         run: ruff check .
       # Architecture boundary, anti-pattern, goal-registry, and authority-chain
