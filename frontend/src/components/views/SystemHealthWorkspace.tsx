@@ -159,9 +159,9 @@ export const SystemHealthWorkspace: React.FC = () => {
           <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-2 rounded">
             <div className="text-[10px] text-slate-400">FRAME AGE</div>
             <div className="font-bold text-slate-200 font-mono-num">
-              {live.lastFrameAgeMs === null
+              {live.lastFrameAt === null
                 ? "NO FRAME"
-                : `${(live.lastFrameAgeMs / 1000).toFixed(1)}s`}
+                : `${((Date.now() - live.lastFrameAt) / 1000).toFixed(1)}s`}
             </div>
           </div>
           <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-2 rounded">

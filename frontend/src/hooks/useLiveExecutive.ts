@@ -48,8 +48,19 @@ export interface LiveExecutive {
   status: StreamStatus;
   /** True only when the stream is `live`; false means the value is polled. */
   live: boolean;
-  /** Milliseconds since the last stream frame, or null if none has arrived. */
+  /**
+   * Milliseconds since the last stream frame, or null if none has arrived.
+   *
+   * Recomputed on a tick while the stream is NOT live, so a parked feed's age
+   * keeps counting rather than freezing at the value it held when the stream last
+   * spoke. It froze before, which meant a console whose stream had been dead for
+   * minutes displayed the age from minutes ago -- a stale figure presented as
+   * current, in the one readout whose entire job is to say how current the
+   * figure beside it is.
+   */
   lastFrameAgeMs: number | null;
+  /** When the last frame arrived, or null. The fact; `lastFrameAgeMs` is a reading. */
+  lastFrameAt: number | null;
   refresh: () => void;
 }
 
@@ -62,6 +73,7 @@ export function useLiveExecutive(
   const [frame, setFrame] = useState<StreamFrame | null>(null);
   const [polled, setPolled] = useState<Executive | null>(null);
   const [lastFrameAgeMs, setLastFrameAgeMs] = useState<number | null>(null);
+  const [lastFrameAt, setLastFrameAt] = useState<number | null>(null);
 
   const poll = useCallback(async () => {
     try {
@@ -89,6 +101,7 @@ export function useLiveExecutive(
   useEffect(() => onStream((next) => {
     setStatus(next.status);
     setLastFrameAgeMs(lastEventAgeMs());
+    setLastFrameAt(Date.now());
     // A frame is adopted only if it actually carries an executive. A malformed
     // frame is ignored rather than allowed to replace a good value with
     // `undefined`, which on screen reads as a measurement of zero.
@@ -109,6 +122,10 @@ export function useLiveExecutive(
     if (!shouldPoll(status)) return;
     const id = setInterval(() => {
       void poll();
+      // Keep the age counting while the feed is parked. A poll refreshes the
+      // executive value but NOT the stream's frame time, so without this the
+      // readout freezes at whatever it showed when the stream last spoke.
+      setLastFrameAgeMs(lastEventAgeMs());
     }, pollIntervalMs);
     return () => clearInterval(id);
   }, [status, poll, pollIntervalMs]);
@@ -119,6 +136,7 @@ export function useLiveExecutive(
     status,
     live: status === "live",
     lastFrameAgeMs,
+    lastFrameAt,
     refresh: poll,
   };
 }
