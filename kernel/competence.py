@@ -53,11 +53,18 @@ __all__ = [
 def competence_from_verdict(verdict: Any) -> DomainOfCompetence:
     """The regimes in which this verdict says the strategy may trade.
 
-    Raises when the verdict carries no per-regime checks at all. That is the
-    honest answer for a strategy nobody measured per-regime, and it is raised
-    rather than returned empty because an empty declaration reads two ways --
-    "competent nowhere" and "never declared" -- and only one of them is what the
-    data says.
+    Raises twice, and the two are deliberately different kinds of failure.
+
+    No per-regime checks at all: that is the honest answer for a strategy nobody
+    measured per-regime, and it is raised rather than returned empty because an
+    empty declaration reads two ways -- "competent nowhere" and "never declared"
+    -- and only one of them is what the data says.
+
+    Measured in every regime and competent in none: `IncompetentInEveryMeasuredRegime`,
+    which names the regimes and their measured Sharpes. Raised before the
+    constructor can, because the constructor's own refusal is about the model's
+    shape rather than about this strategy, and reporting the most informative case
+    as the least informative one is what the `invalid` set exists to prevent.
     """
     checks = getattr(verdict, "checks", None) or ()
     by_value = {regime.value: regime for regime in Regime}
@@ -176,6 +183,16 @@ def competence_resolver(registry: Any) -> CompetenceResolver:
     with the reason -- for an unknown strategy, an uncertified one, and one whose
     verdict carries no per-regime decomposition. All three mean the same thing to a
     caller: no competence can be shown, so none is granted.
+
+    One case does NOT come back as ``None``. A verdict that measured every regime it
+    decomposed and passed none of them raises `IncompetentInEveryMeasuredRegime` out
+    of here, and so out of `PlaybookRouter.register`. That is a caller-visible
+    behaviour change, made because folding it into the same ``None`` reported a
+    strategy that had been measured and had lost as one nobody had measured -- and
+    pointed the operator at hand-declaring a competence, the one remedy this design
+    forbids. Callers that catch gate failures broadly should note that
+    `CompetenceNotDeclared` and `StrategyIncompetent` are the two refusals, and this
+    is a third, raised rather than returned.
     """
 
     def resolve(strategy_id: str, strategy_version: str) -> DomainOfCompetence | None:

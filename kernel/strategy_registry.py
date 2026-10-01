@@ -414,6 +414,20 @@ class StrategyArtifact(BaseModel):
     status: ValidationStatus = ValidationStatus.UNVALIDATED
     verdict: CertificationVerdict | None = None
 
+    #: The measurements the verdict was built from, retained. A verdict without
+    #: its evidence is a conclusion without its premises: nothing downstream —
+    #: notably the playbook derivation, which sizes positions from the capacity
+    #: ceiling — could check its numbers against anything. Retained at record
+    #: time rather than re-supplied later so the evidence cannot drift from the
+    #: verdict it justified.
+    evidence: CertificationEvidence | None = None
+    validator_id: str | None = None
+    approver: str | None = None
+    parent_ref: str | None = None
+    created_at: str = Field(default_factory=_utc_now)
+    decided_at: str | None = None
+
+
     def __setattr__(self, name: str, value: Any) -> None:
         """Refuse to re-point a recorded verdict at a different one.
 
@@ -429,8 +443,10 @@ class StrategyArtifact(BaseModel):
         about certification on EVERY selection, precisely because "a verdict can be
         revoked by the oracle at any instant". Competence is checked ONCE at admission,
         justified by the claim that a recorded verdict is immutable. That justification
-        was convention until this guard made it enforced, and a convention is not a
-        property a design can lean on.
+        was convention, and a convention is not a property a design can lean on. This
+        closes the routes an ordinary caller has: reassignment. `__dict__` writes and
+        `object.__setattr__` still work and are used nowhere in this tree, so the
+        honest claim is 'enforced against reassignment', not 'enforced'.
 
         An `__setattr__` override rather than `validate_assignment`: a field validator
         is handed the new value and cannot see whether one was already recorded, so it
@@ -450,18 +466,6 @@ class StrategyArtifact(BaseModel):
                 "artifact version."
             )
         super().__setattr__(name, value)
-    #: The measurements the verdict was built from, retained. A verdict without
-    #: its evidence is a conclusion without its premises: nothing downstream —
-    #: notably the playbook derivation, which sizes positions from the capacity
-    #: ceiling — could check its numbers against anything. Retained at record
-    #: time rather than re-supplied later so the evidence cannot drift from the
-    #: verdict it justified.
-    evidence: CertificationEvidence | None = None
-    validator_id: str | None = None
-    approver: str | None = None
-    parent_ref: str | None = None
-    created_at: str = Field(default_factory=_utc_now)
-    decided_at: str | None = None
 
     @property
     def ref(self) -> str:

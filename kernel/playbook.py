@@ -438,11 +438,14 @@ def derive_action(
                 "A size built on an unmeasured check inherits the check's "
                 "absence rather than its passing."
             )
-    # Imported here, not at module scope: `kernel.strategy_registry` imports this
-    # module, so a module-level import would be circular. The constant is used
-    # rather than a literal because a renamed check that this site stopped finding
-    # would fail closed -- reading as "this strategy does not work in that regime"
-    # rather than as a broken join.
+    # Imported at function scope to match the two other `kernel.strategy_registry`
+    # imports in this file, which are also function-local. NOT because a module-level
+    # import would be circular: verified by cold import in both directions, neither
+    # module pulls the other at module scope, so that claim would have been false and
+    # would have mis-directed the next person to look for a cycle that is not there.
+    # The constant rather than a literal, because a renamed check this site stopped
+    # finding would fail closed -- reading as "this strategy does not work in that
+    # regime" rather than as a broken join.
     from kernel.strategy_registry import REGIME_CHECK_PREFIX
 
     regime_check_name = f"{REGIME_CHECK_PREFIX}{regime.value}"
@@ -1131,7 +1134,11 @@ def persist_router(router: PlaybookRouter, sink: Any) -> int:
 
 
 def load_router(
-    oracle: CertificationOracle, sink: Any
+    oracle: CertificationOracle,
+    sink: Any,
+    competence: StrategyCompetence
+    | Callable[[str, str], DomainOfCompetence | None]
+    | None = None,
 ) -> tuple[PlaybookRouter, tuple[str, ...]]:
     """Rebuild a router from a durable store after a restart. Returns the
     router plus the refs skipped as uncertified.
@@ -1143,12 +1150,39 @@ def load_router(
     silently admitting them would trade it. What must never happen is trading
     a revoked strategy because its playbook survived a restart that its
     verdict did not.
+
+    COMPETENCE, and why it needed saying rather than adding. This function
+    populates `router._playbooks` directly rather than going through `register()`,
+    because the store is the source of truth after a restart and re-deciding what was
+    already decided is not this function's job. That direct insertion also meant
+    `_check_competence` -- which `register()` calls -- ran on NO path through here. A
+    parameter alone would have been inert: a caller could pass a fully enforcing
+    resolver and receive none, with nothing to indicate it.
+
+    So `_check_competence` is called explicitly on each restored playbook. It raises
+    rather than skipping, which is the right asymmetry: a stored playbook whose strategy
+    is certified but no longer competent is a genuine error to surface at startup, not a
+    detail to drop -- and a refusal that named the regime is far more use to whoever
+    reads the log than a silently absent playbook.
+
+    `competence=None` preserves the previous behaviour exactly, and disables the gate.
+    That default is deliberate and arguable: it is the only construction site that can
+    silently produce an unenforcing router, and a restart path is precisely where nobody
+    re-checks. Callers that mean to enforce must say so.
+
+    Owed and unspecified: nothing in production calls this yet, so there is no restart
+    wiring to source a resolver from. Inventing a restart path would be the duplication
+    `docs/DEPENDENCY_POLICY.md` refuses, so the parameter is here and the gap is named.
+    Whoever builds that path must pass competence -- trusting that a stored playbook was
+    competent when admitted is unsound, because competence is read from a verdict and a
+    verdict can be revoked while the process is down, which is why this function exists.
     """
-    router = PlaybookRouter(oracle)
+    router = PlaybookRouter(oracle, competence=competence)
     skipped: list[str] = []
     for ref, _content_hash, payload in sink.read_all():
         playbook = Playbook.model_validate_json(payload)
         if oracle.is_certified(playbook.strategy_id, playbook.strategy_version):
+            router._check_competence(playbook)
             router._playbooks[playbook.ref] = playbook
         else:
             skipped.append(ref)

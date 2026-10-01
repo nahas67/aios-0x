@@ -12,7 +12,7 @@ losing money net of costs.
 
 So competence is read off the verdict. That is the whole reason to prefer it over
 hand-declaring, and one test here exists purely to keep it honest:
-`test_competence_is_derived_from_the_verdict_and_not_from_the_playbook`. If
+the test now named `test_competence_depends_on_the_verdict_and_on_nothing_else`. If
 competence were derived from playbooks, two strategies activating in the same
 regime would be indistinguishable, and that test would fail.
 
@@ -66,6 +66,7 @@ from kernel.playbook import (
     DomainOfCompetence,
     PlaybookRouter,
     Regime,
+    StrategyCompetence,
     StrategyIncompetent,
 )
 from kernel.strategy_registry import (
@@ -317,7 +318,11 @@ def test_the_derivation_cannot_see_a_playbook_because_it_takes_no_parameters_for
 
     assert params == ["verdict"], (
         f"competence_from_verdict takes {params}; non-circularity depends on there "
-        "being no route by which playbook state could reach the derivation"
+        "being no route BY WHICH A PLAYBOOK COULD BE PASSED to the derivation. Scoped "
+        "to parameters deliberately: a module-level read inside the function would "
+        "satisfy this assertion while violating what it is for, and no signature check "
+        "can rule that out. The guarantee is the absence of a parameter, not the "
+        "absence of every possible path."
     )
     assert not hasattr(competence_module.competence_from_verdict, "__wrapped__"), (
         "the derivation is wrapped, so the signature above may not be the real one"
@@ -609,6 +614,98 @@ def test_a_router_given_derived_competence_refuses_a_playbook_it_did_not_measure
     assert router.register(_playbook(regime=Regime.TRENDING_UP)) is not None
 
 
+class _MemorySink:
+    """Implements the durable protocol as `persist_router` and `load_router` call it.
+
+    NOT symmetric, and deliberately transcribed rather than tidied. `persist_router`
+    calls `save(playbook_id, version, content_hash, payload, registered_at)` -- five
+    positional arguments -- while `load_router` unpacks `read_all()` rows as
+    `(ref, _content_hash, payload)`, three. The first version of this helper guessed
+    three and two, and the test would have failed on the arity before reaching the
+    competence check it exists to test. An asymmetric protocol is worth naming here so
+    the next person adding a sink does not rediscover it.
+    """
+
+    def __init__(self) -> None:
+        self.rows: list[tuple[str, str, str, str]] = []
+
+    def save(self, *args) -> None:
+        playbook_id, version, content_hash, payload = args[0], args[1], args[2], args[3]
+        self.rows.append((f"{playbook_id}:{version}", content_hash, payload))
+
+    def read_all(self) -> list[tuple[str, str, str]]:
+        return list(self.rows)
+
+
+def test_a_restored_playbook_is_competence_checked_and_not_merely_restored() -> None:
+    """`load_router` is the third construction site, and it was skipping the gate.
+
+    Reading it turned up more than a missing parameter. `load_router` populates
+    `router._playbooks` DIRECTLY rather than going through `register()` -- deliberately,
+    since the store is the source of truth after a restart and re-deciding what was
+    already decided is not its job -- and that insertion also meant `_check_competence`,
+    which `register()` calls, ran on NO path through the function. A `competence`
+    parameter alone would have been INERT: a caller could pass a fully enforcing
+    resolver and receive none, with nothing to indicate it.
+
+    The stored playbook is built through the real `register()` and the real
+    `persist_router`, so what is restored is a playbook the system would actually have
+    admitted -- not one fabricated to make the assertion pass.
+
+    Both directions are asserted, because a change that made this refuse everything would
+    pass a refusal-only test and be a strictly worse regression than the original. The
+    refusal is checked by TYPE and by content, since the whole value is that whoever
+    reads the log learns which regime was at fault.
+    """
+    from kernel.playbook import (
+        Bound,
+        PlaybookAction,
+        PlaybookActionKind,
+        build_playbook,
+        load_router,
+        persist_router,
+    )
+
+    permits = StrategyCompetence()
+    permits.declare(
+        "momentum-1", "v1",
+        DomainOfCompetence(valid=frozenset({Regime.CRISIS}), invalid=frozenset()),
+    )
+    admitter = PlaybookRouter(_ApprovingOracle(), competence=permits)
+    admitter.register(build_playbook(
+        playbook_id="pb-stored", version="v1", title="t", regime=Regime.CRISIS,
+        bounds=(Bound(feature="f", minimum=0.0, maximum=1.0),),
+        action=PlaybookAction(
+            kind=PlaybookActionKind.TRADE, target_weight=0.1, reason="r"
+        ),
+        strategy_id="momentum-1", strategy_version="v1",
+        verdict=_certified_verdict(), evidence=("core/quant_statistics.py",),
+    ))
+
+    sink = _MemorySink()
+    assert persist_router(admitter, sink) == 1
+    assert sink.read_all(), "nothing was persisted; the restore below would be vacuous"
+
+    forbids = StrategyCompetence()
+    forbids.declare(
+        "momentum-1", "v1",
+        DomainOfCompetence(valid=frozenset({Regime.TRENDING_UP}), invalid=frozenset()),
+    )
+    with pytest.raises(StrategyIncompetent) as caught:
+        load_router(_ApprovingOracle(), sink, competence=forbids)
+    assert "crisis" in str(caught.value)
+
+    router, skipped = load_router(_ApprovingOracle(), sink, competence=permits)
+    assert skipped == ()
+    assert "pb-stored:v1" in router._playbooks  # noqa: SLF001 -- the subject
+
+    # Omitting the parameter disables the gate: the previous behaviour, and why the
+    # docstring argues the default at length. Asserted as PRESERVED rather than as
+    # correct -- a test that treated it as desired would quietly ratify a gate that is
+    # off, which is the state this whole change set set out to end.
+    ungated, ungated_skipped = load_router(_ApprovingOracle(), sink)
+    assert ungated_skipped == () and "pb-stored:v1" in ungated._playbooks  # noqa: SLF001
+
 class _ApprovingOracle:
     """Certifies whatever it is asked about, so competence is the only gate in play.
 
@@ -739,6 +836,16 @@ def test_the_check_prefix_is_a_constant_and_not_a_literal_anywhere_else_in_kerne
     assert f"{REGIME_CHECK_PREFIX}crisis" in emitted
     assert f"{REGIME_CHECK_PREFIX}range_bound" in emitted
 
+    _constant_lineno = next(
+        node.lineno
+        for node in _ast.walk(_ast.parse((REPO / "kernel" / "strategy_registry.py").read_text(encoding="utf-8")))
+        if isinstance(node, _ast.Assign)
+        and any(
+            isinstance(tgt, _ast.Name) and tgt.id == "REGIME_CHECK_PREFIX"
+            for tgt in node.targets
+        )
+    )
+
     offenders: list[str] = []
     for module in sorted((REPO / "kernel").glob("*.py")):
         tree = _ast.parse(module.read_text(encoding="utf-8"))
@@ -747,8 +854,12 @@ def test_the_check_prefix_is_a_constant_and_not_a_literal_anywhere_else_in_kerne
                 continue
             if not node.value.startswith("regime_sharpe:"):
                 continue
-            # The constant's own definition is the one legitimate occurrence.
-            if module.name == "strategy_registry.py" and node.value == REGIME_CHECK_PREFIX:
+            # Exempt the constant's own DEFINITION NODE, located by walking the AST
+            # for the assignment. The previous version exempted any occurrence of the
+            # same VALUE in that file, so a second literal sitting on the same line as
+            # the constant -- or anywhere else in the file -- would not be flagged,
+            # which is precisely the coupling this test exists to police.
+            if node.value == REGIME_CHECK_PREFIX and node.lineno == _constant_lineno:
                 continue
             offenders.append(f"{module.name}:{node.lineno} = {node.value!r}")
 
@@ -792,6 +903,14 @@ def test_a_strategy_that_lost_in_every_measured_regime_says_so() -> None:
         "the refusal must name the regimes that were tried"
     )
     assert "competent in none" in message
+    # The measured Sharpe itself, not just the regime names. `_regime_check` pins
+    # value=-0.5 for a failing check, and `_value_of` exists for no purpose other than
+    # putting this number in the message -- so without this assertion the whole helper
+    # is untested, and returning 0.0 unconditionally would pass every other check in
+    # this file.
+    assert "-0.5000" in message, (
+        f"the refusal must quote the measurement the gate refused on: {message}"
+    )
     assert not isinstance(caught.value, ValueError), (
         "this error must not be a ValueError, or the resolver's except clause will "
         "swallow it back into the never-declared refusal"
@@ -799,26 +918,40 @@ def test_a_strategy_that_lost_in_every_measured_regime_says_so() -> None:
 
 
 def test_the_two_kinds_of_no_competence_produce_different_refusals() -> None:
-    """Measured-and-lost and never-measured must stay distinguishable.
+    """Measured-and-lost and never-measured must stay distinguishable, in BOTH senses.
 
-    Asserted on the two messages together rather than on either alone, because the
-    defect was precisely that they were the same string. A test on each case in
-    isolation passed while they were identical.
+    The first version of this test asserted only the exception TYPES, while its
+    docstring claimed it compared the two refusal MESSAGES and that a test on each
+    case in isolation "passed while they were identical". It captured no messages at
+    all, so the byte-identical property -- which WAS the defect -- was pinned only
+    indirectly by a sibling. The author's own recorded pattern, reintroduced in the fix
+    for it.
+
+    Both properties are asserted here rather than one: the types must differ, and the
+    rendered text must differ. The first version of this defect satisfied the type
+    check only by accident of what the resolver collapsed, and satisfying the text
+    check is what an operator actually experiences. A rewrite that made the second
+    case raise the new error type while keeping its old wording would pass a
+    type-only test and reintroduce the confusion.
     """
-    from kernel.playbook import CompetenceNotDeclared
-
     loses = _handmade_verdict(
         [_regime_check("trending_up", passed=False), _regime_check("crisis", passed=False)]
     )
     unmeasured = _handmade_verdict([])
 
-    with pytest.raises(IncompetentInEveryMeasuredRegime):
+    with pytest.raises(IncompetentInEveryMeasuredRegime) as lost:
         competence_from_verdict(loses)
-    with pytest.raises(ValueError, match="per-regime"):
+    with pytest.raises(ValueError, match="per-regime") as never:
         competence_from_verdict(unmeasured)
 
-    assert issubclass(IncompetentInEveryMeasuredRegime, RuntimeError)
     assert not issubclass(IncompetentInEveryMeasuredRegime, CompetenceNotDeclared)
+    assert str(lost.value) != str(never.value), (
+        "the two refusals render identically, which is the original defect: an "
+        "operator cannot tell a strategy that was measured and lost from one nobody "
+        "measured"
+    )
+    assert "competent in none" in str(lost.value)
+    assert "no domain of competence" in str(never.value)
 
 
 def test_a_recorded_verdict_cannot_be_re_pointed_at_a_wider_one() -> None:

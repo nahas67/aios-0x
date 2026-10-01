@@ -8,18 +8,34 @@
 and is deliberately *not* authoritative — where the two disagree, the registry
 and the tests win.
 
-**Last verified** (full tree, `git rev-parse HEAD` = `75d3d5c`, 134 commits,
-497 tracked files, working tree clean; the only
-delta from that commit is this file's verified block and the four rows below it,
-plus the four kernel files and the test file that fix findings #59-#62):
+**Last verified**. Measured on the working tree that became the most recent commit, which added this block and the row below it; the last commit *before* that change is `85163ba` (135 commits, 497 tracked files, working tree clean).
+
+The block cannot name its own commit, and an earlier version pretended to: it said
+`git rev-parse HEAD` = `75d3d5c` while reporting the figure measured after that commit, which
+was impossible for the tree it named. Stating what was measured is worth more than a hash
+that is stale by one commit, and defect #56's rule -- this block is what a reader checks
+first, so a wrong one is worse than none -- is the reason it is said in words rather than
+approximated. Last verified at `85163ba` plus this block.
 
 - **Full suite hermetic** (no `AIOS_TEST_PG_DSN` / `AIOS_TEST_NATS_URL`) —
-  `1611 passed, 12 skipped, 76 deselected` (exit 0, 0:03:57).
-  This is the authoritative current number.
-- **Full suite with PostgreSQL *and* NATS JetStream up** — `1646 passed, 1 skipped`
-  (exit 0, 6m41s), measured well before this cycle's additions and labelled as such
-  rather than quoted as current. Re-run with
-  `docker compose -f docker-compose.test.yml up -d` plus `AIOS_TEST_PG_DSN`.
+  `1612 passed, 12 skipped, 76 deselected` (exit 0). Of 1750 tests in the tree, the hermetic selection collects 1623 (`--collect-only`; the run's junit `tests`
+  attribute reads 1624, since one collected test is itself a skip).
+  This is the authoritative current number, and it is the one CI runs.
+- **Full suite with PostgreSQL *and* NATS JetStream up** — `1750 passed, 1 skipped`
+  (exit 0, 6:11), measured on the tree this block describes. **Replaces the previous
+  `1646 passed, 1 skipped`, which was labelled as measured before this cycle's additions**
+  — the block said so itself, which is the right way to record a figure you know is behind.
+  Re-run with `docker compose -f docker-compose.test.yml up -d` plus `AIOS_TEST_PG_DSN`.
+  Counts read from junit-xml rather than scraped from stdout, because `addopts = "-q"`
+  in `pyproject.toml` combines with an explicit `-q` into `-qq`, which prints no summary
+  line at all — a figure scraped that way is a figure nobody read.
+
+  The gap between the two figures is **not** just the marker. Of 1750 collected, 76 are excluded by `-m "not integration"` and
+  **51 are not collected at all without a live backend** — they are the parity suites,
+  which is the same shape as defects #33–#36 and #52: a test that cannot run on one tier
+  quietly stops being the test its name claims. Verified by diffing collected ids with
+  and without the two environment variables, not inferred from the counts.
+
 - ruff clean · mypy clean on 145 source files · anti-pattern lint clean (6 rules) ·
   constitution pin verifies at boot · architecture boundaries and goal registry pass ·
   zero secret findings in tracked content.
@@ -265,8 +281,8 @@ is removed.
 
 ## 3. Defects found and fixed in this cycle
 
-Sixty-two. Twenty-seven were found by a test written to assert the property, not by
-inspection — the point of writing the test first. The other twenty (#28–#62)
+Sixty-three. Twenty-seven were found by a test written to assert the property, not by
+inspection — the point of writing the test first. The other twenty (#28–#63)
 were found by *running the artifact* rather than reading it: building the image,
 starting the container, calling the release packager, standing up PostgreSQL and
 NATS, model-checking the TLA+ specs, and diffing the frozen architecture against
@@ -352,6 +368,7 @@ and a suite that only tests the former will never notice the latter.
 | 60 | Nothing stopped a recorded verdict being re-pointed at a wider one | `record_verdict` always refused a second verdict, but only through the METHOD. `StrategyArtifact` is a mutable pydantic model, `verdict` a plain field, and `StrategyRegistry` a public attribute of the kernel — so `artifact.verdict = <wider>` reassigned it, and `competence_resolver` reads that field. Demonstrated before the guard: a strategy recorded as **losing money in crisis** became competent there, silently, for every playbook already admitted. Worse than it looks, because the two facts are treated differently downstream on purpose: `register()` re-asks the oracle about certification on EVERY selection “because a verdict can be revoked by the oracle at any instant”, while competence is checked ONCE at admission, justified by the claim that a recorded verdict is immutable. Competence would have inherited the verdict's mutability without inheriting the re-check, and the justification was a docstring. Enforced with `__setattr__` rather than `validate_assignment`, because a field validator is handed the new value and cannot know whether one was already recorded |
 | 61 | Two more hardcoded copies of the check prefix survived the constant introduced to remove them | `kernel/playbook.py:441` (on the production publish path) and `:1049` each built `regime_sharpe:` from a literal, immediately after `REGIME_CHECK_PREFIX` was created precisely to stop that. Rename the constant and certification plus `competence.py` stay in agreement while `build_measured_playbook` and `propose_candidates` silently stop finding their checks — and the former fails CLOSED, so it would read as “this strategy does not work in that regime” rather than as a broken join. Both now import the constant, and the pin test was widened from one file to every module in `kernel/`. **The test was what made this survive a green suite**: it counted literals inside `strategy_registry.py` alone, so it certified a coupling still broken twice over. It now walks the AST for string constants rather than counting text, because docstrings legitimately quote `regime_sharpe:<regime>` while explaining it, and a text count flags documentation of a rule as a violation of it |
 | 62 | The fix for #59 was verified at the layer it was written, not the layer it was for | Both all-invalid tests called `competence_from_verdict` **directly**. The defect was never in that function — it raised correctly and the message was right; the defect was that `competence_resolver` collapsed its raise into the same `None` the absent-decomposition case returns, and no test passed an all-invalid verdict to the resolver. Widening `except ValueError` to `except Exception` — the tidy-up a future editor would plausibly make — restored the swallowing and left the suite green, so the hole was found by mutation rather than by reading. The gap was in the SEAM between two functions, which is where the bug actually was. Two tests now drive the case through the resolver, in both directions, because a change that made it propagate everything would also pass the first. **The general form, and the seventh time this cycle**: a green suite plus a mutation check reporting 6 of 7 still left the load-bearing property untested |
+| 63 | `load_router` rebuilt the router with the Layer 9 gate silently off | Three `PlaybookRouter` construction sites existed. Two were wired with derived competence when the gap was closed; this one was missed, and it is the one most likely to be reached for — the function whose entire docstring is about production restarts, rebuilding from the durable store after a process dies. Worse than a missing parameter: `load_router` populates `router._playbooks` **directly** rather than through `register()` — deliberately, since the store is the source of truth after a restart — and that insertion meant `_check_competence`, which `register()` calls, ran on **no path through the function at all**. So the obvious fix, adding a `competence=` parameter, would have been **inert**: a caller could pass a fully enforcing resolver and receive none, with nothing to indicate it. Found by reading the function while checking an independent review's *declined-to-judge* list, which had it right on the narrow point (nothing in production calls it) and the wrong question. Both halves now present, with the check called explicitly, and the `None` default documented as disabling the gate rather than left to be assumed. Not wired, because nothing calls it: inventing a restart path would be the duplication `docs/DEPENDENCY_POLICY.md` refuses, so the parameter is here and the gap is named. Three mutations aimed at it and all three caught, including the check moved into the `else` branch — the shape a careless edit takes, and one that would leave every “a playbook was refused” test green |
 
 Three of these deserve emphasis. **#10** is the class of bug that makes a
 statistic meaningless while looking perfectly healthy: PBO returned 1.0 for
