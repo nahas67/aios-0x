@@ -32,9 +32,11 @@ tracked files, working tree clean):
 - **Release archive builds and self-verifies** — 306 files, manifest agrees with
   member names, `verify_archive` true. SBOM: CycloneDX 1.5, 52 components.
 
-The single failing gate is CI's "Lock file is current" step, which is
-environment-dependent by construction and left untouched rather than made green
-by baking this machine's versions into the lock.
+CI's "Lock file is current" step used to be the one permanently-red gate. It
+is green now, and for a reason worth recording: it had been comparing the lock
+against a closure recomputed from the local environment, so it asserted that one
+machine's resolution reproduces everywhere (#51). It now checks the lock against
+`pyproject.toml`, which does not vary by machine.
 
 ---
 
@@ -253,8 +255,8 @@ is removed.
 
 ## 3. Defects found and fixed in this cycle
 
-Fifty. Twenty-seven were found by a test written to assert the property, not by
-inspection — the point of writing the test first. The other eighteen (#28–#48)
+Fifty-two. Twenty-seven were found by a test written to assert the property, not by
+inspection — the point of writing the test first. The other eighteen (#28–#52)
 were found by *running the artifact* rather than reading it: building the image,
 starting the container, calling the release packager, standing up PostgreSQL and
 NATS, model-checking the TLA+ specs, and diffing the frozen architecture against
@@ -328,6 +330,8 @@ and a suite that only tests the former will never notice the latter.
 | 48 | G220 claimed four assurance targets it does not model | Its summary named fills, duplicate delivery, reconciliation and failover. Duplicate delivery and the fill sequence **are** covered (Outbox's `DuplicateDeliver`/`AtMostOnceEffect`, OrderLifecycle's `PARTIALLY_FILLED`/`FillMonotone`/`NoPhantomFill`); reconciliation is now modelled; **failover has no specification anywhere**. It appears exactly once in the architecture, as a bare word in the section 3E list -- no scope, no layer, no service, no acceptance criterion, no implementation. Same reasoning that declined Disaster Recovery: one bare mention is not a specification, and modelling it would mean inventing the requirements. Corrected, with the reasoning **recorded rather than dropped**, because a corrected summary with no reason invites the next reader to re-add failover from the list alone, which is how it got there. Its gate also read that a specification exists for two named things, which cannot fail: presence is not a property, and a file containing a single character satisfies it. Rewritten to assert the invariant-to-cfg correspondence and the taxonomy coverage |
 | 49 | A complete SSE implementation on both sides was never started | `api/server.py` has served `/api/v1/stream` since G210, emitting an executive snapshot every two seconds, and `frontend/src/api/stream.ts` has implemented a correct, authenticated, reconnecting client since the same commit — using `fetch` + `ReadableStream` rather than `EventSource` precisely because `EventSource` cannot send an `Authorization` header. Nothing ever called `startStream()`. Not a registry overclaim: G210's stated deliverable is one correlation chain across eleven stages, which is delivered and tested by `tests/test_trace_continuity.py`. This is unconsumed surface, and the expensive kind — a feature that looks finished because both halves exist and type-check, while every view polls. Now consumed by `useLiveExecutive`, with the load-bearing assumption **verified rather than assumed**: a probe against a live server confirms the stream's `executive` has an identical field set to `GET /api/v1/executive` with every value agreeing, which is what allows a frame to be used with no translation layer |
 | 50 | A malformed-frame guard was imported and never called | `useLiveExecutive` imported `frameExecutive` — the function that stops a malformed frame replacing a good value with `undefined` — and then never invoked it, because the guard had been written before the state it guards and the wiring was superseded. `tsc` caught it as an unused import. Worth its own row because the shape is specific and easy to repeat: an import that documents an intent the code does not carry out reads as protection and provides none. The consequence was concrete — `undefined` on screen where a number belongs reads as a measurement of zero, which is the exact shape of defect #42 in miniature. A second pair of unused setters went with it, and their removal mattered as much: holding a second copy of a server value is how a client comes to disagree with its backend |
+| 51 | The dependency lock gate asserted one machine's resolution reproduces everywhere | `lock_dependencies.py --check` compared the committed lock against a closure recomputed from `importlib.metadata`, so it asked "are the versions pip resolved on THIS machine the versions in the lock" -- which for a lock means nothing, since a lock's job is to *define* the environment rather than describe one. CI made it worse: the step installed **unpinned** ranges (`psycopg[binary]>=3.3,<4`, `nats-py>=2.15,<3`, `ccxt>=4.5,<5`) precisely so the gate could recompute the closure, then asserted the result equalled one Windows machine's resolution. Every release anywhere in the 52-package closure broke it, and it printed the single word "stale", so there was nothing to act on. It was left red and described as "structurally environment-dependent by construction" -- true, and curable. **The lock was never the problem:** measured before any change, the lock and a fresh resolution agree on all 52 packages with the same set (0 added, 0 dropped) and differ only in 21 versions, and every locked version satisfies its pyproject specifier. The gate now compares the lock against `pyproject.toml`, which does not vary by machine, and the environment comparison survives as `--check-installed` -- a report, not a gate. **The property the old gate could not check at all:** a locked version violating its declared specifier, because it only ever asked whether that version happened to be installed |
+| 52 | Two of ten new lock tests passed or failed for reasons unrelated to the gate | Recorded because it is the seventh instance this cycle of a check that could not be trusted, and the first two found in code written specifically to prevent that. `test_all_problems_are_reported_not_just_the_first` appended a duplicate with `text + "packaging==1.0\n"` after `"\n".join(text.splitlines())` -- and `splitlines` drops the trailing newline, so the append was glued onto the previous line as `zlib-ng==1.0.0packaging==1.0`. The duplicate never existed, and the test failed while asserting a property its own setup had not created: a test that reports a failure its setup did not cause sends you to fix correct code. `test_a_locked_version_violating_pyproject_fails` recomputed its digest over the header comment lines as well as the package lines, so the digest never matched and the test passed because of a digest mismatch -- a second copy of the hand-edit test wearing the wrong name. Both were found only because the mutation was debugged through the gate's own return value rather than by reasoning about it |
 
 Three of these deserve emphasis. **#10** is the class of bug that makes a
 statistic meaningless while looking perfectly healthy: PBO returned 1.0 for
@@ -879,10 +883,18 @@ at the top; the list below is what is genuinely outstanding.
    `@testing-library/react`, no `jsdom` and no `happy-dom`. Only one consumer is
    wired (`SystemHealthWorkspace`, reporting feed status and snapshot
    provenance); the rest of the console still polls.
-6. **CI's "Lock file is current" will fail** — structurally environment-dependent
-   (`lock_dependencies.py --check` recomputes from `importlib.metadata`, so it can
-   only pass on the generating machine). Left untouched rather than made green by
-   baking this machine's versions in.
+6. ~~CI's lock gate will fail~~ -- **fixed** at `8c77a90`. It compared the lock
+   against a closure recomputed from the installed environment, so it could only
+   ever pass on the machine that generated the lock, and CI made that worse by
+   priming the environment with UNPINNED ranges before running it. It now checks
+   the lock against `pyproject.toml`; all six properties are mutation-checked.
+   **One honest narrowing, recorded in the module docstring rather than assumed:**
+   the gate no longer verifies that the lock's transitive closure is COMPLETE,
+   because that needs the metadata of the packages in the lock -- exactly the
+   environment dependence the rewrite removes. A lock missing a transitive
+   dependency passes it. The CI step itself has not been run here (no GitHub
+   activity), so its reasoning is in the step comment where a failure would be
+   diagnosable.
 
 ---
 
