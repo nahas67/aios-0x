@@ -118,6 +118,46 @@ def test_clean_archive_with_matching_manifest_verifies(tmp_path: Path) -> None:
     assert verify_archive(_archive(tmp_path, members, _manifest_for(members))) is True
 
 
+def test_member_names_are_posix_slashed_not_native() -> None:
+    """tar member names are POSIX paths by specification; the manifest must
+    agree with them byte for byte.
+
+    `str(Path.relative_to(...))` yields backslashes on Windows, so the manifest
+    recorded `data\\golden\\X.csv` while the archive member was
+    `data/golden/X.csv`. verify_archive compares the two, so it reported every
+    nested file as an unlisted member -- the integrity check could never pass for
+    any path containing a directory separator, which is most of the repository.
+    """
+    from scripts.package_release import arcname_of
+
+    nested = ROOT / "core" / "capital_firewall.py"
+    assert nested.exists()
+    arc = arcname_of(nested)
+    assert arc == "core/capital_firewall.py"
+    assert "\\" not in arc, f"archive member name must not contain backslashes: {arc!r}"
+
+
+def test_a_nested_file_is_not_reported_as_unlisted(tmp_path: Path) -> None:
+    """The end-to-end form of the same property, using a nested member."""
+    members = {"core/pkg/mod.py": b"x = 1\n", "core/a.py": b"y = 2\n"}
+    assert verify_archive(_archive(tmp_path, members, _manifest_for(members))) is True
+
+
+def test_manifest_and_member_names_are_the_same_string(tmp_path: Path) -> None:
+    """Both sides of the integrity check must derive the name the same way, so
+    read the manifest back out of the archive and compare against the member
+    names rather than trusting that they were built from the same variable."""
+    import tarfile
+
+    members = {"core/deep/nested/mod.py": b"z = 3\n"}
+    path = _archive(tmp_path, members, _manifest_for(members))
+    with tarfile.open(path, "r:gz") as tar:
+        names = {n for n in tar.getnames() if n != MANIFEST_NAME}
+        raw = tar.extractfile(MANIFEST_NAME).read().decode()  # type: ignore[union-attr]
+    listed = {line.split("  ", 1)[1] for line in raw.splitlines() if line}
+    assert names == listed, f"member names {names} and manifest names {listed} disagree"
+
+
 def test_archive_missing_its_manifest_fails(tmp_path: Path) -> None:
     assert verify_archive(_archive(tmp_path, {"core/a.py": b"x"}, None)) is False
 

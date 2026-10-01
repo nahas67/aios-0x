@@ -47,6 +47,23 @@ def _sha256_file(path: Path) -> str:
             digest.update(chunk)
     return digest.hexdigest()
 
+
+def arcname_of(path: Path) -> str:
+    """Archive member name for a file: always forward slashes.
+
+    tar member names are POSIX paths by specification, and Python's tarfile
+    normalises whatever it is given. The manifest, however, is built from
+    str(Path.relative_to(...)), which on Windows yields backslashes. So the
+    manifest recorded `data\\golden\\BTC_1d.csv` while the archive member was
+    `data/golden/BTC_1d.csv`, and verify_archive -- correctly, since it compares
+    the two -- reported every nested file as unlisted. The integrity check could
+    therefore never pass for any path containing a directory separator.
+
+    Normalised at the single place a member name is produced, so the manifest and
+    the archive cannot drift apart again.
+    """
+    return path.relative_to(ROOT).as_posix()
+
 # Patterns to ALWAYS exclude (forbidden in release)
 FORBIDDEN_PATTERNS = [
     ".env",
@@ -218,8 +235,9 @@ def build_archive(version: str = "latest") -> Path:
                 print(f"  SKIP (not found): {dir_name}/")
                 continue
             for file in sorted(dir_path.rglob("*")):
-                if file.is_file() and not should_exclude(file, str(file.relative_to(ROOT))):
-                    _add(file, str(file.relative_to(ROOT)))
+                arc = arcname_of(file)
+                if file.is_file() and not should_exclude(file, arc):
+                    _add(file, arc)
 
         # Add root files
         for file_name in INCLUDE_FILES:
@@ -232,8 +250,7 @@ def build_archive(version: str = "latest") -> Path:
         if ui_dist.exists():
             for file in ui_dist.rglob("*"):
                 if file.is_file():
-                    rel = str(file.relative_to(ROOT))
-                    _add(file, rel)
+                    _add(file, arcname_of(file))
 
         # The manifest is the last member, covering everything above it.
         manifest_bytes = ("\n".join(sorted(manifest)) + "\n").encode()
