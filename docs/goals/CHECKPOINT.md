@@ -8,10 +8,29 @@
 and is deliberately *not* authoritative — where the two disagree, the registry
 and the tests win.
 
-**Last verified:** full suite `1465 passed, 7 skipped, 76 deselected` (exit 0) ·
-ruff clean · mypy clean on 144 files · anti-pattern lint clean (6 rules) ·
-constitution pin verifies · architecture boundaries pass · 115 files changed or
-added, nothing committed.
+**Last verified** (full tree, `git rev-parse HEAD` = `ead3f34`, 113 commits, 482
+tracked files, working tree clean):
+
+- **Full suite with PostgreSQL *and* NATS JetStream up** — `1646 passed,
+  1 skipped` (exit 0, 6m41s). Previously every PG and JetStream leg skipped, so
+  this number had never been produced by anyone.
+- **Full suite hermetic** (no `AIOS_TEST_PG_DSN` / `AIOS_TEST_NATS_URL`) —
+  `1511 passed, 12 skipped, 76 deselected` (exit 0, 3m53s).
+- ruff clean · mypy clean on 144 source files · anti-pattern lint clean
+  (6 rules) · constitution pin verifies at boot · architecture boundaries and
+  goal registry pass · zero secret findings in tracked content.
+- **Docker image builds** (`aios-0x:test`, `backends importable`), container
+  serves `/api/v1/health` and `/`, image's own HEALTHCHECK reports `healthy`,
+  constitution pin verifies inside the container.
+- **TLA+ model-checked** — `scripts/run_tlc.ps1`: OrderLifecycle 70 generated /
+  42 distinct / depth 4; Outbox 16 / 13 / depth 7; no property violated.
+- **Release archive builds and self-verifies** — 306 files, manifest agrees with
+  member names, `verify_archive` true. SBOM: CycloneDX 1.5, 52 components.
+- Frontend `tsc -b --noEmit` clean; `vite build` 1736 modules.
+
+The single failing gate is CI's "Lock file is current" step, which is
+environment-dependent by construction and left untouched rather than made green
+by baking this machine's versions into the lock.
 
 ---
 
