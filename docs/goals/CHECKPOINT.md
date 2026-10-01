@@ -27,8 +27,8 @@ tracked files, working tree clean):
   / depth 7; KillSwitch 88 / 48 / depth 4; **Reconciliation 793,036 / 1,494 /
   depth 3**. `CHECK_DEADLOCK` is off in every `.cfg` because each terminal
   state is deliberately a dead end.
-- **Frontend** — `tsc -b --noEmit` clean · `vite build` succeeds · 20 vitest
-  files / 66 tests pass.
+- **Frontend** -- `tsc -b --noEmit` clean - `vite build` succeeds - **21 vitest files / 84 tests** pass (was 20 / 66; the new tests cover the executive-reconciliation decisions behind the SSE consumer, each mutation-checked).
+
 - **Release archive builds and self-verifies** — 306 files, manifest agrees with
   member names, `verify_archive` true. SBOM: CycloneDX 1.5, 52 components.
 
@@ -253,7 +253,7 @@ is removed.
 
 ## 3. Defects found and fixed in this cycle
 
-Forty-eight. Twenty-seven were found by a test written to assert the property, not by
+Fifty. Twenty-seven were found by a test written to assert the property, not by
 inspection — the point of writing the test first. The other eighteen (#28–#48)
 were found by *running the artifact* rather than reading it: building the image,
 starting the container, calling the release packager, standing up PostgreSQL and
@@ -326,6 +326,8 @@ and a suite that only tests the former will never notice the latter.
 | 46 | TLC found a reconciliation state no snapshot can justify | `CursorCannotDeriveInternalOnly` was refuted with a three-state trace: discover an internal-only execution under `FULL_SNAPSHOT` (legitimate), then switch mode to `CURSOR`. The finding survived, so a CURSOR-mode state carried a finding that mode cannot support. `ReconciliationMode`'s own docstring says a delta "proves nothing about executions it did not mention, so internal-only findings cannot be derived" -- inferring that the venue has no execution the blotter lacks, from a payload that never claimed to list executions, is a **fabricated negative**, and no test asserted it. Fixed by refusing the transition rather than clearing the finding, because discarding a real discrepancy because a query mode changed is the dishonesty the spec exists to catch. Second time a TLA+ spec has found something the Python suite could not, and the sharper of the two: the invariant encodes a docstring rather than a behaviour |
 | 47 | Four of the reconciliation invariants could not fail | A mutation check found a disjunction implied by the constructor (a tautology), a biconditional restating a sibling invariant, a structural guarantee dressed up as a check, and a claim about transitions that no TLC form accepts -- `[]` demands an action of the form `[A]_v`, so a transition predicate is rejected; `[A]_v => pred` is rejected as mixing a temporal formula with an action; `ENABLED` over a primed-only action is rejected. All four were replaced or dropped rather than shipped as decoration, and the replacements have isolating mutations that TLC refutes. The spec now states which of its invariants are **not** independently verified: `TypeOK` cannot be broken alone by design, and `NoOpenFindingIsResolved` is implied by `TypeOK` plus the action definitions, so all three mutations that could break it produce states `TypeOK` rejects. Sixth instance this cycle of a check that could not fail (#44, `HashBindsKey`, `FlattenPrecedesHalt`, the unawaited coroutine, the registry rule reading its own docstring, and the harness that destroyed its subject) |
 | 48 | G220 claimed four assurance targets it does not model | Its summary named fills, duplicate delivery, reconciliation and failover. Duplicate delivery and the fill sequence **are** covered (Outbox's `DuplicateDeliver`/`AtMostOnceEffect`, OrderLifecycle's `PARTIALLY_FILLED`/`FillMonotone`/`NoPhantomFill`); reconciliation is now modelled; **failover has no specification anywhere**. It appears exactly once in the architecture, as a bare word in the section 3E list -- no scope, no layer, no service, no acceptance criterion, no implementation. Same reasoning that declined Disaster Recovery: one bare mention is not a specification, and modelling it would mean inventing the requirements. Corrected, with the reasoning **recorded rather than dropped**, because a corrected summary with no reason invites the next reader to re-add failover from the list alone, which is how it got there. Its gate also read that a specification exists for two named things, which cannot fail: presence is not a property, and a file containing a single character satisfies it. Rewritten to assert the invariant-to-cfg correspondence and the taxonomy coverage |
+| 49 | A complete SSE implementation on both sides was never started | `api/server.py` has served `/api/v1/stream` since G210, emitting an executive snapshot every two seconds, and `frontend/src/api/stream.ts` has implemented a correct, authenticated, reconnecting client since the same commit — using `fetch` + `ReadableStream` rather than `EventSource` precisely because `EventSource` cannot send an `Authorization` header. Nothing ever called `startStream()`. Not a registry overclaim: G210's stated deliverable is one correlation chain across eleven stages, which is delivered and tested by `tests/test_trace_continuity.py`. This is unconsumed surface, and the expensive kind — a feature that looks finished because both halves exist and type-check, while every view polls. Now consumed by `useLiveExecutive`, with the load-bearing assumption **verified rather than assumed**: a probe against a live server confirms the stream's `executive` has an identical field set to `GET /api/v1/executive` with every value agreeing, which is what allows a frame to be used with no translation layer |
+| 50 | A malformed-frame guard was imported and never called | `useLiveExecutive` imported `frameExecutive` — the function that stops a malformed frame replacing a good value with `undefined` — and then never invoked it, because the guard had been written before the state it guards and the wiring was superseded. `tsc` caught it as an unused import. Worth its own row because the shape is specific and easy to repeat: an import that documents an intent the code does not carry out reads as protection and provides none. The consequence was concrete — `undefined` on screen where a number belongs reads as a measurement of zero, which is the exact shape of defect #42 in miniature. A second pair of unused setters went with it, and their removal mattered as much: holding a second copy of a server value is how a client comes to disagree with its backend |
 
 Three of these deserve emphasis. **#10** is the class of bug that makes a
 statistic meaningless while looking perfectly healthy: PBO returned 1.0 for
@@ -859,14 +861,24 @@ at the top; the list below is what is genuinely outstanding.
    correct but not switched on. Declaring competence for the real strategies
    and wiring it at the composition roots is the outstanding part, and it is
    a decision about which strategies are competent where rather than a build.
-5. **SSE is unconsumed.** `api/stream.ts` is complete and correct — it uses
-   `fetch` + `ReadableStream` precisely because `EventSource` cannot send an
-   `Authorization` header — and the server streams at `/api/v1/stream`, but
-   `startStream()` is never called and no view calls `onStream`, so every view
-   polls. Not a claim defect: G210's stated deliverable is trace continuity, which
-   is delivered and tested. Wiring live refresh into every view is a feature with
-   its own failure modes, not a one-liner, and deserves its own verification
-   pass rather than being attached to the end of another one.
+5. ~~SSE is unconsumed~~ -- **consumed** at `a165877`. `api/stream.ts` and
+   `/api/v1/stream` were complete, correct and authenticated on both sides, and
+   `startStream()` was never called, so the console polled for everything while
+   a live feed sat idle beside it. Now `useLiveExecutive` starts the stream,
+   prefers a frame's executive, and keeps polling as a fallback -- deliberately,
+   because the stream parks in `auth_required` whenever the server answers 401
+   (which it does for an unauthenticated console) and a reconnect can take 30
+   seconds, so a live-only design would show either nothing or a frozen number
+   with no hint it was frozen. The core assumption was verified rather than
+   assumed: a probe against a live server confirms the stream's `executive` has
+   an identical field set to `GET /api/v1/executive` with every value agreeing,
+   which is what lets a frame be used with no translation layer.
+   **Left partly open, stated rather than glossed:** the three decisions are
+   pure functions with 18 tests and six caught mutations, but the React
+   re-render wiring is untested, because the frontend has no
+   `@testing-library/react`, no `jsdom` and no `happy-dom`. Only one consumer is
+   wired (`SystemHealthWorkspace`, reporting feed status and snapshot
+   provenance); the rest of the console still polls.
 6. **CI's "Lock file is current" will fail** — structurally environment-dependent
    (`lock_dependencies.py --check` recomputes from `importlib.metadata`, so it can
    only pass on the generating machine). Left untouched rather than made green by
