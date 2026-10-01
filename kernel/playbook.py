@@ -438,7 +438,14 @@ def derive_action(
                 "A size built on an unmeasured check inherits the check's "
                 "absence rather than its passing."
             )
-    regime_check_name = f"regime_sharpe:{regime.value}"
+    # Imported here, not at module scope: `kernel.strategy_registry` imports this
+    # module, so a module-level import would be circular. The constant is used
+    # rather than a literal because a renamed check that this site stopped finding
+    # would fail closed -- reading as "this strategy does not work in that regime"
+    # rather than as a broken join.
+    from kernel.strategy_registry import REGIME_CHECK_PREFIX
+
+    regime_check_name = f"{REGIME_CHECK_PREFIX}{regime.value}"
     regime_checks = [c for c in verdict.checks if c.name == regime_check_name]
     if not regime_checks:
         raise DerivationRefused(
@@ -1042,11 +1049,11 @@ def propose_candidates(
     a taxonomy gap, and taxonomy gaps hidden by filters become regimes nobody
     watches.
     """
-    from kernel.strategy_registry import CertificationVerdict
+    from kernel.strategy_registry import REGIME_CHECK_PREFIX, CertificationVerdict
 
     if not isinstance(verdict, CertificationVerdict):
         raise TypeError("propose_candidates requires a CertificationVerdict")
-    prefix = "regime_sharpe:"
+    prefix = REGIME_CHECK_PREFIX
     candidates: list[CandidatePlaybook] = []
     for check in verdict.checks:
         if not check.name.startswith(prefix):

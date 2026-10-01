@@ -5,7 +5,6 @@ This is the composition root for the kernel. The ReplayRunner calls
 the returned ``AIOSKernel`` instance — never around it.
 """
 
-import logging
 from abc import ABC
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -27,8 +26,6 @@ from kernel.registries import (
 )
 from kernel.state_machine import StateMachineDefinition, StateMachineEngine
 from kernel.strategy_registry import CertificationVerdict, StrategyArtifact, StrategyRegistry
-
-logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════════════════════════════
 # Certification, connected

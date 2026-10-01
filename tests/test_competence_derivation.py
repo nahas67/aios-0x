@@ -49,11 +49,18 @@ say so where it matters:
 
 from __future__ import annotations
 
+#: The repository root, for the one test that scans `kernel/` for a duplicated
+#: check prefix. `parents[1]` because this file is `<repo>/tests/<name>.py`.
+import pathlib
 from datetime import UTC, datetime
 
 import pytest
 
-from kernel.competence import competence_from_verdict, competence_resolver
+from kernel.competence import (
+    IncompetentInEveryMeasuredRegime,
+    competence_from_verdict,
+    competence_resolver,
+)
 from kernel.playbook import (
     CompetenceNotDeclared,
     DomainOfCompetence,
@@ -69,6 +76,8 @@ from kernel.strategy_registry import (
     RegimeSlice,
     StrategyRegistry,
 )
+
+REPO = pathlib.Path(__file__).resolve().parents[1]
 
 # ══════════════════════════════════════════════════════════════════════════
 # Fixtures: real certification output, and one hand-built verdict per edge case
@@ -112,6 +121,7 @@ def _handmade_verdict(
     *,
     strategy_id: str = "momentum-1",
     strategy_version: str = "v1",
+    verdict: str = "REJECTED",
 ) -> CertificationVerdict:
     """A verdict with a check list supplied directly.
 
@@ -124,7 +134,7 @@ def _handmade_verdict(
     return CertificationVerdict(
         strategy_id=strategy_id,
         strategy_version=strategy_version,
-        verdict="REJECTED",
+        verdict=verdict,
         checks=checks,
         failure_reasons=("supplied for test",),
         observed_sharpe=1.0,
@@ -251,16 +261,23 @@ def test_a_never_measured_regime_is_unaddressed_rather_than_invalid() -> None:
     assert Regime.HIGH_VOLATILITY not in domain.invalid
 
 
-def test_competence_is_derived_from_the_verdict_and_not_from_the_playbook() -> None:
-    """The anti-circularity property, as a test.
+def test_competence_depends_on_the_verdict_and_on_nothing_else() -> None:
+    """Verdict-sensitivity: same playbook shape, different verdicts, different answers.
 
-    Two strategies, both measured, with verdicts that disagree about the same
-    regime: one passed the trending_up check and failed crisis, the other the
-    reverse. If competence were read from the playbooks -- each playbook asserting
-    the regimes it activates in -- both strategies would carry the same competence,
-    because the playbooks are interchangeable here. Reading it off the verdicts
-    separates them, and that separation is the property the derivation exists to
-    provide: a playbook cannot widen its own permissions by existing.
+    Renamed from `..._not_from_the_playbook`, which it never earned. The old name
+    claimed to demonstrate non-circularity; this test constructs no playbook at all,
+    so it demonstrated only that the derivation reads the verdict. That is this
+    repo's defect #54 again -- a test satisfied by something other than what it names.
+
+    The non-circularity guarantee is real, and it is STRUCTURAL rather than tested
+    here: `competence_from_verdict` takes a verdict and nothing else, so there is no
+    parameter through which playbook data could enter. The test below asserts that
+    signature directly, which is a stronger statement than any fixture could be,
+    because no fixture can prove the absence of a code path.
+
+    What remains here is the property a fixture CAN show: two strategies whose verdicts
+    disagree about the same regime come out with different competences. If competence
+    came from playbooks, and the playbooks were interchangeable, they would match.
     """
     trend_only = competence_from_verdict(
         _handmade_verdict(
@@ -277,6 +294,34 @@ def test_competence_is_derived_from_the_verdict_and_not_from_the_playbook() -> N
     assert not trend_only.is_competent(Regime.CRISIS)
     assert crisis_only.is_competent(Regime.CRISIS)
     assert not crisis_only.is_competent(Regime.TRENDING_UP)
+
+
+def test_the_derivation_cannot_see_a_playbook_because_it_takes_no_parameters_for_one() -> None:
+    """The structural half of non-circularity, asserted on the signature.
+
+    A fixture can show that the derivation RESPONDS to a verdict. It cannot show that
+    the derivation is INDEPENDENT of playbooks, because any such test would have to
+    vary the playbooks and observe no change -- which a reader cannot distinguish from
+    a test that forgot to vary anything. The signature can: if the function accepts a
+    verdict and one optional verdict-shaped argument, there is no route by which
+    playbook state could reach it.
+
+    Checked by name and by shape, so a parameter renamed to something playbook-ish
+    fails here rather than passing on a technicality.
+    """
+    import inspect
+
+    from kernel import competence as competence_module
+
+    params = list(inspect.signature(competence_module.competence_from_verdict).parameters)
+
+    assert params == ["verdict"], (
+        f"competence_from_verdict takes {params}; non-circularity depends on there "
+        "being no route by which playbook state could reach the derivation"
+    )
+    assert not hasattr(competence_module.competence_from_verdict, "__wrapped__"), (
+        "the derivation is wrapped, so the signature above may not be the real one"
+    )
 
 
 def test_competence_is_keyed_by_strategy_version() -> None:
@@ -387,7 +432,12 @@ def test_a_check_naming_a_regime_this_build_does_not_know_confers_nothing() -> N
     of a hallucinated permission.
     """
     verdict = _handmade_verdict([_regime_check("martian_meltdown", passed=True)])
-    with pytest.raises(ValueError):
+    # Matched on the message, not merely the type: `DomainOfCompetence` rejects an
+    # empty valid set with a ValidationError that is also a ValueError, so a bare
+    # `pytest.raises(ValueError)` is satisfied whether the derivation raised or merely
+    # returned something the model then rejected. Two docstrings above this one explain
+    # that; using the bare form here anyway is how the same defect returns next door.
+    with pytest.raises(ValueError, match="per-regime"):
         competence_from_verdict(verdict)
 
     mixed = competence_from_verdict(
@@ -660,40 +710,242 @@ def test_the_composition_root_sees_a_strategy_certified_after_it_was_built() -> 
     assert not domain.is_competent(Regime.CRISIS)
 
 
-def test_the_check_name_comes_from_the_registry_rather_than_a_second_literal() -> None:
-    """The pin promised by the constant's own docstring.
+def test_the_check_prefix_is_a_constant_and_not_a_literal_anywhere_else_in_kernel() -> None:
+    """The pin promised by the constant's docstring -- and it was too narrow.
 
-    `regime_sharpe:` was a bare f-string literal inside the certification loop, so
-    nothing outside `kernel/strategy_registry.py` could refer to it and a consumer
-    had to hardcode a copy. The constant exists so the two sides cannot drift, and
-    this runs the real certification path and asserts the emitted check names are
-    exactly `REGIME_CHECK_PREFIX + regime`. Renaming the constant on one side only
-    makes the derivation silently empty -- every strategy incompetent everywhere --
-    which fails CLOSED and so would read as a deliberate refusal rather than a
-    broken join. This is the test that turns that into a visible failure.
+    The first version of this test counted occurrences of the literal inside
+    `kernel/strategy_registry.py` alone, and passed. An independent review then found
+    two MORE copies in `kernel/playbook.py`, one of them on the production publish
+    path. So the test certified a coupling that was still broken twice over: rename the
+    constant and certification plus `competence.py` would have stayed in agreement
+    while `build_measured_playbook` and `propose_candidates` silently stopped finding
+    their checks -- and the former fails CLOSED, so it would have read as "this
+    strategy does not work in that regime" rather than as a broken join.
+
+    Two changes, both from that. The scan covers every module in `kernel/`, not one
+    file. And it walks the AST for string CONSTANTS rather than counting text, because
+    docstrings legitimately quote `regime_sharpe:<regime>` while explaining it -- a
+    text count flags documentation of the rule as a violation of it, and a check that
+    cries wolf gets deleted rather than fixed.
+
+    The real certification path is also run, so the assertion is about the names the
+    registry actually emits and not about a constant agreeing with itself.
     """
+    import ast as _ast
+
     registry = _registry_with_decomposition()
-    verdict = registry.artifacts()[0].verdict
-    assert verdict is not None
+    emitted = {c.name for c in registry.artifacts()[0].verdict.checks}
+    assert f"{REGIME_CHECK_PREFIX}trending_up" in emitted
+    assert f"{REGIME_CHECK_PREFIX}crisis" in emitted
+    assert f"{REGIME_CHECK_PREFIX}range_bound" in emitted
 
-    emitted = {c.name for c in verdict.checks if c.name.startswith(REGIME_CHECK_PREFIX)}
-    assert emitted == {
-        f"{REGIME_CHECK_PREFIX}trending_up",
-        f"{REGIME_CHECK_PREFIX}crisis",
-        f"{REGIME_CHECK_PREFIX}range_bound",
-    }
+    offenders: list[str] = []
+    for module in sorted((REPO / "kernel").glob("*.py")):
+        tree = _ast.parse(module.read_text(encoding="utf-8"))
+        for node in _ast.walk(tree):
+            if not isinstance(node, _ast.Constant) or not isinstance(node.value, str):
+                continue
+            if not node.value.startswith("regime_sharpe:"):
+                continue
+            # The constant's own definition is the one legitimate occurrence.
+            if module.name == "strategy_registry.py" and node.value == REGIME_CHECK_PREFIX:
+                continue
+            offenders.append(f"{module.name}:{node.lineno} = {node.value!r}")
 
-    # And the literal exists exactly once in the registry module: the constant.
-    import kernel.strategy_registry as registry_module
-
-    source = registry_module.__file__
-    assert source is not None
-    text = open(source, encoding="utf-8").read()
-    assert text.count('"regime_sharpe:') == 1, (
-        "the check prefix appears outside the constant, so the derivation and the "
-        "certification can disagree about what the check is called"
+    assert not offenders, (
+        "the check prefix is duplicated in executable code; rename the constant and "
+        f"these sites stop finding their checks silently: {offenders}"
     )
 
+
+# ══════════════════════════════════════════════════════════════════════════
+# Regressions for the four review findings fixed alongside this file
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def test_a_strategy_that_lost_in_every_measured_regime_says_so() -> None:
+    """The case `invalid` exists for must not be reported as "never measured".
+
+    Before the fix these two produced a byte-identical `CompetenceNotDeclared`
+    reading "has declared no domain of competence", and neither named the regimes. The
+    message also pointed at hand-declaring a competence, which is the one remedy this
+    design forbids -- `competence.py` calls it circular. So the most informative case
+    in the whole arrangement was reported as the least informative one, and the
+    operator was sent to invent a declaration for a strategy that had been measured
+    and had lost.
+
+    The error is asserted by TYPE as well as content, because the type is the load-
+    bearing part: it is deliberately not a `ValueError`, so the resolver's
+    `except ValueError` provably cannot fold it into the same `None` the absent-
+    decomposition case returns. Asserting only the message would let a future change
+    re-derive it as a `ValueError` and pass.
+    """
+    verdict = _handmade_verdict(
+        [_regime_check("trending_up", passed=False), _regime_check("crisis", passed=False)]
+    )
+
+    with pytest.raises(IncompetentInEveryMeasuredRegime) as caught:
+        competence_from_verdict(verdict)
+
+    message = str(caught.value)
+    assert "trending_up" in message and "crisis" in message, (
+        "the refusal must name the regimes that were tried"
+    )
+    assert "competent in none" in message
+    assert not isinstance(caught.value, ValueError), (
+        "this error must not be a ValueError, or the resolver's except clause will "
+        "swallow it back into the never-declared refusal"
+    )
+
+
+def test_the_two_kinds_of_no_competence_produce_different_refusals() -> None:
+    """Measured-and-lost and never-measured must stay distinguishable.
+
+    Asserted on the two messages together rather than on either alone, because the
+    defect was precisely that they were the same string. A test on each case in
+    isolation passed while they were identical.
+    """
+    from kernel.playbook import CompetenceNotDeclared
+
+    loses = _handmade_verdict(
+        [_regime_check("trending_up", passed=False), _regime_check("crisis", passed=False)]
+    )
+    unmeasured = _handmade_verdict([])
+
+    with pytest.raises(IncompetentInEveryMeasuredRegime):
+        competence_from_verdict(loses)
+    with pytest.raises(ValueError, match="per-regime"):
+        competence_from_verdict(unmeasured)
+
+    assert issubclass(IncompetentInEveryMeasuredRegime, RuntimeError)
+    assert not issubclass(IncompetentInEveryMeasuredRegime, CompetenceNotDeclared)
+
+
+def test_a_recorded_verdict_cannot_be_re_pointed_at_a_wider_one() -> None:
+    """Immutability is now enforced, not merely asserted in a docstring.
+
+    `record_verdict` always refused a second verdict, but only through the METHOD, and
+    `StrategyArtifact.verdict` was a plain field on a mutable model with the registry
+    reachable as a public kernel attribute. Demonstrated before the guard: a strategy
+    recorded as losing money in crisis became competent there, silently, for every
+    playbook already admitted.
+
+    That gap is worse than it looks, and the docstring on the guard says why:
+    `PlaybookRouter.register` re-asks the oracle about certification on EVERY
+    selection because a verdict can be revoked at any instant, while competence is
+    checked once at admission. Competence would have inherited the verdict's
+    mutability without inheriting the re-check.
+
+    The first assignment must still work, or `record_verdict` cannot function -- so
+    this asserts both halves, because a guard that blocked the first write would look
+    identical to one that worked.
+    """
+    from kernel.strategy_registry import ValidationError
+
+    registry = _registry_with_decomposition()
+    artifact = registry.artifacts()[0]
+    assert artifact.verdict is not None, "record_verdict failed to attach one"
+
+    wider = _handmade_verdict([_regime_check("crisis", passed=True)])
+    with pytest.raises(ValidationError, match="immutable"):
+        artifact.verdict = wider
+
+    domain = competence_resolver(registry)("momentum-1", "v1")
+    assert domain is not None
+    assert not domain.is_competent(Regime.CRISIS), (
+        "competence widened after the refused assignment; the guard raised but did not "
+        "prevent the change"
+    )
+
+
+def test_a_regime_performance_key_must_match_the_slice_it_names() -> None:
+    """The key is what competence is read back through, so the two must agree.
+
+    `build_verdict` named each per-regime check from the `regime_performance` dict
+    KEY, while the resolver maps check names back through `Regime.value`. A caller
+    passing `{"UP": RegimeSlice("trending_up", ...)}` therefore produced
+    `regime_sharpe:UP`, which maps to nothing -- and the strategy was reported as never
+    decomposed when it had been, which is the one diagnosis this module exists to get
+    right. Pre-existing, but this change made the reader.
+
+    Both halves asserted: the mismatch is refused, and the matching form still certifies
+    with the name the resolver expects.
+    """
+    from kernel.strategy_registry import ValidationError
+
+    registry = StrategyRegistry()
+    registry.register(
+        strategy_id="mismatch-1", version="v1", hypothesis_id="h", family="trend",
+        dataset_ref={"ref": "d"},
+    )
+    registry.begin_validation("mismatch-1", "v1", validator_id="test-derivation")
+    evidence = _evidence()
+
+    with pytest.raises(ValidationError, match="does not match"):
+        registry.build_verdict(
+            "mismatch-1", "v1", observed_sharpe=2.0, n_trials=300,
+            regime_performance={"UP": RegimeSlice("trending_up", 2.5, 300)},
+            evidence=evidence,
+        )
+
+    ok = registry.build_verdict(
+        "mismatch-1", "v1", observed_sharpe=2.0, n_trials=300,
+        regime_performance={"trending_up": RegimeSlice("trending_up", 2.5, 300)},
+        evidence=evidence,
+    )
+    assert f"{REGIME_CHECK_PREFIX}trending_up" in {c.name for c in ok.checks}
+
+
+def test_the_resolver_lets_the_all_invalid_refusal_through() -> None:
+    """The seam between the two functions is where the defect was, so test the seam.
+
+    `competence_from_verdict` raising correctly is not the property that was broken.
+    The defect was `competence_resolver` catching that raise and returning the same
+    `None` it returns for a strategy nobody measured -- so the two cases reached the
+    operator as one indistinguishable refusal. Every existing all-invalid test calls
+    the derivation DIRECTLY and therefore passed throughout, while the resolver went on
+    swallowing.
+
+    Found by mutation: widening `except ValueError` to `except Exception` -- the tidy-up
+    a future editor would plausibly make -- restored the swallowing and left the suite
+    green. This test is the one that notices.
+
+    A stand-in registry is used rather than a real one because the property is about
+    what the resolver does with the raise, and building a real CERTIFIED_WITH_LIMITS
+    verdict means fabricating a backtest that clears deflated-Sharpe, PSR and CSCV --
+    declined for the same reason as in the rest of this file.
+    """
+    verdict = _handmade_verdict(
+        [_regime_check("trending_up", passed=False), _regime_check("crisis", passed=False)],
+        verdict="CERTIFIED_WITH_LIMITS",
+    )
+
+    class _Registry:
+        def get(self, strategy_id: str, version: str):
+            return type("_Artifact", (), {"verdict": verdict})()
+
+    with pytest.raises(IncompetentInEveryMeasuredRegime) as caught:
+        competence_resolver(_Registry())("loser-1", "v1")
+
+    assert "trending_up" in str(caught.value) and "crisis" in str(caught.value)
+
+
+def test_the_resolver_still_returns_none_when_nothing_was_measured() -> None:
+    """The other half of the seam, so the fix cannot be made by swallowing both.
+
+    Asserted separately and immediately after the propagation test on purpose. A
+    change that made the resolver propagate EVERYTHING would also pass the test above,
+    and would be a strictly worse regression: a strategy that was simply never certified
+    would raise out of the admission path instead of being refused with an explanation.
+    The two cases must diverge, and both directions have to be pinned.
+    """
+    verdict = _handmade_verdict([])
+
+    class _Registry:
+        def get(self, strategy_id: str, version: str):
+            return type("_Artifact", (), {"verdict": verdict})()
+
+    assert competence_resolver(_Registry())("loser-1", "v1") is None
 
 # ══════════════════════════════════════════════════════════════════════════
 # Helpers needing the playbook constructor

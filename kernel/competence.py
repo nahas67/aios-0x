@@ -44,6 +44,7 @@ from .strategy_registry import REGIME_CHECK_PREFIX
 
 __all__ = [
     "CompetenceResolver",
+    "IncompetentInEveryMeasuredRegime",
     "competence_from_verdict",
     "competence_resolver",
 ]
@@ -91,7 +92,64 @@ def competence_from_verdict(verdict: Any) -> DomainOfCompetence:
             "hand here would be a claim the measurements do not support."
         )
 
+    if not valid and invalid:
+        # Checked BEFORE the constructor, because the constructor's own refusal for an
+        # empty valid set is a statement about the model's shape ("a domain of
+        # competence must name at least one valid regime") and says nothing about this
+        # strategy. Which is precisely the confusion: the most informative case in the
+        # design was being reported as the least informative one.
+        detail = ", ".join(
+            f"{regime.value} (net Sharpe {value:.4f})"
+            for regime, value in sorted(
+                (r, _value_of(verdict, r)) for r in invalid
+            )
+        )
+        raise IncompetentInEveryMeasuredRegime(
+            f"{getattr(verdict, 'strategy_id', '?')}:"
+            f"{getattr(verdict, 'strategy_version', '?')} was measured in "
+            f"{len(invalid)} regime(s) and is competent in none of them: {detail}. "
+            "A regime that was measured and lost is not the same as a regime nobody "
+            "measured, and the difference is the actionable part: these regimes were "
+            "tried. Amending the measurement means certifying a new version, which is "
+            "the only way a verdict changes -- deliberately, rather than by a "
+            "declaration made here, which would be the circular version of this whole "
+            "arrangement."
+        )
+
     return DomainOfCompetence(valid=frozenset(valid), invalid=frozenset(invalid))
+
+
+def _value_of(verdict: Any, regime: Any) -> float:
+    """The net Sharpe the verdict recorded for one regime, for the message.
+
+    Reads the same check the pass/fail decision was made from, so the number quoted
+    is the one the gate used rather than a second lookup that could disagree. Returns
+    0.0 if the check has no numeric value, because a message that says "0.0000" is
+    better than one that raises while explaining a refusal.
+    """
+    for check in getattr(verdict, "checks", None) or ():
+        name = getattr(check, "name", None)
+        if isinstance(name, str) and name == f"{REGIME_CHECK_PREFIX}{regime.value}":
+            value = getattr(check, "value", None)
+            return float(value) if isinstance(value, (int, float)) else 0.0
+    return 0.0
+
+
+class IncompetentInEveryMeasuredRegime(RuntimeError):
+    """The strategy was measured in every regime it decomposed, and lost in all of them.
+
+    Distinct from "no decomposition" on purpose, and deliberately NOT a `ValueError`:
+    `competence_resolver` catches `ValueError` to turn an absent decomposition into
+    `None`, so an error deriving from it would be swallowed into exactly the refusal
+    this class exists to replace. Deriving from `RuntimeError` makes the separation
+    structural rather than a matter of ordering two excepts.
+
+    The state is reachable and not exotic. Regime slices are classified OPERATIONAL by
+    `build_verdict`, so a strategy that clears deflated Sharpe, PSR and PBO and then
+    loses money in every decomposed regime is `CERTIFIED_WITH_LIMITS` -- which
+    `is_certified` accepts. It is a real strategy, admitted by the firewall, that may
+    trade nowhere. Saying so is the whole point.
+    """
 
 
 #: What a resolver is handed and must return: the competence of one
@@ -131,6 +189,11 @@ def competence_resolver(registry: Any) -> CompetenceResolver:
         try:
             return competence_from_verdict(verdict)
         except ValueError:
+            # An absent decomposition only. `IncompetentInEveryMeasuredRegime` is a
+            # RuntimeError precisely so it arrives here as a raised error rather than
+            # being folded into this `None` -- folding it in is what made a strategy
+            # that lost in every measured regime indistinguishable from one nobody
+            # measured.
             return None
 
     return resolve

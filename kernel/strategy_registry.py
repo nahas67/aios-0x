@@ -413,6 +413,43 @@ class StrategyArtifact(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
     status: ValidationStatus = ValidationStatus.UNVALIDATED
     verdict: CertificationVerdict | None = None
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Refuse to re-point a recorded verdict at a different one.
+
+        `record_verdict` already refuses a second verdict, but only through the
+        method. `StrategyArtifact` is a mutable model, `verdict` a plain field, and
+        `StrategyRegistry` a public attribute of the kernel -- so `artifact.verdict =
+        <wider>` reassigned it, and `kernel.competence.competence_resolver` reads that
+        field. Demonstrated before this guard: a strategy recorded as LOSING MONEY in
+        crisis became competent there, silently, for every playbook already admitted.
+
+        That gap matters more than it first appears, because the two facts are treated
+        differently downstream on purpose. `PlaybookRouter.register` re-asks the oracle
+        about certification on EVERY selection, precisely because "a verdict can be
+        revoked by the oracle at any instant". Competence is checked ONCE at admission,
+        justified by the claim that a recorded verdict is immutable. That justification
+        was convention until this guard made it enforced, and a convention is not a
+        property a design can lean on.
+
+        An `__setattr__` override rather than `validate_assignment`: a field validator
+        is handed the new value and cannot see whether one was already recorded, so it
+        cannot distinguish the first assignment (which `record_verdict` performs) from
+        a second. Construction is unaffected -- pydantic v2 populates `__dict__`
+        directly rather than through `__setattr__`.
+
+        Amending a decision means registering a new version, which is what
+        `record_verdict`'s own refusal message already told callers to do.
+        """
+        if name == "verdict" and self.__dict__.get("verdict") is not None:
+            raise ValidationError(
+                f"{getattr(self, 'ref', 'artifact')!r} already carries a verdict. A "
+                "recorded verdict is immutable: re-deciding a disappointing result is "
+                "how a ledger becomes a record of successes, and a domain of competence "
+                "is derived from the verdict once and never re-checked. Register a new "
+                "artifact version."
+            )
+        super().__setattr__(name, value)
     #: The measurements the verdict was built from, retained. A verdict without
     #: its evidence is a conclusion without its premises: nothing downstream —
     #: notably the playbook derivation, which sizes positions from the capacity
@@ -679,6 +716,18 @@ class StrategyRegistry:
             )
             for name in sorted(regime_performance):
                 measured_slice = regime_performance[name]
+                # The check name is what `kernel.competence` maps back to a `Regime`, by
+                # `Regime.value`. Naming it from this dict's key instead would emit
+                # `regime_sharpe:<key>`, which maps to nothing for any key that is not
+                # a regime value -- and the strategy would then be reported as never
+                # decomposed when it had been. Fail loudly rather than certify into a
+                # state the reader cannot interpret.
+                if measured_slice.regime != name:
+                    raise ValidationError(
+                        f"regime_performance key {name!r} does not match its slice's "
+                        f"regime {measured_slice.regime!r}. The key names the check "
+                        "that competence is read back from, so the two must agree."
+                    )
                 thin = measured_slice.n_observations < policy["min_regime_observations"]
                 losing = measured_slice.net_sharpe < policy["min_regime_sharpe"]
                 add(
