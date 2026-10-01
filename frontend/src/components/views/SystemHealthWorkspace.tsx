@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { executiveApi, kernelApi } from '../../api/backend';
 import { useApi } from '../../hooks/useApi';
+import { useLiveExecutive } from '../../hooks/useLiveExecutive';
 import { Unavailable } from '../Unavailable';
 
 /**
@@ -18,6 +19,10 @@ import { Unavailable } from '../Unavailable';
 export const SystemHealthWorkspace: React.FC = () => {
   const healthQ = useApi(() => executiveApi.health());
   const kernelQ = useApi(() => kernelApi.health());
+  // Starts the SSE stream and exposes the executive snapshot with an honest
+  // provenance label. Polling continues underneath while the stream is down, so
+  // this panel is never blank merely because the socket is.
+  const live = useLiveExecutive();
 
   if (healthQ.loading || kernelQ.loading) {
     return <div className="text-xs text-slate-400 font-mono p-8">Loading system health from /api/v1/health + /financial/health…</div>;
@@ -110,6 +115,72 @@ export const SystemHealthWorkspace: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Live stream provenance.
+          Reports the feed's own status and, separately, where the executive
+          snapshot came from. The two are never merged: a panel labelled LIVE
+          while rendering a value a fallback poll fetched 30 seconds ago is the
+          exact dishonesty this repository is built to prevent. */}
+      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl">
+        <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+          <h3 className="text-xs font-bold uppercase text-white tracking-wider">
+            EXECUTIVE STREAM
+          </h3>
+          <span className="text-[10px] text-slate-400">
+            SOURCE: /api/v1/stream + /api/v1/executive
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 my-3 text-xs">
+          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-2 rounded">
+            <div className="text-[10px] text-slate-400">FEED</div>
+            <div
+              className={`font-bold ${live.live ? "text-emerald-400" : "text-amber-400"}`}
+              data-testid="stream-status"
+            >
+              {live.status.toUpperCase().replace("_", " ")}
+            </div>
+          </div>
+          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-2 rounded">
+            <div className="text-[10px] text-slate-400">SNAPSHOT FROM</div>
+            <div
+              className={`font-bold ${live.source === "stream" ? "text-emerald-400" : "text-slate-300"}`}
+              data-testid="stream-source"
+            >
+              {live.source === "stream"
+                ? "STREAM"
+                : live.source === "poll"
+                  ? "FALLBACK POLL"
+                  : "NONE YET"}
+            </div>
+          </div>
+          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-2 rounded">
+            <div className="text-[10px] text-slate-400">FRAME AGE</div>
+            <div className="font-bold text-slate-200 font-mono-num">
+              {live.lastFrameAgeMs === null
+                ? "NO FRAME"
+                : `${(live.lastFrameAgeMs / 1000).toFixed(1)}s`}
+            </div>
+          </div>
+          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-2 rounded">
+            <div className="text-[10px] text-slate-400">EMERGENCY STATE</div>
+            <div className="font-bold text-slate-200">
+              {live.executive?.emergency_state ?? "UNKNOWN"}
+            </div>
+          </div>
+        </div>
+        {live.status === "auth_required" && (
+          <div className="text-[10px] text-amber-400">
+            The stream needs credentials. The values above are still being fetched by
+            the fallback poll, which is why they are present at all.
+          </div>
+        )}
+        {live.status === "reconnecting" && (
+          <div className="text-[10px] text-amber-400">
+            Feed reconnecting. Values above come from the fallback poll and may be
+            up to one poll interval stale.
+          </div>
+        )}
       </div>
 
       {/* Component wiring matrix */}
