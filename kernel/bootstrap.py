@@ -5,6 +5,7 @@ This is the composition root for the kernel. The ReplayRunner calls
 the returned ``AIOSKernel`` instance — never around it.
 """
 
+import logging
 from abc import ABC
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -12,6 +13,7 @@ from typing import Any
 
 from kernel.authority import AuthorityGateway
 from kernel.capability import CapabilityRouter
+from kernel.competence import competence_resolver
 from kernel.identity import ActorType, IdentityRegistry, Role
 from kernel.playbook import CertificationOracle, PlaybookRouter
 from kernel.promotion import PromotionController, RollbackController
@@ -25,6 +27,8 @@ from kernel.registries import (
 )
 from kernel.state_machine import StateMachineDefinition, StateMachineEngine
 from kernel.strategy_registry import CertificationVerdict, StrategyArtifact, StrategyRegistry
+
+logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════════════════════════════
 # Certification, connected
@@ -71,14 +75,29 @@ class RegistryCertificationOracle:
 
 
 def build_playbook_router(registry: StrategyRegistry) -> PlaybookRouter:
-    """A router whose certification answers come from the real registry.
+    """A router whose certification AND competence both come from the real registry.
 
-    The alternative — letting a caller pass any ``CertificationOracle`` — would
+    The alternative -- letting a caller pass any ``CertificationOracle`` -- would
     allow a permissive stub into production, and a stub that always says yes is
-    indistinguishable from a working one until it matters. This constructor
-    takes the registry specifically so the production path has no seam.
+    indistinguishable from a working one until it matters. This constructor takes
+    the registry specifically so the production path has no seam.
+
+    Competence is derived rather than accepted as an argument, for the same reason.
+    A caller-supplied declaration would let a permissive one into production, and a
+    permissive competence declaration is indistinguishable from a correct one until a
+    strategy trades somewhere it should not.
+
+    The resolver is LAZY. Reading the registry here and passing a finished
+    `StrategyCompetence` would describe the registry as it is at this instant --
+    which, at boot, is empty -- and every strategy would then be permanently
+    incompetent. Competence is therefore read when a playbook is offered, by which
+    point the strategy has been certified and the verdict carrying its per-regime
+    measurements exists. See `kernel.competence.competence_resolver`.
     """
-    return PlaybookRouter(RegistryCertificationOracle(registry))
+    return PlaybookRouter(
+        RegistryCertificationOracle(registry),
+        competence=competence_resolver(registry),
+    )
 
 
 def publish_playbook(
@@ -320,7 +339,13 @@ def create_kernel(
     experiments = ExperimentRegistry(sm, provenance)
     strategies = StrategyRegistry(provenance=provenance)
     certification: CertificationOracle = RegistryCertificationOracle(strategies)
-    playbook_router = PlaybookRouter(certification)
+    # Competence resolved from the same registry the oracle certifies
+    # against, so a playbook can only activate in a regime its strategy was
+    # measured good enough to trade. Resolved lazily rather than read here:
+    # the registry is empty at construction, so a snapshot taken now would
+    # refuse every strategy forever.
+    _competence = competence_resolver(strategies)
+    playbook_router = PlaybookRouter(certification, competence=_competence)
 
     # Register standard lifecycles
     for lifecycle in (STRATEGY_LIFECYCLE, HYPOTHESIS_LIFECYCLE, EXPERIMENT_LIFECYCLE):

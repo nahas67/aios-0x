@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -685,15 +685,23 @@ class PlaybookRouter:
     def __init__(
         self,
         oracle: CertificationOracle,
-        competence: StrategyCompetence | None = None,
+        competence: StrategyCompetence | Callable[[str, str], DomainOfCompetence | None]
+        | None = None,
     ) -> None:
         self._oracle = oracle
         self._playbooks: dict[str, Playbook] = {}
         #: ``None`` disables the competence gate entirely, which is what every
-        #: existing caller does. That is recorded rather than hidden: a router
-        #: with no competence registry enforces no competence, and the flag is
-        #: here so a composition root that meant to wire one cannot do so
-        #: silently and believe it is enforcing one.
+        #: caller that does not care about competence does. That is recorded rather
+        #: than hidden: a router with no competence registry enforces no competence,
+        #: and the flag is here so a composition root that meant to wire one cannot
+        #: do so silently and believe it is enforcing one.
+        #:
+        #: Either a fixed `StrategyCompetence` or a resolver callable. The resolver
+        #: exists because a registry read at construction is a registry read before
+        #: anything has been certified: production wires a resolver so competence is
+        #: read when a playbook is offered, not when the process started. A fixed
+        #: registry stays supported because it is the right shape for a caller that
+        #: genuinely holds a complete set of declarations already.
         self._competence = competence
 
     # ------------------------------------------------------------- registration
@@ -735,9 +743,12 @@ class PlaybookRouter:
         """
         if self._competence is None:
             return
-        domain = self._competence.for_strategy(
-            playbook.strategy_id, playbook.strategy_version
-        )
+        if callable(self._competence):
+            domain = self._competence(playbook.strategy_id, playbook.strategy_version)
+        else:
+            domain = self._competence.for_strategy(
+                playbook.strategy_id, playbook.strategy_version
+            )
         if domain is None:
             raise CompetenceNotDeclared(
                 f"{playbook.ref} binds to {playbook.strategy_id}:"

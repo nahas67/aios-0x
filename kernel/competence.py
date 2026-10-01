@@ -1,0 +1,136 @@
+"""Derive a strategy's domain of competence from the verdict that certified it.
+
+WHY THIS IS A DERIVATION, NOT A DECLARATION.
+
+The Layer 9 gate (`PlaybookRouter._check_competence`) has been implemented and
+correct since `6b80af2` and wired nowhere in production, so it enforces nothing
+outside tests. The blocker was recorded as "a decision about which strategies are
+competent where" -- too pessimistic, because certification already makes that
+decision.
+
+For each regime in the supplied decomposition, certification adds a check named
+`REGIME_CHECK_PREFIX + name`, and it passes only when the regime is neither too thin
+to support a playbook nor losing money net of costs. A verdict therefore already
+records, per regime, whether the strategy was measured good enough to trade. So:
+
+    competent in R  <=>  the verdict carries a PASSING `regime_sharpe:R` check
+
+Non-circular, and that is the whole reason to prefer it. Deriving competence from
+the playbooks would be circular -- a strategy's competence would be whatever its own
+playbooks happen to assert, and the gate would approve of anything it was shown.
+Deriving it from the verdict means a playbook is checked against the measurements
+that justified the strategy, which is what the certification step exists to
+establish, and a playbook cannot widen its own permissions by existing.
+
+The three states map onto the three `DomainOfCompetence` needs:
+
+  passing check   -> valid        measured good enough to trade
+  failing check   -> invalid      measured thin or losing -- recorded explicitly,
+                                 so a refusal can say WHY
+  no check        -> unaddressed, and therefore INCOMPETENT
+
+The last is the same rule the router and the TLA+ spec both apply: silence is not
+permission. A regime certification never decomposed is not a regime the strategy was
+vouched for.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+
+from .playbook import DomainOfCompetence, Regime
+from .strategy_registry import REGIME_CHECK_PREFIX
+
+__all__ = [
+    "CompetenceResolver",
+    "competence_from_verdict",
+    "competence_resolver",
+]
+
+
+def competence_from_verdict(verdict: Any) -> DomainOfCompetence:
+    """The regimes in which this verdict says the strategy may trade.
+
+    Raises when the verdict carries no per-regime checks at all. That is the
+    honest answer for a strategy nobody measured per-regime, and it is raised
+    rather than returned empty because an empty declaration reads two ways --
+    "competent nowhere" and "never declared" -- and only one of them is what the
+    data says.
+    """
+    checks = getattr(verdict, "checks", None) or ()
+    by_value = {regime.value: regime for regime in Regime}
+
+    valid: set[Regime] = set()
+    invalid: set[Regime] = set()
+
+    for check in checks:
+        name = getattr(check, "name", None)
+        if not isinstance(name, str) or not name.startswith(REGIME_CHECK_PREFIX):
+            continue
+        regime = by_value.get(name[len(REGIME_CHECK_PREFIX):])
+        if regime is None:
+            # A check naming a regime this build does not know. Not an error: the
+            # verdict may come from a newer registry, and refusing to trade an
+            # unknown regime is the same default as an unmeasured one. Silently
+            # skipping it would be the alternative, and that would make competence
+            # depend on which build reads the verdict.
+            continue
+        if getattr(check, "passed", False):
+            valid.add(regime)
+        else:
+            invalid.add(regime)
+
+    if not valid and not invalid:
+        raise ValueError(
+            f"verdict for {getattr(verdict, 'strategy_id', '?')}:"
+            f"{getattr(verdict, 'strategy_version', '?')} carries no "
+            f"`{REGIME_CHECK_PREFIX}<regime>` checks, so it records no per-regime "
+            "measurement and therefore no domain of competence. Certify with a "
+            "regime decomposition before trading this strategy; declaring one by "
+            "hand here would be a claim the measurements do not support."
+        )
+
+    return DomainOfCompetence(valid=frozenset(valid), invalid=frozenset(invalid))
+
+
+#: What a resolver is handed and must return: the competence of one
+#: (strategy_id, strategy_version), or ``None`` when there is none to give.
+CompetenceResolver = Callable[[str, str], DomainOfCompetence | None]
+
+
+def competence_resolver(registry: Any) -> CompetenceResolver:
+    """Resolve a strategy's competence from the registry, at the moment it is asked.
+
+    Lazy rather than a snapshot, and the laziness is the whole point. A snapshot
+    taken at construction describes the registry as it was when the process started,
+    which is before any strategy has been certified -- so a boot-time snapshot is
+    always empty and every strategy is permanently incompetent. Resolving per
+    admission reads the verdict that exists at the time the playbook is offered.
+
+    Sound as a one-time check, which is all `_check_competence` claims to be, because
+    a recorded verdict is immutable: the competence of a given
+    (strategy_id, strategy_version) is fixed once its verdict is, so a check made at
+    admission cannot go stale. Were a verdict ever overwritable in place, this would
+    stop being true and admission-time checking would need to move onto selection.
+
+    Returns ``None`` -- which `_check_competence` reports as `CompetenceNotDeclared`,
+    with the reason -- for an unknown strategy, an uncertified one, and one whose
+    verdict carries no per-regime decomposition. All three mean the same thing to a
+    caller: no competence can be shown, so none is granted.
+    """
+
+    def resolve(strategy_id: str, strategy_version: str) -> DomainOfCompetence | None:
+        try:
+            artifact = registry.get(strategy_id, strategy_version)
+        except KeyError:
+            return None
+        verdict = getattr(artifact, "verdict", None)
+        if verdict is None:
+            return None
+        try:
+            return competence_from_verdict(verdict)
+        except ValueError:
+            return None
+
+    return resolve

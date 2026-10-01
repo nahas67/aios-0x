@@ -90,6 +90,20 @@ _TRANSITIONS: dict[ValidationStatus, frozenset[ValidationStatus]] = {
 }
 
 
+
+#: Prefix of the per-regime certification check. Certification adds one check per
+#: regime in the supplied decomposition, named ``regime_sharpe:<regime value>``, and
+#: it passes only when that regime is neither too thin to support a playbook nor
+#: losing money net of costs.
+#:
+#: Named rather than left as an f-string literal inside the loop, because
+#: `kernel.competence` derives a strategy's domain of competence from these checks
+#: and a hardcoded copy of this string would make the join invisible: renaming the
+#: check would leave the derivation silently empty, every strategy would become
+#: incompetent everywhere, and that fails CLOSED -- so it would read as a deliberate
+#: refusal rather than a broken coupling.
+REGIME_CHECK_PREFIX = "regime_sharpe:"
+
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -668,7 +682,7 @@ class StrategyRegistry:
                 thin = measured_slice.n_observations < policy["min_regime_observations"]
                 losing = measured_slice.net_sharpe < policy["min_regime_sharpe"]
                 add(
-                    f"regime_sharpe:{name}",
+                    f"{REGIME_CHECK_PREFIX}{name}",
                     not thin and not losing,
                     round(measured_slice.net_sharpe, 6),
                     policy["min_regime_sharpe"],
