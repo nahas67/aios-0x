@@ -51,7 +51,13 @@ class OrderManager:
         adapter: BaseExecutionAdapter,
         quantity_provider: Callable[[PortfolioAllocationPlan], float],
         durable: DurableOrderManager | None = None,
-        safety: SafetyPlane | None = None,
+        # Quoted because SafetyPlane is a TYPE_CHECKING-only import. On Python
+        # <=3.13 an unquoted annotation here is evaluated at definition time and
+        # raises NameError, so the module cannot be imported at all. Python 3.14
+        # made annotations lazy by default (PEP 649), which hid the bug in the
+        # local venv while the Docker image and CI both run 3.12. pyproject
+        # declares requires-python >=3.11, so 3.12 is in scope.
+        safety: "SafetyPlane | None" = None,
     ) -> None:
         self.event_bus = event_bus
         self.adapter = adapter
@@ -60,7 +66,10 @@ class OrderManager:
         self._safety = safety
         self.orders: dict[str, OrderRequest] = {}
 
-    def safety_decision(self, plan: PortfolioAllocationPlan) -> LockoutDecision | None:
+    # Quoted for the same reason as `safety` above: LockoutDecision is imported
+    # under TYPE_CHECKING only, and an unquoted return annotation raises
+    # NameError on Python <=3.13.
+    def safety_decision(self, plan: PortfolioAllocationPlan) -> "LockoutDecision | None":
         """Durable safety-plane verdict for this plan's account/venue/strategy.
 
         The in-memory ``RiskGovernor`` lockout is a *separate* control that lives
