@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from scripts import sbom as sbom_module
-from scripts.package_release import MANIFEST_NAME, verify_archive
+from scripts.package_release import MANIFEST_NAME, should_exclude, verify_archive
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -143,6 +143,62 @@ def test_archive_with_a_secret_fails(tmp_path: Path, capsys) -> None:
     members = {"core/a.py": b"x", ".env": b"KEY=live"}
     assert verify_archive(_archive(tmp_path, members, _manifest_for(members))) is False
     assert "SECRET" in capsys.readouterr().out
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Packaging exclusions: negations must actually override, and only exactly
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def test_negation_overrides_a_pattern_listed_before_it() -> None:
+    """`*md` is listed before `!README.md`, so an order-dependent matcher
+    excludes README.md and the negation never runs. README.md is named in
+    INCLUDE_FILES, so it silently never shipped in any release archive."""
+    assert should_exclude(Path("README.md"), "README.md") is False
+    assert should_exclude(Path("CONSTITUTION.md"), "CONSTITUTION.md") is False
+
+
+def test_other_markdown_is_still_excluded() -> None:
+    """Re-including two files must not have re-included all of prose. The
+    default `*.md` exclusion is the reason an archive is code, not docs."""
+    for rel in ("docs/DEPENDENCY_POLICY.md", "ARCHITECTURE_PLANES.md", "CHECKPOINT.md"):
+        assert should_exclude(Path(rel), rel) is True, f"{rel} must stay out"
+
+
+def test_a_negation_does_not_widen_into_a_prefix_match() -> None:
+    """The negations are exact, so they re-include only what they name.
+
+    The previous implementation compared with `startswith`, so a negation
+    written as `!README.md` would also rescue `README.md.bak` -- quietly
+    widening an allowlist. This checks the negation helper directly, against
+    names that `*.md` genuinely excludes, so a prefix regression is visible
+    rather than masked by the fact that `.bak` is not itself excluded.
+    """
+    from scripts.package_release import _negation_matches
+
+    assert _negation_matches("README.md", "README.md") is True
+    for rel in ("README.md.bak", "docs/README.md", "README.mdx"):
+        assert _negation_matches(rel, "README.md") is False, (
+            f"the README negation must not match {rel!r} by prefix or basename"
+        )
+
+    # End to end: the root README ships, and a same-named file in a subdirectory
+    # does not ride in on the root's negation.
+    assert should_exclude(Path("README.md"), "README.md") is False
+    assert should_exclude(Path("docs/README.md"), "docs/README.md") is True
+
+
+def test_secrets_and_caches_remain_excluded() -> None:
+    """The negations are narrow; the exclusions they sit beside are not."""
+    for rel in (
+        ".env",
+        ".env.production",
+        "node_modules/react/index.js",
+        "core/__pycache__/x.pyc",
+        "data/aios.db",
+        "logs/serve.err.log",
+    ):
+        assert should_exclude(Path(rel), rel) is True, f"{rel} must stay out"
 
 
 # ══════════════════════════════════════════════════════════════════════════

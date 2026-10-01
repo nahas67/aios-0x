@@ -70,8 +70,20 @@ FORBIDDEN_PATTERNS = [
     "data/ui_audit/",
     "data/pytest_*.txt",
     "data/figma_*.json",
-    "*.md",  # exclude except README
+    # Logs are excluded by extension wherever they are, not only under data/.
+    # Tracked since commit 2413331, before .gitignore covered logs/, and three
+    # of them shipped in the repository until they were untracked. A release
+    # archive should not reintroduce that.
+    "*.log",
+    "*.pid",
+    "logs/",
+    # Prose is excluded because a release archive is code, not documentation.
+    # CONSTITUTION.md is the exception: core/constitution.py verifies it against
+    # a SHA-256 pin at boot, so excluding it ships a tree whose own integrity
+    # check cannot run.
+    "*.md",
     "!README.md",
+    "!CONSTITUTION.md",
     ".cursorrules",
     ".gitattributes",
     "TAG",
@@ -100,6 +112,10 @@ INCLUDE_FILES = [
     # pyproject.toml is the single dependency authority; there is no
     # requirements.txt to keep in sync (see docs/DEVELOPMENT.md).
     "pyproject.toml",
+    # core/constitution.py verifies this file against a SHA-256 pin on every
+    # boot, so a release archive without it cannot start: the pin is checked
+    # against a file the operator is expected to be able to read and amend.
+    "CONSTITUTION.md",
     "Dockerfile",
     "docker-compose.yml",
     "README.md",
@@ -107,31 +123,73 @@ INCLUDE_FILES = [
 ]
 
 
+def _matches(path: Path, rel_fwd: str, pattern: str) -> bool:
+    """True when `pattern` selects this path (no negation handling here)."""
+    if pattern.endswith("/"):
+        return rel_fwd.startswith(pattern) or f"/{pattern}" in rel_fwd
+    if "*" in pattern:
+        import fnmatch
+
+        return fnmatch.fnmatch(rel_fwd, pattern) or fnmatch.fnmatch(path.name, pattern)
+    return rel_fwd == pattern
+
+
+def _re_included(path: Path, rel_fwd: str, pattern: str) -> bool:
+    """True when a negation `pattern` (without '!') re-includes this path.
+
+    Deliberately exact rather than a `startswith` sweep. A prefix match would
+    let "!README.md" re-include "README.md.bak" or "docs/README.md", quietly
+    widening a release archive -- the failure mode a packaging allowlist exists
+    to prevent. A directory negation may match a path beneath it, since that is
+    the only way to express "this subtree is allowed".
+    """
+    allowed = pattern
+    if allowed.endswith("/"):
+        return rel_fwd.startswith(allowed)
+    # Exact on the full relative path, or on the bare filename. Comparing the
+    # filename rather than testing startswith is what stops README.md.bak from
+    # matching a negation written as "!README.md".
+    return rel_fwd == allowed or path.name == allowed
+
+
+def _negation_matches(rel_fwd: str, pattern: str) -> bool:
+    """True when negation `pattern` (without '!') applies to `rel_fwd`.
+
+    A negation names a path, not a filename: `!README.md` means the root
+    README, and does not reach `docs/README.md`. Matching on the basename would
+    make every README in the tree re-includable from one root-level entry,
+    which is the allowlist quietly widening -- the failure this list exists to
+    prevent. A trailing slash expresses a subtree, since that is the only way
+    to say "everything under here".
+    """
+    if pattern.endswith("/"):
+        return rel_fwd.startswith(pattern)
+    return rel_fwd == pattern
+
+
 def should_exclude(path: Path, rel: str) -> bool:
-    """Check if a relative path should be excluded from the archive."""
+    """Check if a relative path should be excluded from the archive.
+
+    Negations are collected first and applied last. Evaluating patterns in list
+    order meant `*.md` returned True for README.md before `!README.md` was ever
+    reached, so the two negations in this list had no effect at all: every
+    markdown file was excluded and README.md -- explicitly listed in
+    INCLUDE_FILES -- never shipped. Order-independent matching is the only way a
+    negation can mean anything next to a broad pattern.
+    """
     rel_fwd = rel.replace("\\", "/")
 
+    excluded = False
+    negations: list[str] = []
     for pattern in FORBIDDEN_PATTERNS:
         if pattern.startswith("!"):
-            # Negation — this pattern is allowed
-            allowed = pattern[1:]
-            if rel_fwd == allowed or rel_fwd.startswith(allowed):
-                return False
-        elif pattern.endswith("/"):
-            # Directory match
-            if rel_fwd.startswith(pattern) or f"/{pattern}" in rel_fwd:
-                return True
-        elif "*" in pattern:
-            # Glob match
-            import fnmatch
-            if fnmatch.fnmatch(rel_fwd, pattern) or fnmatch.fnmatch(path.name, pattern):
-                return True
-        else:
-            # Exact file match
-            if rel_fwd == pattern:
-                return True
+            negations.append(pattern[1:])
+        elif _matches(path, rel_fwd, pattern):
+            excluded = True
 
-    return False
+    if not excluded:
+        return False
+    return not any(_negation_matches(rel_fwd, allowed) for allowed in negations)
 
 
 def build_archive(version: str = "latest") -> Path:
