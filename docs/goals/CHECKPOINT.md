@@ -46,7 +46,7 @@ approximated. Last verified at `85163ba` plus this block.
   states). See #51, #53.
 - **TLA+ model-checked** — `scripts/run_tlc.ps1`, **four** specs, no property violated:
   OrderLifecycle 70 generated / 42 distinct / depth 4; Outbox 16 / 13 / depth 7;
-  KillSwitch 88 / 48 / depth 4; Reconciliation 793,036 / 1,494 / depth 3.
+  KillSwitch 88 / 48 / depth 11; Reconciliation 793,036 / 1,494 / depth 3.
   `CHECK_DEADLOCK` is off in every `.cfg` because each terminal state is deliberately
   a dead end. Of the eight targets architecture §3E names, four are modelled; the
   other four are covered by existing specs or unspecified (#48).
@@ -56,9 +56,18 @@ approximated. Last verified at `85163ba` plus this block.
   sits between socket and screen.
 - **Docker image builds** (`aios-0x:test`, `backends importable`), container serves
   `/api/v1/health` and `/`, image's own HEALTHCHECK reports `healthy`, constitution
-  pin verifies inside the container.
-- **Release archive builds and self-verifies** — 306 files, manifest agrees with member
+  pin verifies inside the container. Re-verified this cycle: the image serves
+  `/api/v1/health` with `audit_chain_valid: true` and carries CONSTITUTION.md.
+- **Release archive builds and self-verifies** — 312 files, manifest agrees with member
   names, `verify_archive` true. SBOM: CycloneDX 1.5, 52 components.
+  All four bullets above re-measured on the tree this block describes. Two were
+  WRONG and are corrected here: KillSwitch's search depth is 11, not the 4 recorded,
+  and the archive holds 312 files, not 306. The KillSwitch state counts were right,
+  which is why the error survived — a reader checking the headline sees matching
+  numbers. Four specs model-check clean in 18 seconds, so re-running cost almost
+  nothing, and this block is the thing a reader trusts without checking. That is
+  also why defect #56's rule cuts both ways: copying the previous block forward is
+  how the depth got wrong in the first place.
 
 Every CI step is green. The one that used not to be -- "Lock file is current" -- is
 now green because it checks the lock against `pyproject.toml` rather than against

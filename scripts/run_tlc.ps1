@@ -49,9 +49,28 @@ if (-not $JarPath) {
 }
 if (-not (Test-Path $JarPath)) {
     Say "fetch tla2tools.jar -> $JarPath"
+    # `curl -o` creates the destination BEFORE it knows the transfer will succeed, so a
+    # failed download leaves a zero-byte or partial file behind. Checking only that the
+    # path exists therefore passes on exactly the failure it was meant to catch, and the
+    # script then dies in the Copy-Item below with a bare IOException naming an internal
+    # scratch path -- not the download that failed, and not the flag that fixes it. Hit
+    # for real: the log said "fetch tla2tools.jar" and then reported a CopyError.
+    #
+    # So the predicate is "a usable jar", not "a path": curl's exit status, and a
+    # non-empty file. And the message names -JarPath, because that is the remedy.
     curl.exe -sL -o $JarPath $TlcUrl
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $JarPath) -or (Get-Item $JarPath).Length -eq 0) {
+        Remove-Item $JarPath -Force -ErrorAction SilentlyContinue
+        throw (
+            "could not fetch tla2tools.jar from $TlcUrl (curl exit $LASTEXITCODE). " +
+            "Download it manually and pass -JarPath <path>, or drop the jar at $JarPath."
+        )
+    }
 }
 if (-not (Test-Path $JarPath)) { throw "tla2tools.jar not available at $JarPath" }
+if ((Get-Item $JarPath).Length -eq 0) {
+    throw "tla2tools.jar at $JarPath is empty. Delete it and re-run, or pass -JarPath <path>."
+}
 Copy-Item $JarPath (Join-Path $Work 'tla2tools.jar') -Force
 
 $Modules = Get-ChildItem (Join-Path $SpecsDir '*.tla') | ForEach-Object { $_.BaseName }
