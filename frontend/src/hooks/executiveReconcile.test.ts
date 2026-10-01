@@ -74,7 +74,33 @@ describe("reconcileExecutive", () => {
     // "no data" is a different claim from "the last thing the server said".
     const view = reconcileExecutive(NONE, "reconnecting", frame(FRESH), null);
     expect(view.executive).toBe(FRESH);
-    expect(view.source).not.toBe("stream");
+    // EXACT, not `.not.toBe("stream")`. The earlier version of this assertion was
+    // satisfied by "poll", by "pollx", by anything -- which is how the code came to
+    // report a stream-delivered value as a fallback-poll value for the whole time
+    // the suite was green. A negative assertion cannot distinguish two wrong
+    // answers from each other; this claim is about which one it is.
+    expect(view.source).toBe("stream_stale");
+  });
+
+  it("does not call a stream-delivered value a polled one, in either direction", () => {
+    // The defect and its converse. `stream_stale` and `poll` are different facts:
+    // one says the stream said this and has stopped, the other says a request
+    // returned this just now. Collapsing them is what the UI renders as
+    // "FALLBACK POLL" for a value no fallback poll produced.
+    const stale = reconcileExecutive(NONE, "reconnecting", frame(FRESH), null);
+    const polled = reconcileExecutive(NONE, "reconnecting", frame(FRESH), STALE);
+
+    expect(stale.source).not.toBe(polled.source);
+    expect(stale.source).toBe("stream_stale");
+    expect(polled.source).toBe("poll");
+  });
+
+  it("reports no source at all when there is no value to attribute", () => {
+    // A label attached to nothing is still a claim. This was reachable before and
+    // is pinned so it stays unreachable.
+    const view = reconcileExecutive(NONE, "offline", null, null);
+    expect(view.executive).toBeNull();
+    expect(view.source).toBeNull();
   });
 
   it("prefers the poll over a stale frame once both exist and the stream is down", () => {

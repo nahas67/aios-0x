@@ -238,16 +238,25 @@ def test_reconciliation_anomaly_kinds_match_the_implementation() -> None:
 
 
 def test_reconciliation_scope_ranks_match_the_implementation() -> None:
-    """The spec's rank ordering is the code's SCOPE_RANK ordering.
+    """The spec's reach must match the code's SCOPE_RANK and LOCKOUT_SCOPE_BY_KIND.
 
-    The rank is what carries the meaning -- "widest" -- so a renumbering in either
-    direction is a semantic change. Asserted against the real table rather than a
-    hardcoded copy, so the spec cannot drift from the enum silently.
+    The rank carries the meaning -- "widest" -- so a renumbering in either direction
+    is a semantic change, and a spec that stopped agreeing with the table would be
+    describing a severity ladder the engine does not use.
+
+    Both assertions read the real tables rather than a hardcoded copy, so the spec
+    cannot drift from the enum silently.
+
+    An earlier version also asserted
+
+        sorted(SCOPE_RANK, key=lambda s: -SCOPE_RANK[s])[0] is max(SCOPE_RANK, ...)
+
+    which holds for ANY mapping -- an independent review demonstrated it on the real
+    table plus two arbitrary ones. It asserted nothing about the spec, which is what
+    this docstring claimed it pinned, so it was removed rather than left as
+    decoration. The two assertions below are the ones with teeth.
     """
     text = _read("Reconciliation.tla")
-
-    widest_first = sorted(SCOPE_RANK, key=lambda s: -SCOPE_RANK[s])
-    assert widest_first[0] is max(SCOPE_RANK, key=lambda s: SCOPE_RANK[s])
 
     # Only CRITICAL restricts, per LOCKOUT_SCOPE_BY_KIND's docstring.
     restricting = {k for k, scope in LOCKOUT_SCOPE_BY_KIND.items() if scope is not LockoutScope.NONE}

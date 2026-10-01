@@ -151,7 +151,9 @@ export const SystemHealthWorkspace: React.FC = () => {
                 ? "STREAM"
                 : live.source === "poll"
                   ? "FALLBACK POLL"
-                  : "NONE YET"}
+                  : live.source === "stream_stale"
+                    ? "STREAM (STALE)"
+                    : "NONE YET"}
             </div>
           </div>
           <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-2 rounded">
@@ -177,8 +179,9 @@ export const SystemHealthWorkspace: React.FC = () => {
         )}
         {live.status === "reconnecting" && (
           <div className="text-[10px] text-amber-400">
-            Feed reconnecting. Values above come from the fallback poll and may be
-            up to one poll interval stale.
+            Feed reconnecting. {live.source === "stream_stale"
+              ? "The value shown is the last one the stream delivered, and no fallback poll has run yet."
+              : "Values above come from the fallback poll and may be up to one poll interval stale."}
           </div>
         )}
       </div>

@@ -23,7 +23,25 @@
 import type { StreamStatus } from "../api/stream";
 import type { Executive, StreamFrame } from "../api/types";
 
-export type ExecutiveSource = "stream" | "poll" | null;
+/**
+ * Where the value on screen came from.
+ *
+ * Three states, not two. `stream` and `poll` are both LIVE -- a value delivered
+ * this instant by one or the other. `stream_stale` is neither: the stream
+ * delivered it, and the stream has since stopped, so the figure is the last thing
+ * the server said rather than something currently arriving.
+ *
+ * An independent review found the two-state version returning `"poll"` for a
+ * stream-delivered value whenever no poll had landed yet, which the UI renders as
+ * FALLBACK POLL. So a console parked in `auth_required` was told its state came
+ * from a fallback poll that had not run -- the mirror image of the dishonesty this
+ * module exists to prevent, and committed in the same commit that named it.
+ *
+ * A separate label rather than an overloading of `"poll"` because "polled" and
+ * "stale" are different facts: the first says where the number came from, the
+ * second says how much to trust it now.
+ */
+export type ExecutiveSource = "stream" | "poll" | "stream_stale" | null;
 
 export interface ExecutiveView {
   executive: Executive | null;
@@ -56,9 +74,11 @@ export function reconcileExecutive(
     return { executive: frame.executive, source: "stream" };
   }
   if (frame && !polled) {
-    // Stream dropped, nothing polled yet: keep the last thing the server said,
-    // and do not claim it is live.
-    return { executive: frame.executive, source: "poll" };
+    // Stream dropped, nothing polled yet: keep the last thing the server said.
+    // Reported as stream_stale, NOT as "poll" -- a fallback poll has not run, and
+    // claiming it had tells the operator where a number came from when nobody
+    // knows.
+    return { executive: frame.executive, source: "stream_stale" };
   }
   if (frame && polled) {
     // Stream down and a poll has landed: the poll is the more recent of the two,

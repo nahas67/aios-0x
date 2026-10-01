@@ -402,6 +402,99 @@ def test_env_example_carries_no_secret_values() -> None:
         )
 
 # ══════════════════════════════════════════════════════════════════════════
+def test_an_extras_providing_distribution_missing_from_the_lock_fails(
+    sandbox: Path,
+) -> None:
+    """`psycopg[binary]` declares TWO distributions, and both must be locked.
+
+    Found by independent review: `--check` passed with `psycopg-binary` deleted from
+    the lock, with the digest recomputed so the lock was otherwise internally
+    perfect. `declared_requirements` contributed a `base-extra` root so GENERATION
+    resolved it, while `declared_specifiers` -- which drives the presence and
+    specifier checks -- recorded only `requirement.name`. The two halves of the
+    module disagreed about what pyproject declares and the gate consulted one.
+
+    It matters more than an ordinary missing package: this is the database driver's
+    binary, so a lock without it installs a psycopg that cannot connect to anything,
+    and the lock is what a deployment installs from.
+    """
+    def drop_binary(text: str) -> str:
+        header, packages = _split_lock(text)
+        packages = [line for line in packages if not line.startswith("psycopg-binary==")]
+        return _rebuild(header, packages)
+
+    _rewrite(sandbox, drop_binary)
+
+    problems = _verify(sandbox)
+    assert any("psycopg-binary" in p and "absent" in p for p in problems), (
+        f"removing an extras-provided distribution must fail; got {problems}"
+    )
+
+
+def test_an_extras_provider_is_required_without_inventing_a_range(
+    sandbox: Path,
+) -> None:
+    """pyproject declares a range for `psycopg`, and none at all for `psycopg-binary`.
+
+    So the provider is required to be PRESENT and has no range to satisfy. Giving
+    it the parent's range would be inventing a constraint pyproject does not
+    declare, and would pass a `psycopg-binary` incompatible with the `psycopg`
+    beside it -- a false assurance manufactured by the check itself. Asserted on
+    the real lock: the provider is present, and no specifier is claimed for it.
+    """
+    table = lockdep.declared_specifiers(EXTRAS)
+    assert "psycopg-binary" in table, (
+        "the extras provider must be among the checked names"
+    )
+    assert table["psycopg-binary"] == [], (
+        "the extras provider must be required-present with no invented range, "
+        f"got {table['psycopg-binary']}"
+    )
+    assert table["psycopg"], "psycopg itself must still carry its declared range"
+
+
+def test_check_installed_reports_an_unreadable_lock_without_raising(
+    sandbox: Path, capsys
+) -> None:
+    """A flag whose contract is "report, do not fail" must not raise.
+
+    `--check-installed` documents that it reports drift rather than failing on it,
+    because the honest answer to "how does my environment differ" is never an
+    exception. An unpinned entry is a fact about the lock worth reporting, exactly
+    like a version difference, so it takes the same path. `--check` remains the flag
+    that refuses such a lock.
+    """
+    (sandbox / "requirements.lock").write_text(
+        "aiohttp==3.14.3\nrequests\n", encoding="utf-8"
+    )
+
+    code = lockdep.main(["--check-installed"])
+    out = capsys.readouterr().out
+
+    assert code == 0, f"the reporting flag must not fail: exit {code}"
+    assert "not readable" in out, out
+    assert "unpinned lock entry" in out, out
+
+
+def test_check_refuses_the_same_lock_the_reporting_flag_only_reports(
+    sandbox: Path,
+) -> None:
+    """The two flags disagree on purpose, and the disagreement is the point.
+
+    One refuses a lock that is not a lock; the other reports on it. A reader who
+    collapses them gets either a gate that cries wolf or a report that fails a
+    build, so the difference is pinned rather than left to be inferred from the
+    code.
+    """
+    (sandbox / "requirements.lock").write_text(
+        "aiohttp==3.14.3\nrequests\n", encoding="utf-8"
+    )
+
+    assert lockdep.main(["--check"]) == 1, "the gate must refuse an unpinned lock"
+    assert lockdep.main(["--check-installed"]) == 0, "the reporter must not fail"
+
+
+
 # Dependency lock gate (environment-independent)
 # ══════════════════════════════════════════════════════════════════════════
 

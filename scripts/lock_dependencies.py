@@ -41,16 +41,39 @@ truth and does not vary by machine:
 matched what was installed, so a lock pinning a version pyproject FORBIDS passed as
 long as that version happened to be installed. (3), (4) and (6) are new.
 
-NOT CHECKED, AND WHY
+NOT CHECKED -- ALL THREE NARROWINGS, FOUND BY REVIEW
 
-Whether the lock's transitive closure is COMPLETE. That cannot be verified without
-the metadata of the packages in it, which is exactly the environment dependence this
-rewrite removes. A lock missing a transitive dependency therefore passes.
+1. COMPLETENESS of the transitive closure. Whether every reachable dependency is in
+   the lock cannot be verified without the metadata of the packages in it, which is
+   exactly the environment dependence this rewrite removes. A lock missing a
+   transitive dependency therefore passes.
 
-This is a real narrowing of the old gate's APPARENT coverage -- it appeared to cover
-this because it recomputed the closure. It is stated here rather than left for a
-reader to assume, because a gate whose real scope is wider than what it checks is
-read as assurance it does not provide.
+2. ADDED PACKAGES. The old gate was a byte-compare against a closure recomputed from
+   the environment, so anything in the lock that no root reached was caught. That is
+   no longer checked: inserting a distribution this project never asked for, with a
+   correct digest, produces no problems.
+
+3. TRANSITIVE VERSION AUTHENTICITY. A version can only be checked against a range
+   pyproject states, and pyproject states ranges for 11 of the 52 locked packages.
+   The other 41 -- 79% of the lock -- have no version anchor at all, so a
+   `cryptography==3.0.1` passes despite known CVEs. This is inherent to a lock whose
+   authority is a manifest that does not mention those packages, not a defect
+   specific to this implementation.
+
+Each of the three was disclosed by an independent review of the previous version, and
+the first is the one I had written down -- which is the reason all three are here now.
+A gate whose real scope is wider than what it checks is read as assurance it does not
+provide, and a partial list is worse than none, because it reads as complete.
+
+BLAST RADIUS, STATED PRECISELY
+
+Nothing installs from `requirements.lock` in CI or in the Dockerfile: pyproject is
+what gets installed, and the lock is derived from it. So the live exposure of
+narrowings 1-3 is the SBOM and audit surface -- `sbom.parse_lock` certifies exactly
+this file, and a package it should not have listed would be certified as part of the
+build. That is a fact about the current shape of the build rather than a property of
+the lock file, and it is labelled as such so nobody reads it as a guarantee that stops
+applying the moment an installer is added.
 
 WHY BOTH MODES EXIST
 
@@ -208,6 +231,21 @@ def declared_specifiers(
 
     Keyed by normalized name so `PyJWT`, `pyjwt` and `py_jwt` are one entry; a
     lookup that missed those would report a satisfied dependency as absent.
+
+    An extras-PROVIDING distribution (`psycopg-binary`, from `psycopg[binary]`) is
+    included as a key with an EMPTY list, which means "must be present, no range
+    declared". It was missing entirely before an independent review pointed out
+    that `--check` passed with `psycopg-binary` deleted from the lock: generation
+    resolved extras via `declared_requirements`, but this function -- which drives
+    the presence and specifier checks -- recorded only `requirement.name`. The two
+    halves of this module disagreed about what pyproject declares and the gate
+    consulted only one.
+
+    The empty list is not a shortcut. pyproject states a range for the package
+    carrying the extra and none for the distribution providing it, so the two
+    obligations differ. Inheriting the parent's range would invent a constraint
+    pyproject does not declare, and would pass a psycopg-binary incompatible with
+    the psycopg beside it -- a false assurance manufactured by the check itself.
     """
     data = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
     project = data.get("project", {})
@@ -228,6 +266,10 @@ def declared_specifiers(
         if requirement.marker is not None and not requirement.marker.evaluate({"extra": ""}):
             continue
         table.setdefault(_normalize(requirement.name), []).append(spec)
+        # The extra's PROVIDING distribution, if it is not already a declared
+        # dependency in its own right. Presence is required; no range is invented.
+        for extra_name in requirement.extras:
+            table.setdefault(_normalize(f"{requirement.name}-{extra_name}"), [])
     return table
 
 
@@ -260,6 +302,10 @@ def verify_lock(
         version = locked.get(name)
         if version is None:
             problems.append(f"{name} is declared in pyproject but absent from the lock")
+            continue
+        if not specs:
+            # An extras provider: required to be present, with no declared range.
+            # The presence check above already ran, so this is complete.
             continue
         try:
             requirement = Requirement(specs[0])
@@ -369,7 +415,16 @@ def main(argv: list[str] | None = None) -> int:
         if not LOCK.exists():
             print("requirements.lock is missing; run scripts/lock_dependencies.py")
             return 1
-        lines, _, _ = parse_lock(LOCK.read_text(encoding="utf-8"))
+        try:
+            lines, _, _ = parse_lock(LOCK.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            # A flag whose contract is "report, do not fail" must not raise. An
+            # unpinned entry is a fact about the lock worth reporting, not a
+            # reason to hand the caller a traceback; `--check` is the flag that
+            # refuses it.
+            print(f"the lock is not readable: {exc}")
+            print("  --check will refuse it; --check-installed only reports")
+            return 0
         locked = {
             _normalize(line.split("==", 1)[0]): line.split("==", 1)[1]
             for line in lines
