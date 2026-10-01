@@ -340,22 +340,46 @@ class KillSwitch:
         flatten_callback: Callable[[str, float], Awaitable[None]],
         price_lookup: Callable[[str], float],
         adverse_slip_pct: float = 0.25,
+        cancel_open_orders: Callable[[], Awaitable[int]] | None = None,
     ) -> None:
         self.governor = governor
         self._positions_view = positions_view
         self._flatten = flatten_callback
         self._price_of = price_lookup
         self.adverse_slip_pct = adverse_slip_pct
+        # CONSTITUTION.md 2.2 makes cancelling open orders the FIRST step of the
+        # sequence. The capability existed (DurableOrderManager.cancel,
+        # BaseExecutionAdapter.cancel_all_orders) but nothing invoked it, so the
+        # switch flattened positions and halted while leaving working orders at
+        # the venue -- an order placed before the emergency could still fill and
+        # leave exposure nothing had flattened. Optional so callers that hold no
+        # OMS (unit tests, adapters) keep working; when supplied, the step runs.
+        self._cancel_open_orders = cancel_open_orders
         self.engaged_at: datetime | None = None
+        self.cancelled_last: int | None = None
 
     async def trigger(self, reason: str, triggered_by: str = "system") -> int:
-        """Cancel->flatten->lockout. Returns number of positions flattened."""
+        """Cancel->flatten->lockout. Returns number of positions flattened.
+
+        The order of the three steps is the constitution's, not a convenience.
+        Cancel runs first because an order already working at the venue can fill
+        while we flatten, and the fill it produces would be new exposure created
+        after the emergency. Flattening first and cancelling second leaves a
+        window in which the book gains a position nobody has flattened.
+        """
         positions = self._positions_view()
         logger.critical(
-            "KILL SWITCH triggered (%s): flattening %d position(s)",
+            "KILL SWITCH triggered (%s): cancelling open orders, flattening %d position(s)",
             reason,
             len(positions),
         )
+
+        cancelled = 0
+        if self._cancel_open_orders is not None:
+            cancelled = await self._cancel_open_orders()
+        self.cancelled_last = cancelled
+        if cancelled:
+            logger.critical("KILL SWITCH cancelled %d open order(s)", cancelled)
 
         flattened = 0
         slip = self.adverse_slip_pct / 100.0
@@ -369,7 +393,7 @@ class KillSwitch:
 
         await self.governor.escalate(
             EmergencyStateValue.EMERGENCY_HALT,
-            f"kill switch: {reason}",
+            f"kill switch: {reason} (cancelled {cancelled}, flattened {flattened})",
             triggered_by=triggered_by,
         )
         self.engaged_at = datetime.now(UTC)

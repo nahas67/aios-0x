@@ -444,6 +444,7 @@ class ReplayRunner:
             positions_view=self._positions_view,
             flatten_callback=self._flatten_position,
             price_lookup=self._last_price_of,
+            cancel_open_orders=self._cancel_every_open_order,
         )
 
         # ---- §26 reconciliation: ONE authoritative engine.
@@ -919,6 +920,41 @@ class ReplayRunner:
         if position is None:
             return
         await self._settle(position.receipt, exit_price, "KILL_SWITCH")
+
+    async def _cancel_every_open_order(self) -> int:
+        """CONSTITUTION.md 2.2, step 1 of the kill-switch sequence.
+
+        Cancels every order the durable OMS still considers live, so nothing that
+        was working when the switch was pulled can fill into exposure the
+        flatten step has already passed. Returns how many were cancelled.
+
+        Venue-side cancellation is attempted too, because the OMS's own record
+        going quiet does not stop a broker from filling: an order already
+        acknowledged can still deliver. Whichever seam is available does the
+        work, and the count reflects orders this system actually stopped.
+        """
+        cancelled = 0
+        try:
+            for order in self.oms.recover_open_orders():
+                try:
+                    self.oms.cancel(order.internal_order_id, "kill switch")
+                    cancelled += 1
+                except Exception:  # noqa: BLE001 - one refusal must not stop the halt
+                    logger.exception(
+                        "kill switch: could not cancel order %s",
+                        order.internal_order_id,
+                    )
+        except Exception:  # noqa: BLE001
+            logger.exception("kill switch: open-order enumeration failed")
+
+        adapter = getattr(self, "adapter", None)
+        venue_cancel = getattr(adapter, "cancel_all_orders", None)
+        if callable(venue_cancel):
+            try:
+                await venue_cancel(None)
+            except Exception:  # noqa: BLE001
+                logger.exception("kill switch: venue cancel_all_orders failed")
+        return cancelled
 
     async def _reconcile(self) -> ReconciliationResult:
         """Per-bar venue-vs-internal comparison through the durable engine (§26).
