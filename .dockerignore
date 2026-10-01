@@ -31,8 +31,17 @@ frontend/.cache
 # Dev / test
 tests/
 docs/
+# Prose is excluded because it is not needed at run time -- with two exceptions
+# the image cannot start without. CONSTITUTION.md is copied by the Dockerfile and
+# core/constitution.py verifies it against a SHA-256 pin on every boot, so
+# excluding it made the build fail at `COPY pyproject.toml CONSTITUTION.md`
+# rather than merely producing a slimmer image. The pin is the point of the
+# constitution: an image that ships without the file it verifies cannot enforce
+# it, and silently skipping the check is exactly the failure mode the pin
+# exists to prevent.
 *.md
 !README.md
+!CONSTITUTION.md
 
 # Dev config
 .env.example

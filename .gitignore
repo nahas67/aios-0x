@@ -33,6 +33,16 @@ data/*
 !data/seed/
 data/seed/*
 !data/seed/*.json
+# The golden datasets are the exception that proves the rule. They are
+# regenerable byte-stable from simulation/generate_golden_data.py (seed=42), but
+# the Dockerfile COPYs data/golden, docker-compose mounts it read-only, and
+# scripts/run_replay.py defaults to it -- so a fresh clone without them cannot
+# build the image or replay anything. Versioned because a fixture a build
+# depends on is source, and because "regenerate it first" is a step every
+# consumer would otherwise have to rediscover.
+!data/golden/
+data/golden/*
+!data/golden/*.csv
 *.db
 *.sqlite3
 
