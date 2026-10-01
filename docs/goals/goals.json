@@ -408,7 +408,7 @@
       "depends_on": [
         "G090"
       ],
-      "summary": "RegimeState from trend, volatility and liquidity inputs via an online regime labeller, with change detection (two-sided CUSUM plus Bai-Perron offline segmentation) supplying dated, confidence-bearing shift events, and a per-strategy DomainOfCompetence refusing a playbook outside the regimes its strategy declared itself valid in.",
+      "summary": "RegimeState from trend, volatility and liquidity inputs via an online regime labeller, with change detection (two-sided CUSUM plus Bai-Perron offline segmentation) supplying dated, confidence-bearing shift events, and a per-strategy DomainOfCompetence refusing a playbook outside the regimes its strategy was measured competent in — read off the certification verdict's own per-regime checks and resolved at admission, so the gate fires in production and not only in tests.",
       "gates": [
         {
           "check": "test:tests/test_regime_engine.py",
@@ -425,6 +425,10 @@
         {
           "check": "test:tests/test_domain_of_competence.py",
           "statement": "Competence is opt-in: a regime in neither the valid nor the invalid set is refused, and the permitted set equals exactly what was declared; the two lists cannot overlap and valid cannot be empty; a strategy with no declaration may register no playbook at all; a playbook activating in a regime its strategy recorded as unsafe is refused by name; and a registration that is refused leaves nothing behind."
+        },
+        {
+          "check": "test:tests/test_competence_derivation.py",
+          "statement": "A strategy's domain of competence is derived from the verdict that certified it — a regime is competent exactly when its `regime_sharpe:<regime>` check passed, which is the regime being neither too thin to support a playbook nor losing money net of costs — and never from the playbooks being checked. A verdict carrying no per-regime decomposition yields no competence rather than an empty one; a regime certification never decomposed is incompetent, not permitted; and a check naming a regime this build does not know confers nothing. Competence is resolved at admission from the registry rather than snapshotted at construction, because the registry is empty at boot and a snapshot would refuse every strategy forever."
         }
       ],
       "evidence": [
