@@ -8,36 +8,44 @@
 and is deliberately *not* authoritative — where the two disagree, the registry
 and the tests win.
 
-**Last verified** (full tree, `git rev-parse HEAD` = `6f9ff81`, 117 commits, 489
-tracked files, working tree clean):
+**Last verified** (full tree, `git rev-parse HEAD` = `7549d52`, 131 commits,
+495 tracked files, working tree clean):
 
-- **Full suite with PostgreSQL *and* NATS JetStream up** — `1646 passed,
-  1 skipped` (exit 0, 6m41s), measured before this cycle's later additions.
 - **Full suite hermetic** (no `AIOS_TEST_PG_DSN` / `AIOS_TEST_NATS_URL`) —
-  `1539 passed, 12 skipped, 76 deselected` (exit 0, 4m02s). This is the
-  authoritative current number.
-- ruff clean · mypy clean on 144 source files · anti-pattern lint clean
-  (6 rules) · constitution pin verifies at boot · architecture boundaries and
-  goal registry pass · zero secret findings in tracked content.
-- **Docker image builds** (`aios-0x:test`, `backends importable`), container
-  serves `/api/v1/health` and `/`, image's own HEALTHCHECK reports `healthy`,
-  constitution pin verifies inside the container.
-- **TLA+ model-checked** -- `scripts/run_tlc.ps1`, **four** specs, no property
-  violated: OrderLifecycle 70 generated / 42 distinct / depth 4; Outbox 16 / 13
-  / depth 7; KillSwitch 88 / 48 / depth 4; **Reconciliation 793,036 / 1,494 /
-  depth 3**. `CHECK_DEADLOCK` is off in every `.cfg` because each terminal
-  state is deliberately a dead end.
-- **Frontend** -- `tsc -b --noEmit` clean - `vite build` succeeds - **21 vitest files / 84 tests** pass (was 20 / 66; the new tests cover the executive-reconciliation decisions behind the SSE consumer, each mutation-checked).
+  `1587 passed, 12 skipped, 76 deselected` (exit 0, 0:04:40).
+  This is the authoritative current number.
+- **Full suite with PostgreSQL *and* NATS JetStream up** — `1646 passed, 1 skipped`
+  (exit 0, 6m41s), measured well before this cycle's additions and labelled as such
+  rather than quoted as current. Re-run with
+  `docker compose -f docker-compose.test.yml up -d` plus `AIOS_TEST_PG_DSN`.
+- ruff clean · mypy clean on 144 source files · anti-pattern lint clean (6 rules) ·
+  constitution pin verifies at boot · architecture boundaries and goal registry pass ·
+  zero secret findings in tracked content.
+- **Dependency lock gate** — `scripts/lock_dependencies.py --check` exits 0. All six
+  properties mutation-checked. Three narrowings are disclosed in the module docstring
+  rather than assumed: transitive-closure completeness, added packages, and
+  transitive version authenticity (41 of 52 locked packages carry no range pyproject
+  states). See #51, #53.
+- **TLA+ model-checked** — `scripts/run_tlc.ps1`, **four** specs, no property violated:
+  OrderLifecycle 70 generated / 42 distinct / depth 4; Outbox 16 / 13 / depth 7;
+  KillSwitch 88 / 48 / depth 4; Reconciliation 793,036 / 1,494 / depth 3.
+  `CHECK_DEADLOCK` is off in every `.cfg` because each terminal state is deliberately
+  a dead end. Of the eight targets architecture §3E names, four are modelled; the
+  other four are covered by existing specs or unspecified (#48).
+- **Frontend** — `tsc -b --noEmit` clean · `vite build` succeeds · **21 vitest files /
+  86 tests** pass. The SSE stream is consumed; the frame's `executive` was verified
+  field-for-field against `GET /api/v1/executive` on a live server, so no translation
+  sits between socket and screen.
+- **Docker image builds** (`aios-0x:test`, `backends importable`), container serves
+  `/api/v1/health` and `/`, image's own HEALTHCHECK reports `healthy`, constitution
+  pin verifies inside the container.
+- **Release archive builds and self-verifies** — 306 files, manifest agrees with member
+  names, `verify_archive` true. SBOM: CycloneDX 1.5, 52 components.
 
-- **Release archive builds and self-verifies** — 306 files, manifest agrees with
-  member names, `verify_archive` true. SBOM: CycloneDX 1.5, 52 components.
-
-CI's "Lock file is current" step used to be the one permanently-red gate. It
-is green now, and for a reason worth recording: it had been comparing the lock
-against a closure recomputed from the local environment, so it asserted that one
-machine's resolution reproduces everywhere (#51). It now checks the lock against
-`pyproject.toml`, which does not vary by machine.
-
+Every CI step is green. The one that used not to be -- "Lock file is current" -- is
+now green because it checks the lock against `pyproject.toml` rather than against
+whatever versions one machine happened to install (#51). The CI workflow itself has
+not been executed here, since no GitHub activity is permitted.
 ---
 
 ## 1. Where the program stands
@@ -255,8 +263,8 @@ is removed.
 
 ## 3. Defects found and fixed in this cycle
 
-Fifty-five. Twenty-seven were found by a test written to assert the property, not by
-inspection — the point of writing the test first. The other eighteen (#28–#55)
+Fifty-six. Twenty-seven were found by a test written to assert the property, not by
+inspection — the point of writing the test first. The other eighteen (#28–#56)
 were found by *running the artifact* rather than reading it: building the image,
 starting the container, calling the release packager, standing up PostgreSQL and
 NATS, model-checking the TLA+ specs, and diffing the frozen architecture against
@@ -335,6 +343,7 @@ and a suite that only tests the former will never notice the latter.
 | 53 | The lock gate's headline claim was false for extras-provided packages | `--check` passed with `psycopg-binary` deleted from `requirements.lock`, the digest recomputed so the lock was otherwise internally perfect: `requirements.lock agrees with pyproject (51 package(s), digest c86072dce399)`. Found by an independent review, then reproduced end to end before changing anything. The cause is a one-line inconsistency between two functions in the same module: `declared_requirements` contributes a `base-extra` root for `psycopg[binary]`, so GENERATION resolved the extras-providing distribution, while `declared_specifiers` -- which drives the presence and specifier checks -- recorded only `requirement.name` and never looked for it. The two halves disagreed about what pyproject declares and the gate consulted one, so the docstring's claim that "every distribution pyproject declares is present in the lock" was false for exactly the distributions extras provide. It matters more than an ordinary missing package: this is the database driver's binary, so a lock without it installs a psycopg that cannot connect to anything, and the lock is what a deployment installs from. Fixed by contributing the extras providers as presence-required with NO invented range -- pyproject states `>=3.3,<4` for `psycopg` and nothing for `psycopg-binary`, so inheriting the parent's range would invent a constraint pyproject does not declare and pass a `psycopg-binary` incompatible with the psycopg beside it. **AND IT SURVIVED A MUTATION CHECK**, which is the general form: every property I chose to mutate turned the suite red, so the check proves the properties I thought to attack are load-bearing and says nothing about the ones I did not think of. The coverage of one's imagination is not a property, and that is now stated as a rule rather than as an anecdote |
 | 54 | The stream's provenance label lied, in the mirror direction | `reconcileExecutive`'s stale-frame branch returned `source: "poll"` for a value the SSE stream delivered, and `SystemHealthWorkspace` renders that as **FALLBACK POLL**. A console parked in `auth_required` with no poll yet was therefore told its state came from a fallback poll that had not run. Found by an independent review. The commit that introduced this module says the feed status and the snapshot's provenance are "never merged", and that claiming live delivery for a polled value is the dishonesty to avoid -- this is the mirror of that dishonesty, in the same commit that named it. The type was the cause: `"stream" \| "poll" \| null` has no way to say "the stream said this and the stream has since stopped". A fourth member `stream_stale` is added rather than overloading either existing one, because "polled" and "stale" are different facts: the first says where a number came from, the second says how much to trust it now. **The paired test that should have caught it asserted only `expect(view.source).not.toBe("stream")`**, which is satisfied by `"poll"` and by anything else -- a negative assertion cannot distinguish two wrong answers from each other, and the claim is about identity. Now asserted exactly, from both directions. Found by an independent review while the mutation check was green, and the eighth time this cycle that the discipline which was supposed to catch this did not |
 | 55 | Three statements in the tree that were untrue, or could not fail | All three from the same review. (1) `test_formal_assurance.py` asserted `sorted(SCOPE_RANK, key=-rank)[0] is max(SCOPE_RANK, key=rank)`, which holds for **any** mapping -- demonstrated on the real table plus two arbitrary ones, one with ties and one all-equal. It asserted nothing about the spec, which is what its docstring claimed it pinned, and its `widest_first` binding was left orphaned when it was removed. (2) `Reconciliation.tla` carried the header and body of a deleted property, including the normative sentence "the resolution ledger only grows, and no action can bring a closed finding back into the open set", attached to nothing -- while `Discover` sets `resolved' = {}` and therefore **shrinks** the ledger, so after Discover -> Resolve -> Discover a resolved kind is re-derivable. A spec asserting a guarantee its own machine contradicts is worse than a spec that is silent. Removing the orphaned prose also deleted the independently-verified scope note, which a drift test pins; the test caught it and the note was restored, which is that test doing its job. (3) the lock docstring disclosed ONE narrowing when there are three: transitive-closure completeness, **added** packages (the old byte-compare caught anything no root reached, so an invented package with a correct digest now passes), and transitive version **authenticity** -- 41 of 52 locked packages have no range pyproject states, so `cryptography==3.0.1` passes despite known CVEs. All three are now stated, with the blast radius: nothing installs from the lock, so the exposure is the SBOM and audit surface |
+| 56 | The checkpoint's headline verification figures were twelve commits stale | The "Last verified" block read `6f9ff81`, 117 commits, 489 tracked files, `1539 passed` -- every figure from before P1. Nine commits of work were added to the defect table while the block kept describing the tree from three items earlier: the domain of competence, the reconciliation spec, the SSE consumer and the lock-gate rewrite all landed underneath a verification line that claimed none of them. The file's own rule is that a defect table whose prose and split disagree is this same drift, and the verified block is the one thing a reader is certain to check first, so a stale headline is worse than no headline: it is trusted. **Rewritten from measured values**, with the commit hash, counts and suite figures read from the repository and the measurement file rather than retyped, and a post-condition that refuses to write any figure it could not obtain. The with-services figure is kept and explicitly labelled as measured before these additions, because quoting a stale number as current is the same error in the other direction. Recorded because the discipline that was supposed to prevent it -- update the checkpoint in the same change -- was applied to the defect table nine times and to the verified line not at all |
 
 Three of these deserve emphasis. **#10** is the class of bug that makes a
 statistic meaningless while looking perfectly healthy: PBO returned 1.0 for
@@ -853,10 +862,16 @@ at the top; the list below is what is genuinely outstanding.
    coverage of one's imagination is not a property. That lesson is now the most
    repeated in this file and is stated as a rule in #53.
    **Still open, deliberately:** `competence=` is wired nowhere in production, so the
-   Layer 9 gate enforces nothing outside tests; and two NITs are unfixed -- an
-   unreachable carry-through branch in the reconcile hook, and a FRAME AGE readout
-   that freezes while the stream is parked rather than growing. Both are recorded
-   rather than quietly dropped.
+   Layer 9 gate enforces nothing outside tests; and one NIT is unfixed -- an
+   unreachable carry-through branch in `reconcileExecutive`, which the hook cannot
+   reach because it always passes a constant. The review's third NIT, a FRAME AGE
+   readout that froze while the stream was parked, was classified as cosmetic and
+   turned out not to be: it is the one readout whose job is to say how current the
+   figure beside it is, so a stale number there is the failure section 3 is about.
+   Fixed at `7549d52` by exposing the frame TIMESTAMP rather than only a duration --
+   a timestamp is a fact, a duration is a reading, and only the first can be
+   recomputed later. Recording a fix as outstanding would be this file's own defect
+   class: a claim that does not match what the code does.
 2. **Humans decide G240/G250** — testnet credentials, shadow cycle, five
    Phase 5.0 gates, `approve_live_capital`, ADR amending §1. In that order; no
    step is skippable and none is mine to take.
