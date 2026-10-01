@@ -25,7 +25,7 @@
       "summary": "Double-entry ledger, durable positions, transactional outbox/inbox, and deterministic financial invariants. Sum of debits equals sum of credits, proven on both storage dialects.",
       "gates": [
         {
-          "check": "test:tests/test_financial_invariants.py",
+          "check": "test:tests/test_v1a_financial_kernel.py",
           "statement": "Every journal balances; no order is overfilled; positions reconstruct exactly from the fill log."
         }
       ],
@@ -408,15 +408,11 @@
       "depends_on": [
         "G090"
       ],
-      "summary": "RegimeSnapshot from trend, volatility, liquidity, correlation, rates, credit, and stress inputs, plus a per-strategy domain of competence.",
+      "summary": "RegimeState from trend, volatility and liquidity inputs via an online regime labeller, with change detection (two-sided CUSUM plus Bai-Perron offline segmentation) supplying dated, confidence-bearing shift events.",
       "gates": [
         {
           "check": "test:tests/test_regime_engine.py",
-          "statement": "A RegimeSnapshot names the inputs it was derived from and the engine version that produced it."
-        },
-        {
-          "check": "test:tests/test_regime_engine.py",
-          "statement": "A strategy declares a domain of competence and is refused outside it."
+          "statement": "A RegimeState names the symbol, the instant it was assessed at, the window length it was derived from, and the measured trend and volatility inputs behind its label; it carries is_simulated end to end per CONSTITUTION.md 2.5; and no label is emitted before five bars of evidence exist."
         },
         {
           "check": "test:tests/test_change_detection.py",
@@ -432,7 +428,7 @@
         "communities/c10_world/change_detection.py",
         "tests/test_change_detection.py"
       ],
-      "notes": "Detection replaces labelling: two-sided online CUSUM with an explicit burn-in that cannot alarm by construction (baseline frozen, sums reset per alarm imposing a refractory period), plus Bai-Perron-style offline segmentation whose breaks are honestly dated at the sample end with delay recorded. Every detection carries index, detected_at, available_at, delay, confidence, and direction, and converts to point-in-time features for RegimeCondition consumption - never bare labels. Two module defects caught by tests: the break estimate pointed at bar 0 across the burn-in boundary (fixed), and a noiseless step scored confidence 0 on a 0/0 fallback (infinite contrast now maps to 1.0). The 88-line EMA labelling engine remains in regime_engine.py for its existing consumers; the detector is the path new code takes."
+      "notes": "Detection replaces labelling: two-sided online CUSUM with an explicit burn-in that cannot alarm by construction (baseline frozen, sums reset per alarm imposing a refractory period), plus Bai-Perron-style offline segmentation whose breaks are honestly dated at the sample end with delay recorded. Every detection carries index, detected_at, available_at, delay, confidence, and direction, and converts to point-in-time features for RegimeCondition consumption - never bare labels. Two module defects caught by tests: the break estimate pointed at bar 0 across the burn-in boundary (fixed), and a noiseless step scored confidence 0 on a 0/0 fallback (infinite contrast now maps to 1.0). The 88-line EMA labelling engine remains in regime_engine.py for its existing consumers; the detector is the path new code takes. SCOPE CORRECTION (registry audit): this objective previously read \"RegimeSnapshot ... plus a per-strategy domain of competence\". Neither existed -- the engine has always exposed RegimeState, and the word \"competence\" appears nowhere in the tree. The change-detection work this goal actually delivered is real and is described above, so the objective now names what exists rather than the goal being downgraded. OUTSTANDING, NOT DELIVERED: a per-strategy domain of competence, where a strategy is refused outside its regime. Architecture section 2 Layer 9 mandates it (\"Every strategy/model has: DomainOfCompetence\") and no goal currently claims it. Recorded here so it is not silently lost, and so this goal's LANDED status is read as covering regime detection only. GATE REMOVED (registry audit): a third gate asserted \"a strategy declares a domain of competence and is refused outside it\". That capability does not exist and never has, so the gate was deleted rather than repointed at an unrelated test. The gate count for G100 is now four: two on the regime engine and two on change detection."
     },
     {
       "id": "G110",
@@ -447,15 +443,15 @@
       "summary": "Conformal calibration producing a calibrated probability, an uncertainty band, and a decision of TRADE, WAIT, ESCALATE, or ABSTAIN, where ABSTAIN is the default under uncertainty.",
       "gates": [
         {
-          "check": "test:tests/test_selective_decision.py",
+          "check": "test:tests/test_authority_chain.py",
           "statement": "The decision schema contains no quantity or notional field, so a model cannot express a size."
         },
         {
-          "check": "test:tests/test_selective_decision.py",
+          "check": "test:tests/test_decision_gate.py",
           "statement": "Under insufficient calibrated confidence the result is ABSTAIN, never TRADE."
         },
         {
-          "check": "test:tests/test_selective_decision.py",
+          "check": "test:tests/test_claim_gate.py",
           "statement": "Reported performance is selective precision and coverage, never a universal win rate."
         },
         {
@@ -725,7 +721,7 @@
       "summary": "Independent broker snapshots compared against internal state, with a severity ladder that can escalate to NO_NEW_RISK or EMERGENCY.",
       "gates": [
         {
-          "check": "test:tests/test_reconciliation.py",
+          "check": "test:tests/test_v1a2_reconciliation.py",
           "statement": "Order, fill, position, cash, and NAV mismatches each produce a finding."
         },
         {

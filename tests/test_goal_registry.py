@@ -310,3 +310,113 @@ def test_registry_does_not_claim_goals_the_code_lacks() -> None:
                 f"{goal_id} claims {goal['status']} but no {capability!r} implementation "
                 "exists in project source"
             )
+
+
+def test_landed_goals_have_gates_that_exist() -> None:
+    """A `test:` gate on a LANDED goal must name a file that exists.
+
+    ``test_test_gates_name_an_executable_path`` already requires the path to end
+    in ``.py`` and explicitly allows unwritten goals to name files that do not yet
+    exist. That allowance is right for BLOCKED and NOT_STARTED work and wrong for
+    a goal marked LANDED: a landed goal whose gate points at a missing file is
+    claiming a proof that cannot be produced, and every reader of the registry
+    reasonably assumes the gate runs.
+
+    This is not hypothetical. Five gates across four LANDED goals pointed at
+    files that never existed -- test_financial_invariants.py,
+    test_reconciliation.py, test_selective_decision.py (three gates) and
+    test_regime_engine.py. Four were repointed at the tests that actually own the
+    property; one was deleted because the capability it described was never
+    built.
+
+    BLOCKED goals are exempt, and ``test_blocked_goals_state_what_blocks_them``
+    separately requires them to explain themselves.
+    """
+    missing = [
+        f"{goal['id']} -> {gate['check'].split(':', 1)[1].strip()}"
+        for goal in _goals()
+        if goal["status"] != "BLOCKED"
+        for gate in goal.get("gates", [])
+        if gate.get("check", "").startswith("test:")
+        and not (ROOT / gate["check"].split(":", 1)[1].strip()).exists()
+    ]
+    assert missing == [], (
+        "a non-BLOCKED goal's gate must name a test file that exists: "
+        f"{missing}"
+    )
+
+
+#: CamelCase with at least two humps. All-caps acronyms are excluded because
+#: PIT / CPCV / OOS / TLC / SBOM are vocabulary, not code identifiers.
+_CAMEL_IDENTIFIER = re.compile(r"\b([A-Z][a-z]+(?:[A-Z][a-z0-9]*)+)\b")
+
+#: Prose that looks like an identifier but is not a code symbol.
+_NOT_IDENTIFIERS = {"Layer"}
+
+
+def _source_blob() -> str:
+    """Every project source file, excluding vendored, generated and prose trees.
+
+    Frontend sources count too: a goal may legitimately name a type that lives
+    only in the React app, and the question is whether the thing exists anywhere
+    the system runs.
+
+    ``tests`` and ``docs`` are excluded, and that exclusion is load-bearing
+    rather than tidiness. This file's own docstrings quote the very identifiers
+    it is looking for, so a blob that included them would satisfy every lookup
+    with the rule's explanation of what it is checking. A vacuity check caught
+    exactly that: reintroducing ``RegimeSnapshot`` into G100 passed the rule,
+    because the rule was reading this paragraph. The sibling rule above already
+    excluded these directories for the same reason.
+    """
+    skip = {".venv-fresh", "__pycache__", ".vt-study", "node_modules", "tests", "docs"}
+    parts: list[str] = []
+    for path in ROOT.rglob("*.py"):
+        if any(p in skip for p in path.parts):
+            continue
+        parts.append(path.read_text(encoding="utf-8", errors="ignore"))
+    for suffix in ("*.ts", "*.tsx"):
+        for path in (ROOT / "frontend" / "src").rglob(suffix):
+            parts.append(path.read_text(encoding="utf-8", errors="ignore"))
+    return "\n".join(parts)
+
+
+def test_goals_do_not_name_artifacts_the_code_lacks() -> None:
+    """Every identifier a goal claims to have built must exist somewhere.
+
+    ``test_registry_does_not_claim_goals_the_code_lacks`` already guards this
+    failure mode -- "a registry that marks a goal LANDED because someone said so"
+    -- but it hardcodes two goals, so only two were ever checked. G100 was marked
+    LANDED with the objective "RegimeSnapshot ... plus a per-strategy domain of
+    competence": the engine has always exposed ``RegimeState``, and the word
+    "competence" appears nowhere in the tree. Neither was noticed.
+
+    Deriving the identifiers from each objective instead of listing them means a
+    new overclaim is caught the moment it is written, with no edit to this file.
+    Across the current registry exactly one identifier is unresolved, so the rule
+    produces no false positives while still failing on the one real case.
+
+    Editing the registry to name a type that does not exist is exactly how this
+    test is meant to fail. Renaming a real type breaks it too, which is correct:
+    the objective should be updated in the same change.
+    """
+    blob = _source_blob()
+
+    unresolved: dict[str, list[str]] = {}
+    for goal in _goals():
+        text = " ".join(
+            str(goal.get(key, "")) for key in ("title", "summary", "objective")
+        )
+        names = {
+            name
+            for name in _CAMEL_IDENTIFIER.findall(text)
+            if name not in _NOT_IDENTIFIERS
+        }
+        absent = sorted(name for name in names if name not in blob)
+        if absent:
+            unresolved[goal["id"]] = absent
+
+    assert unresolved == {}, (
+        "a goal names an artifact that exists in no source file -- either the "
+        f"objective overclaims, or the type was renamed: {unresolved}"
+    )
