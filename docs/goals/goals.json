@@ -881,9 +881,12 @@
       "evidence": [
         "specs/OrderLifecycle.tla",
         "specs/Outbox.tla",
-        "tests/test_formal_assurance.py"
+        "tests/test_formal_assurance.py",
+        "specs/OrderLifecycle.cfg",
+        "specs/Outbox.cfg",
+        "scripts/run_tlc.ps1"
       ],
-      "notes": "TLA+ specs for the order lifecycle (7 states mirroring OrderStatus, terminal set mirroring _TERMINAL_ORDER_STATES, six transitions) and the outbox (PENDING/PUBLISHING/PUBLISHED/DEAD_LETTER with duplicate-delivery stutter, hash-mismatch quarantine, exactly-once effect). Properties stated: TerminalIsSticky, FillMonotone, NoPhantomFill, NoResurrection, AtMostOnceEffect, HashBindsKey, DeadLetterTerminal, NoLoss. Drift tests fail if code renames a state without renaming it in the spec. TLC has no JVM here so model-checking is explicitly unrun, not claimed - the specs are reviewable artifacts with machine-checkable mirror tests, which is what the manual gate requires."
+      "notes": "TLA+ specs for the order lifecycle (7 states mirroring OrderStatus, terminal set mirroring _TERMINAL_ORDER_STATES, six transitions) and the outbox (PENDING/PUBLISHING/PUBLISHED/DEAD_LETTER with duplicate-delivery stutter, hash-mismatch quarantine, exactly-once effect). Drift tests fail if code renames a state without renaming it in the spec. Both specs are now model-checked: scripts/run_tlc.ps1 runs TLC in a throwaway container, so no Java toolchain is admitted to a Python project whose dependency policy adds nothing without an ADR. OrderLifecycle: 70 states generated, 42 distinct, depth 4. Outbox: 16 generated, 13 distinct, depth 7. No property violated. Running TLC refuted the specs as written: an INVARIANT must be a predicate over one state (no primes, no temporal operators), the body of [] must be an action of the form [A]_v, and the liveness claim that every event eventually reaches an ending is FALSE because Spec uses [Next]_vars and an infinite stuttering trace is therefore legal. That claim was removed rather than weakened; what replaced it is what a bounded-retry queue actually guarantees and TLC can check, namely that retries are capped. Terminality is stated with ENABLED, which is stronger than the original claim because it covers an action added later. A vacuity check confirmed the properties are not decorative: a mutation that requeued a dead letter was caught, and one that removed a hash guard exposed that HashBindsKey alone was weaker than intended, so MismatchIsNeverApplied carries the real weight."
     },
     {
       "id": "G230",

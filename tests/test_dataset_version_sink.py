@@ -30,6 +30,12 @@ from kernel.state_machine import TransitionError
 DSN = os.environ.get("AIOS_TEST_PG_DSN", "")
 SECRET = b"k" * 32
 
+#: A real ISO-8601 instant. These tests used the literal "t", which SQLite
+#: accepts in a TEXT column and PostgreSQL rejects in a TIMESTAMPTZ one -- so on
+#: the production tier four tests were failing on their own fixture rather than
+#: on the behaviour they exist to check.
+STAMP = "2026-01-01T00:00:00+00:00"
+
 
 def _register(
     registry: DatasetRegistry,
@@ -145,7 +151,7 @@ def test_resume_rebuilds_provenance_without_replaying_transitions(
 def test_update_and_delete_are_refused(sink) -> None:
     """Raw SQL around the API. The refusal comes from the schema on both
     tiers; the sqlite message names the tamper class."""
-    sink.append("bars:v1", "REGISTERED", "{}", "t")
+    sink.append("bars:v1", "REGISTERED", "{}", STAMP)
     if hasattr(sink, "_connection") and isinstance(sink._connection, sqlite3.Connection):
         with pytest.raises(sqlite3.IntegrityError, match="append-only"):
             sink._connection.execute(
@@ -159,28 +165,36 @@ def test_update_and_delete_are_refused(sink) -> None:
         with pytest.raises(psycopg.errors.Error, match="append-only"):
             with sink._conn.cursor() as cur:
                 cur.execute("UPDATE dataset_version_events SET payload = 'x' WHERE seq = 1")
+        # The refused statement aborted the transaction, so the connection must be
+        # returned to a usable state before sink.count() queries it. Without this
+        # the count that proves the row survived is exactly what cannot be read.
+        sink._conn.rollback()
     assert sink.count() == 1
 
 
 def test_off_head_linkage_is_refused(sink) -> None:
     """A second genesis for the same key is a forked history, refused by name
     on sqlite and by the shared function on postgres."""
-    sink.append("bars:v1", "REGISTERED", "{}", "t")
+    sink.append("bars:v1", "REGISTERED", "{}", STAMP)
+    # A second genesis for the same key: seq 2 with supersedes 0 when the head is
+    # already 1. Both tiers must refuse it, and both must say which class of
+    # tamper they caught -- on postgres the predecessor-link check fires before
+    # the append-only guard, which is more precise rather than less, so the
+    # assertion names the class rather than one function's text.
+    raw = (
+        "INSERT INTO dataset_version_events (seq, dataset_key, event_type, "
+        f"supersedes, recorded_at, payload) "
+        f"VALUES (2, 'bars:v1', 'X', 0, '{STAMP}', '{{}}')"
+    )
     if hasattr(sink, "_connection") and isinstance(sink._connection, sqlite3.Connection):
         with pytest.raises(sqlite3.IntegrityError, match="chain break"):
-            sink._connection.execute(
-                "INSERT INTO dataset_version_events (seq, dataset_key, event_type, "
-                "supersedes, recorded_at, payload) VALUES (2, 'bars:v1', 'X', 0, 't', '{}')"
-            )
+            sink._connection.execute(raw)
     else:
         import psycopg
 
-        with pytest.raises(psycopg.errors.Error, match="append-only"):
+        with pytest.raises(psycopg.errors.Error, match="chain break|append-only"):
             with sink._conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO dataset_version_events (seq, dataset_key, event_type, "
-                    "supersedes, recorded_at, payload) VALUES (2, 'bars:v1', 'X', 0, 't', '{}')"
-                )
+                cur.execute(raw)
 
 
 def test_seal_and_truncation_audit(sink) -> None:
@@ -188,9 +202,9 @@ def test_seal_and_truncation_audit(sink) -> None:
     covers. Same truncation argument as the sibling ledgers, same answer."""
     from core.experiment_sink import audit_experiment_log
 
-    sink.append("bars:v1", "REGISTERED", "{}", "t")
-    sink.append("bars:v1", "VALIDATED", "{}", "t")
-    sink.append("bars:v1", "ACTIVATED", "{}", "t")
+    sink.append("bars:v1", "REGISTERED", "{}", STAMP)
+    sink.append("bars:v1", "VALIDATED", "{}", STAMP)
+    sink.append("bars:v1", "ACTIVATED", "{}", STAMP)
     assert sink.seal(SECRET) is not None
     assert sink.audit(SECRET).ok is True
 
@@ -201,7 +215,7 @@ def test_seal_and_truncation_audit(sink) -> None:
 
 
 def test_unsealed_log_is_unanchored(sink) -> None:
-    sink.append("bars:v1", "REGISTERED", "{}", "t")
+    sink.append("bars:v1", "REGISTERED", "{}", STAMP)
     audit = sink.audit(SECRET)
     assert audit.ok is False
     assert audit.sealed_through is None
@@ -210,7 +224,7 @@ def test_unsealed_log_is_unanchored(sink) -> None:
 
 def test_empty_key_is_refused(sink) -> None:
     with pytest.raises(AppendOnlyViolation, match="must not be empty"):
-        sink.append("", "REGISTERED", "{}", "t")
+        sink.append("", "REGISTERED", "{}", STAMP)
 
 
 def test_migration_is_registered() -> None:

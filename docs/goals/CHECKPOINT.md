@@ -76,8 +76,12 @@ eleven canonical stages, one id threaded from plan to outbox to governed
 call, gaps reported instead of filled.
 
 **G220 (Formal Assurance)** is the twentieth: TLA+ for the order lifecycle
-and the outbox with drift tests pinning spec to implementation (TLC itself
-unrun — no JVM here — stated, not hidden). **G230 (Supply Chain)** is the
+and the outbox, with drift tests pinning spec to implementation. **Both specs
+are now genuinely model-checked** — `scripts/run_tlc.ps1` runs TLC in a
+container, so no Java toolchain is admitted to a Python project. OrderLifecycle
+explores 42 distinct states to depth 4; Outbox 13 to depth 7. Running them
+refuted several properties, including one that was simply false; see defect #39.
+**G230 (Supply Chain)** is the
 twenty-first: generated SBOM covering exactly the lock, self-verifying
 releases by manifest, and a tree with no secrets in it.
 
@@ -222,8 +226,19 @@ is removed.
 
 ## 3. Defects found and fixed in this cycle
 
-Twenty-seven. Each was found by a test written to assert the property, not by
-inspection — the point of writing the test first.
+Forty. Twenty-seven were found by a test written to assert the property, not by
+inspection — the point of writing the test first. The other thirteen (#28–#40)
+were found by *running the artifact* rather than reading it: building the image,
+starting the container, calling the release packager, standing up PostgreSQL and
+NATS, and model-checking the TLA+ specs.
+
+That split is the finding worth carrying forward. A green Python suite says
+nothing about whether a Dockerfile flattens your package layout, whether your
+interpreter was the one the code actually has to run on, whether a second
+process can see what you wrote, or whether the specification you shipped is the
+one the model checker accepts. Every defect from #28 on was invisible to the
+suite — not because the suite was weak, but because the suite could not see
+those dimensions.
 
 | # | Defect | Consequence had it shipped |
 |---|---|---|
@@ -254,13 +269,38 @@ inspection — the point of writing the test first.
 | 25 | Partial-lane `ParityReport` constructor omitted two required fields | The happy-path constructor was never executed before handoff; absorbed after review and fixed on arrival — partial work is unverified work |
 | 26 | Identical claim re-record raised instead of no-op | Pipelines replay, and twins would double-count judgments; deliberately changed to the OMS idempotency-key semantic, with the old pinning test rewritten to the new contract rather than deleted |
 | 27 | Outbox event rebuilt via `model_copy(update=...)` stored an empty `payload_hash` | Pydantic v2 `model_copy` does not run validators — verified empirically after assuming otherwise. Every order persisted with an unattested hash until the financial invariant caught it. Hash now recomputed explicitly at the rebuild site. Companion lesson: a stash-based bisection is unsound on a branch with interdependent uncommitted work — reverting adapters without the replay runner that depends on the new kwarg produced a failure misattributed as pre-existing |
+| 28 | Docker image could never build: `COPY aios api … /app/` flattened every package into one directory | Docker treats a multi-source COPY as merging each source's *contents* into one destination, so `core/`, `kernel/` and `scripts/` all landed as `/app/*.py`. `import core` could not resolve. The symptom (`ModuleNotFoundError` after a *successful* `pip install`) reads like a packaging bug and is not one — the wheel was empty because the layout it was pointed at did not exist. One COPY per package, each with its own destination |
+| 29 | `communities/c5_execution/execution.py` could not be imported on Python ≤3.13 | PEP 649 made annotations lazy by default in 3.14, and the local venv is 3.14, so an annotation naming a `TYPE_CHECKING`-only import never evaluated and the bug was invisible locally. On 3.12 — declared supported, and what CI and the image run — it raised `NameError` at class-definition time. **The most dangerous defect in this cycle, because the local suite was green throughout.** Both annotations now quoted; `tests/test_python_version_compat.py` pins the property structurally rather than trusting one interpreter |
+| 30 | `.dockerignore` and the release packager both excluded `CONSTITUTION.md` | Both exclude prose, and `core/constitution.py` verifies the file against a SHA-256 pin at boot. An image or archive without it cannot enforce the pin — skipping the check is the failure the pin exists to prevent. Same root cause in `.gitignore` for `data/golden`, which the Dockerfile `COPY`s and `docker-compose` mounts. Each was found by *running* the thing, not reading it |
+| 31 | `should_exclude` returned on the first pattern match, so negations were dead code | `*.md` preceded `!README.md`, so README.md — named in `INCLUDE_FILES` — has never shipped in a release archive. Matching is now order-independent with negations applied last, and a negation matches an exact path rather than a prefix, so `!README.md` cannot quietly re-include `docs/README.md` |
+| 32 | CI's secret gate matched ordinary English | `grep "sk-[a-zA-Z0-9]"` matches `risk-bot`, `risk-governor` and `task-tier` — firing on ~45 lines of ordinary source in files tracked on `master`. A gate that cries wolf on a hundred false hits is a gate nobody runs, which is worse than none because it *looks* like a check that is not running. Pattern now requires a provider prefix and a 32-char base62 body |
+| 33 | Migration v4 could never be applied to PostgreSQL | The sequencing and chain triggers were `WHEN` clauses, and PostgreSQL forbids a subquery inside a `WHEN` condition (and requires it parenthesised). Both checks *are* subqueries, so the form is unrepresentable, not just malformed — every such `CREATE TRIGGER` was a syntax error. **The append-only, sequencing and chain guarantees the ledgers document have never run on the production tier.** Found by bringing up the project's own compose file and running `aios db migrate`. Checks moved into plpgsql functions |
+| 34 | Every seal on the Postgres tier failed its own audit | Seals are HMACs over an ISO timestamp. SQLite stores TEXT and returns that string; PostgreSQL stores TIMESTAMPTZ and returns a `datetime`, and `str(datetime)` renders a space where `isoformat()` renders `T`. The recomputed HMAC covered different bytes, so `audit()` reported tampering that never happened — on the component whose only job is detecting tampering. Normalised on read (`ts_str`) rather than re-signed per dialect, keeping one canonical string on both tiers |
+| 35 | An idempotent claim re-record deleted the claim it absorbed | `record_claim`'s unique-violation handler called `rollback()` after psycopg's `transaction()` block had already rolled back the failed `INSERT`. The second rollback reached the enclosing transaction and discarded the first successful insert: the call returned the correct claim and then removed it. It also read through a plain cursor where a mapping was required, so `dict(tuple)` raised `ValueError` before it could even compare |
+| 36 | `identity_digest()` made the same belief hash differently per tier | `NUMERIC` declares a scale, so PostgreSQL returns `Decimal("0.01")` as `Decimal("0.010000000000")` while SQLite returns it untouched. `upsert()` uses the digest to decide a re-assertion is a no-op, so on the production tier the no-op never fired, the re-assertion fell through to the insert, and the PK refused it — a nightly feed reload crashed on Postgres and worked on SQLite. Decimals normalised by value; distinct values still hash distinctly |
+| 37 | Three "parity" tests were SQLite-only in effect | They passed the literal `"t"` as a recorded timestamp. SQLite accepts it in a `TEXT` column; PostgreSQL rejects it in a `TIMESTAMPTZ` one. So the tests meant to compare the tiers exercised only the reference tier — hiding precisely the divergence they exist to catch. **The lesson is structural, not local: a parity test that cannot run on one tier silently stops being a parity test** |
+| 38 | No durable sink actually committed | All four PostgreSQL sinks wrapped their INSERT in `conn.transaction()` and returned without committing. `transaction()` brackets a statement; it does not commit it. With autocommit off, each row stayed inside its connection's open transaction — visible to that store's own reads, invisible to every other connection, and discarded on close. The playbook store's docstring promises "a restart loses the router's memory, not its policies"; a restart lost every policy. Every in-process test passed because every in-process test read through the same connection that wrote — **the one vantage point that cannot observe this defect.** `tests/test_pg_durability.py` counts rows from a second connection |
+| 39 | Every TLA+ property was mis-shaped for TLC, and two were unsound | G220 recorded that TLC "could not be run here" because no JVM existed. True, and avoidable — TLC runs in a container, so no Java toolchain needs admitting to a Python project. Running it refuted the specs: an `INVARIANT` must be a state predicate (four were not), `[]` demands an action of the form `[A]_v` (two were not), and **"every event eventually reaches an ending" is simply false** — because `Spec` uses `[Next]_vars`, an infinite stuttering trace is legal, so no liveness property holds. That claim is removed rather than repaired. Replaced by what a bounded-retry queue actually guarantees and TLC can check: retries are capped. `ENABLED` replaced the terminality claims, which is also stronger — it covers an action added later |
+| 40 | A vacuity check found `HashBindsKey` weaker than it looked | Removing the `hashOk` guard from `FailPermanent` left it satisfied, because that action never sets `applied`. It asserted a mismatched event is not applied *if it happens to be dead lettered*, not that it can never be applied. `MismatchIsNeverApplied` carries the real weight. A second mutation (requeueing a dead letter) was caught by `DeadLetterTerminal`, confirming that one is not vacuous. **A property that cannot fail is not evidence** — both mutations were reverted after the check |
 
-Two of these deserve emphasis. **#10** is the class of bug that makes a
+Three of these deserve emphasis. **#10** is the class of bug that makes a
 statistic meaningless while looking perfectly healthy: PBO returned 1.0 for
 both pure noise and a genuine edge, because PBO counts `λ ≤ 0` and the rank
 was oriented so that winning produced a large *negative* logit. **#12** is
 subtler — a parameter in a signature that does nothing is worse than a missing
-one, because every caller reads it as load-bearing.
+one, because every caller reads it as load-bearing. **#29** is the one worth
+remembering longest, because it was invisible to the only test suite anyone was
+running: the local interpreter was 3.14 and the deployed one was 3.12, and a
+language change between them decided whether the module imported at all. The
+lesson is not "add a quote" — it is that a green suite certifies the
+interpreter you ran it on, so a compatibility claim needs a test that does not
+inherit the local runtime's opinion. **#38** is the same shape and the most
+expensive instance: every durable ledger reported writes that were never
+committed, and every test passed, because every test read through the same
+connection that wrote. A suite can only certify what it can observe, and one
+connection cannot observe durability. **#40** is the corrective to the whole
+exercise: a property that cannot fail is not evidence, so the model checker was
+used to try to break its own invariants, and one of them did not break.
 
 ---
 
@@ -297,10 +337,21 @@ rather than silently coupled.
   visibility, `as_of`/`as_known`/ISIN. The PG leg runs wherever
   `AIOS_TEST_PG_DSN` is set and skips otherwise; the v3 DDL cross-checks
   (tables, indexes, triggers, columns) run hermetically everywhere, so a
-  schema fork fails without a database. No disposable PG exists in this
-  environment (the sandbox cannot fork postgres children — fresh `initdb`
-  fails the same way as the repo's stale cluster), so the PG legs are written
-  and waiting, not exercised. That is stated, not hidden.
+  schema fork fails without a database.
+- **The PG legs have now actually been exercised**, and they were not healthy.
+  Bringing up the project's own `docker-compose.test.yml` (Postgres 16 on
+  loopback:5433, NATS JetStream on :54222) and running the parity suites for
+  the first time found four defects that no SQLite-only suite could see, because
+  each is a dialect divergence rather than a logic error — see defects #33–#36.
+  Migration v4 had *never applied* to PostgreSQL on any machine. Every seal on
+  the production tier failed its own audit. An idempotent claim re-record
+  deleted the claim it was absorbing. `identity_digest()` made the same belief
+  hash differently per tier, so a nightly feed reload crashed on Postgres and
+  worked on SQLite. The parity tests also passed a literal `"t"` as a timestamp,
+  which SQLite accepts and PostgreSQL rejects — so three tests meant to compare
+  the tiers were in effect SQLite-only, hiding exactly the class of divergence
+  they exist to catch. `tests/test_dialect_divergence.py` now pins each of these
+  hermetically, so the next one fails without a database in the loop.
 - Seed ingest (`core/seed_ingest.py` + `data/seed/bootstrap_v1.json`): a
   versioned-bundle importer. Validation through the domain models completes
   before the first write — one bad row records nothing. Identities upsert,
@@ -657,13 +708,22 @@ it into the governed call session; execution mints-with-warning when absent
 — observability is not authorization, so a missing id never refuses an
 order. The OpenTelemetry SDK stays deliberately deferred.
 
-**TLA+ exists with drift pins** (`specs/OrderLifecycle.tla`,
-`specs/Outbox.tla`, `tests/test_formal_assurance.py`): seven lifecycle states
-mirroring the implementation, terminal set mirrored, transitions covered;
-outbox with duplicate-delivery stutter and hash-mismatch quarantine. TLC has
-no JVM here so model-checking is explicitly unrun — the specs are reviewable
-artifacts with machine-checkable mirror tests, which is what the manual gate
-requires.
+**TLA+ exists with drift pins, and is model-checked**
+(`specs/OrderLifecycle.tla`, `specs/Outbox.tla`, `specs/*.cfg`,
+`tests/test_formal_assurance.py`, `scripts/run_tlc.ps1`): seven lifecycle states
+mirroring the implementation, terminal set mirrored, transitions covered; outbox
+with duplicate-delivery stutter and hash-mismatch quarantine. `run_tlc.ps1` runs
+TLC in a throwaway container — the JDK image and `tla2tools.jar` are cached by
+Docker and neither is vendored into the repository, because a build input is not
+source and a 2 MB binary in git is exactly what the release packager refuses.
+
+Verified results: OrderLifecycle 70 states generated / 42 distinct / depth 4;
+Outbox 16 / 13 / depth 7. No property violated. The specs were wrong when first
+run and are now correct: an `INVARIANT` must be a state predicate, `[]` needs an
+action of the form `[A]_v`, terminality is stated with `ENABLED` (stronger than
+the original claim), and the liveness property that TLC refuted has been removed
+rather than quietly weakened. The `.cfg` files are committed so the gate is
+reproducible without knowing which properties to check.
 
 **Supply chain enforced locally** (`scripts/sbom.py`,
 `tests/test_supply_chain.py`): byte-stable CycloneDX covering exactly the
@@ -699,21 +759,28 @@ further engineering on the plan: 23 of 25 goals LANDED, zero PARTIAL, zero
 NOT_STARTED, and the two BLOCKED goals wait on network/credentials plus
 human decisions that no code completes.
 
-1. **Full verification** — suite, ruff, mypy, lint, constitution pin,
-   architecture boundaries. Then update the verified line below with exact
-   numbers.
-2. **Commit and review** — dozens of files are modified or new; the standing
-   constraint has said commit-and-review for several stretches and it is now
-   the main remaining risk (uncommitted work is unreviewed work).
-3. **Provision a PostgreSQL instance and set `AIOS_TEST_PG_DSN`** — every PG
-   leg (security master, both ledgers, claim ledger, dataset versions) is
-   written and waiting behind the repo's skip contract. One run with a
-   database turns "written, skipped here" into "exercised".
-4. **Run TLC where a JVM exists** — the specs plus drift tests hold the fort
-   here; model-checking closes G220 fully.
-5. **Humans decide G240/G250** — testnet credentials, shadow cycle, five
+1. **Full verification** — suite (with PostgreSQL and NATS up, so the PG and
+   JetStream legs actually run), ruff, mypy, lint, constitution pin,
+   architecture boundaries, Docker build and smoke test, `run_tlc.ps1`. Then
+   update the verified line below with exact numbers.
+2. **Commit and review** — the work is committed; what remains is review.
+   Unreviewed work is the main remaining risk, and defects #33–#38 would have
+   been caught by any reviewer who stood up a database or built the image.
+3. **Humans decide G240/G250** — testnet credentials, shadow cycle, five
    Phase 5.0 gates, `approve_live_capital`, ADR amending §1. In that order;
    no step is skippable and none is mine to take.
+
+Two things that used to be on this list are now done, and both were on it
+because they were written off rather than scheduled:
+
+- **PostgreSQL parity legs are exercised.** `docker compose -f
+  docker-compose.test.yml up -d` plus `AIOS_TEST_PG_DSN` turns "written,
+  skipped" into "exercised" — and immediately found six defects (#33–#38) that
+  years of CI could not see, because CI has no database in the hermetic job.
+  Run it the same way in any environment that has Docker.
+- **TLC runs.** `scripts/run_tlc.ps1` needs no JVM on the host, only Docker.
+  G220 is closed with a model checker rather than a comment saying the specs
+  look right.
 
 ---
 
