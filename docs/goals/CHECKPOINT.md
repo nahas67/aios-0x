@@ -8,25 +8,28 @@
 and is deliberately *not* authoritative — where the two disagree, the registry
 and the tests win.
 
-**Last verified** (full tree, `git rev-parse HEAD` = `ead3f34`, 113 commits, 482
+**Last verified** (full tree, `git rev-parse HEAD` = `6f9ff81`, 117 commits, 489
 tracked files, working tree clean):
 
 - **Full suite with PostgreSQL *and* NATS JetStream up** — `1646 passed,
-  1 skipped` (exit 0, 6m41s). Previously every PG and JetStream leg skipped, so
-  this number had never been produced by anyone.
+  1 skipped` (exit 0, 6m41s), measured before this cycle's later additions.
 - **Full suite hermetic** (no `AIOS_TEST_PG_DSN` / `AIOS_TEST_NATS_URL`) —
-  `1511 passed, 12 skipped, 76 deselected` (exit 0, 3m53s).
+  `1539 passed, 12 skipped, 76 deselected` (exit 0, 4m02s). This is the
+  authoritative current number.
 - ruff clean · mypy clean on 144 source files · anti-pattern lint clean
   (6 rules) · constitution pin verifies at boot · architecture boundaries and
   goal registry pass · zero secret findings in tracked content.
 - **Docker image builds** (`aios-0x:test`, `backends importable`), container
   serves `/api/v1/health` and `/`, image's own HEALTHCHECK reports `healthy`,
   constitution pin verifies inside the container.
-- **TLA+ model-checked** — `scripts/run_tlc.ps1`: OrderLifecycle 70 generated /
-  42 distinct / depth 4; Outbox 16 / 13 / depth 7; no property violated.
+- **TLA+ model-checked** — `scripts/run_tlc.ps1`, three specs, no property
+  violated: OrderLifecycle 70 generated / 42 distinct / depth 4; Outbox 16 / 13 /
+  depth 7; **KillSwitch 88 / 48 / depth 4**. `CHECK_DEADLOCK` is off in every
+  `.cfg` because each terminal state is deliberately a dead end.
+- **Frontend** — `tsc -b --noEmit` clean · `vite build` succeeds · 20 vitest
+  files / 66 tests pass.
 - **Release archive builds and self-verifies** — 306 files, manifest agrees with
   member names, `verify_archive` true. SBOM: CycloneDX 1.5, 52 components.
-- Frontend `tsc -b --noEmit` clean; `vite build` 1736 modules.
 
 The single failing gate is CI's "Lock file is current" step, which is
 environment-dependent by construction and left untouched rather than made green
@@ -44,9 +47,13 @@ by baking this machine's versions into the lock.
 | `BLOCKED` | 2 | G240 G250 |
 
 Progress this cycle: G080 closed entirely; G070's lineage and failure reasons,
-G050's durable decision sink, and G120's playbook engine all landed. The
-`PARTIAL` count is a poor progress signal on its own — the honest read is in the
-per-goal notes in section 4.
+G050's durable decision sink, and G120's playbook engine all landed. G220 gained
+a third model-checked spec (`KillSwitch`) covering the third of the architecture's
+eight assurance targets that had been specified but unimplemented, and that work
+surfaced a constitutional defect (#41) rather than merely a missing artifact.
+G100's objective was corrected (#43): it had claimed a type that exists nowhere
+and a capability nobody built. The `PARTIAL` count is a poor progress signal on
+its own — the honest read is in the per-goal notes in section 4.
 
 **Twenty-three goals are genuinely complete.** G010 (Financial Truth) and G170 (Broker
 Reconciliation) were the pre-existing foundation. **G080 (Certification
@@ -245,8 +252,8 @@ is removed.
 
 ## 3. Defects found and fixed in this cycle
 
-Forty-two. Twenty-seven were found by a test written to assert the property, not by
-inspection — the point of writing the test first. The other fifteen (#28–#42)
+Forty-four. Twenty-seven were found by a test written to assert the property, not by
+inspection — the point of writing the test first. The other seventeen (#28–#44)
 were found by *running the artifact* rather than reading it: building the image,
 starting the container, calling the release packager, standing up PostgreSQL and
 NATS, model-checking the TLA+ specs, and diffing the frozen architecture against
@@ -312,6 +319,8 @@ and a suite that only tests the former will never notice the latter.
 | 40 | A vacuity check found `HashBindsKey` weaker than it looked | Removing the `hashOk` guard from `FailPermanent` left it satisfied, because that action never sets `applied`. It asserted a mismatched event is not applied *if it happens to be dead lettered*, not that it can never be applied. `MismatchIsNeverApplied` carries the real weight. A second mutation (requeueing a dead letter) was caught by `DeadLetterTerminal`, confirming that one is not vacuous. **A property that cannot fail is not evidence** — both mutations were reverted after the check |
 | 41 | The kill switch never cancelled open orders | `CONSTITUTION.md` §2.2 mandates **cancel → flatten → halt**; the code did two of the three. `DurableOrderManager.cancel` and `cancel_all_orders` both existed and both were reachable from the runner (`self.oms`, built at `replay_runner.py:409`) — nothing invoked them. An order placed before the emergency could still fill, `apply_fill` has no emergency guard, and `locked_out` gates only *new* submissions (`execution.py:130`). So the system could take on exposure after an emergency stop. Found by reading §2.2 against the implementation, after the architecture named `kill switch` as a required assurance target that had no spec |
 | 42 | `ModelGovernanceWorkspace.tsx` rendered a wholly fabricated registry | Four invented models, weights hashes, latencies, context lengths, evaluation dates, a system prompt hash, a sampling temperature, and **"BENCHMARK ACCURACY: 92.6% AVERAGE"** — with no backend call behind any of it. `modelsApi`/`evaluationsApi` existed, were typed, and were served on two routes; neither was called. That is a direct breach of architecture §11 (a claim needs 14 companions), of `core/claim_gate.py` (the implementation of exactly that rule), and of §3 Honesty Law 1. The backend was already honest — `models_registry_view` returns `{available: false, models: []}`, documented *"never a fabricated roster"* — so the lie was entirely client-side, which is the more expensive kind: a lying server can be diffed, and a lying client looks exactly like a working feature. Rewritten to read the endpoint, with `tests/test_model_governance_contract.py` pinning the backend side so a future "helpful" placeholder roster cannot be added silently |
+| 43 | The goal registry asserted five dead gates and one artifact that does not exist | The registry is what the project defers to — this file says so: *"where the two disagree, the registry and the tests win"* — so a discrepancy in it is not a documentation nit. Five gates on **LANDED** goals named test files that never existed (G010, G170, G110 ×3, G100), and G100's objective read *"RegimeSnapshot ... plus a per-strategy domain of competence"* when the engine has always exposed `RegimeState` and "competence" appears nowhere in the tree. The existing rule only checked the path ended in `.py`, and its docstring said unwritten goals may name missing files — right for BLOCKED work, exactly wrong for finished work. Four gates repointed at the tests that actually own the property; the domain-of-competence gate **deleted** rather than repointed, and the gap recorded as outstanding. Two new derived rules now prevent recurrence: LANDED gates must exist on disk, and CamelCase identifiers in any objective must appear in source. **The second rule generalises a test that already guarded this exact failure mode but hardcoded two goals, so only two were ever checked** |
+| 44 | The new registry rule passed its own mutation | `_source_blob()` read every `*.py`, including the test whose docstrings quote `RegimeSnapshot` to explain what it is checking — so reintroducing that name into G100 satisfied the lookup with the rule's own explanation. Found only because the rule was mutation-checked. The blob now excludes `tests/` and `docs/`, as the sibling rule already did, and the docstring records that the exclusion is load-bearing rather than tidiness. The same failure had already appeared twice this cycle as a shipped tautology (`HashBindsKey`, `FlattenPrecedesHalt`) and once as an unawaited coroutine in a passing test |
 
 Three of these deserve emphasis. **#10** is the class of bug that makes a
 statistic meaningless while looking perfectly healthy: PBO returned 1.0 for
@@ -748,12 +757,23 @@ Docker and neither is vendored into the repository, because a build input is not
 source and a 2 MB binary in git is exactly what the release packager refuses.
 
 Verified results: OrderLifecycle 70 states generated / 42 distinct / depth 4;
-Outbox 16 / 13 / depth 7. No property violated. The specs were wrong when first
-run and are now correct: an `INVARIANT` must be a state predicate, `[]` needs an
-action of the form `[A]_v`, terminality is stated with `ENABLED` (stronger than
-the original claim), and the liveness property that TLC refuted has been removed
-rather than quietly weakened. The `.cfg` files are committed so the gate is
-reproducible without knowing which properties to check.
+Outbox 16 / 13 / depth 7; KillSwitch 88 / 48 / depth 4. No property violated.
+The specs were wrong when first run and are now correct: an `INVARIANT` must be
+a state predicate, `[]` needs an action of the form `[A]_v`, terminality is
+stated with `ENABLED` (stronger than the original claim), and the liveness
+property that TLC refuted has been removed rather than quietly weakened. The
+`.cfg` files are committed so the gate is reproducible without knowing which
+properties to check.
+
+The third spec is where the payoff showed. `KillSwitch.tla` encodes
+`CONSTITUTION.md` §2.2 — cancel, flatten, halt, exit only by human reset — rather
+than the implementation, so TLC could say where reality diverged from the
+mandate. It refuted the spec on its first run, correctly, and the bug was in the
+spec: `EngageHalt` was guarded on exposure alone, letting the model reach the
+halt with a live order still open. Following that thread back to the code is what
+found defect #41. The architecture names eight targets for formal properties and
+two were covered; `KillSwitch` is the third, and the remaining five — fills,
+partial fills, duplicate deliveries, reconciliation, failover — are still owed.
 
 **Supply chain enforced locally** (`scripts/sbom.py`,
 `tests/test_supply_chain.py`): byte-stable CycloneDX covering exactly the
@@ -784,33 +804,59 @@ wishlist.
 
 ## 5. Recommended next step
 
-**Verify, commit, and hand the two BLOCKED goals to humans.** There is no
-further engineering on the plan: 23 of 25 goals LANDED, zero PARTIAL, zero
-NOT_STARTED, and the two BLOCKED goals wait on network/credentials plus
-human decisions that no code completes.
+**Review, then hand the two BLOCKED goals to humans.** The verification and
+commit items that stood here are done and their numbers are in the verified line
+at the top; the list below is what is genuinely outstanding.
 
-1. **Full verification** — suite (with PostgreSQL and NATS up, so the PG and
-   JetStream legs actually run), ruff, mypy, lint, constitution pin,
-   architecture boundaries, Docker build and smoke test, `run_tlc.ps1`. Then
-   update the verified line below with exact numbers.
-2. **Commit and review** — the work is committed; what remains is review.
-   Unreviewed work is the main remaining risk, and defects #33–#38 would have
-   been caught by any reviewer who stood up a database or built the image.
-3. **Humans decide G240/G250** — testnet credentials, shadow cycle, five
-   Phase 5.0 gates, `approve_live_capital`, ADR amending §1. In that order;
-   no step is skippable and none is mine to take.
+**Done, and struck from this list:**
 
-Two things that used to be on this list are now done, and both were on it
-because they were written off rather than scheduled:
-
-- **PostgreSQL parity legs are exercised.** `docker compose -f
+- ~~Full verification~~ — suite run with PostgreSQL and NATS up *and* hermetic,
+  ruff, mypy, lint, constitution pin, architecture boundaries, Docker build and
+  smoke test, `run_tlc.ps1`, `tsc`, `vite build`, frontend tests. Figures above.
+- ~~PostgreSQL parity legs are exercised~~ — `docker compose -f
   docker-compose.test.yml up -d` plus `AIOS_TEST_PG_DSN` turns "written,
-  skipped" into "exercised" — and immediately found six defects (#33–#38) that
-  years of CI could not see, because CI has no database in the hermetic job.
-  Run it the same way in any environment that has Docker.
-- **TLC runs.** `scripts/run_tlc.ps1` needs no JVM on the host, only Docker.
-  G220 is closed with a model checker rather than a comment saying the specs
-  look right.
+  skipped" into "exercised", and immediately found six defects (#33–#38) that
+  years of CI could not see, because the hermetic job has no database. It was on
+  this list because it was written off rather than scheduled.
+- ~~TLC runs~~ — `scripts/run_tlc.ps1` needs no JVM on the host, only Docker.
+  G220 is closed with a model checker rather than a comment saying the specs look
+  right. Also on this list for the same reason.
+- ~~Disaster Recovery~~ — **investigated and deliberately not built.** It is a
+  rung on the architecture's ladder, so it looked like the obvious gap, but it
+  appears exactly once in the document, as a bare label: `RPO`, `RTO`, `backup`,
+  `restore` and `point-in-time recovery` have **zero occurrences**. Building it
+  would have meant inventing the requirements, which is what §14's freeze rule
+  exists to prevent. Not owed; unspecified.
+
+**Outstanding:**
+
+1. **Review.** The work is committed and the main remaining risk is unreviewed
+   work. Defects #33–#38 would have been caught by any reviewer who stood up a
+   database or built the image; #41–#44 by anyone who opened the UI or read the
+   registry against the code.
+2. **Humans decide G240/G250** — testnet credentials, shadow cycle, five
+   Phase 5.0 gates, `approve_live_capital`, ADR amending §1. In that order; no
+   step is skippable and none is mine to take.
+3. **Publish** — `gh auth login`, then
+   `pwsh -ExecutionPolicy Bypass -File scripts\publish_private.ps1`. The
+   repository exists and is empty; the script reuses it and refuses rather than
+   guessing. No GitHub action has been taken.
+4. **Per-strategy domain of competence** — architecture §2 Layer 9 mandates it
+   ("Every strategy/model has: DomainOfCompetence"), nothing implements it, and
+   no goal claims it. Recorded in G100's notes so it is not silently lost. The
+   one genuine capability gap this cycle found and did **not** close.
+5. **SSE is unconsumed.** `api/stream.ts` is complete and correct — it uses
+   `fetch` + `ReadableStream` precisely because `EventSource` cannot send an
+   `Authorization` header — and the server streams at `/api/v1/stream`, but
+   `startStream()` is never called and no view calls `onStream`, so every view
+   polls. Not a claim defect: G210's stated deliverable is trace continuity, which
+   is delivered and tested. Wiring live refresh into every view is a feature with
+   its own failure modes, not a one-liner, and deserves its own verification
+   pass rather than being attached to the end of another one.
+6. **CI's "Lock file is current" will fail** — structurally environment-dependent
+   (`lock_dependencies.py --check` recomputes from `importlib.metadata`, so it can
+   only pass on the generating machine). Left untouched rather than made green by
+   baking this machine's versions in.
 
 ---
 
