@@ -456,9 +456,18 @@ class PostgresExperimentSink:
                                 (seq, experiment_id, event_type, supersedes, recorded_at, payload),
                             )
                 except self._psycopg.errors.Error as exc:
+                    # transaction() already rolled the failed insert back.
                     raise AppendOnlyViolation(
                         f"append refused by the ledger schema: {exc}"
                     ) from exc
+                # Commit explicitly. `transaction()` brackets the statement but
+                # does not commit it: with autocommit off the event stayed inside
+                # the connection's open transaction, visible to this sink's own
+                # reads and to nothing else. A second connection saw an empty
+                # experiment log, and closing the sink discarded it. An
+                # experiment ledger that cannot survive its own connection
+                # closing is a log, not a ledger.
+                self._conn.commit()
         return ExperimentEvent(
             seq=seq,
             experiment_id=experiment_id,
@@ -490,6 +499,13 @@ class PostgresExperimentSink:
                             "VALUES (%s, %s, %s, %s, %s)",
                             (head, seal.event_count, seal.max_seq, seal.sealed_at, seal.signature),
                         )
+                # Commit: a seal is the external anchor that makes truncation
+                # detectable after the fact, so it is the one row that must
+                # outlive this process. Left uncommitted it vanished on close,
+                # and a restarted log then reported itself unanchored -- the
+                # honest-sounding answer to "was this truncated?" was caused by
+                # the anchoring mechanism itself.
+                self._conn.commit()
                 return seal
 
     def seals(self) -> list[ExperimentSeal]:

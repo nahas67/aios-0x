@@ -330,9 +330,19 @@ class PostgresPlaybookStore:
                                 (playbook_id, version, content_hash, registered_at, payload),
                             )
                 except self._psycopg.errors.Error as exc:
+                    # transaction() rolls back the failed insert on its way out,
+                    # so nothing is written here; the connection is left usable.
                     raise AppendOnlyViolation(
                         f"playbook store refused the write: {exc}"
                     ) from exc
+                # Commit explicitly. `transaction()` on its own only brackets the
+                # statement: with autocommit off, the row stayed inside the
+                # connection's open transaction, visible to this store's own
+                # reads and to nothing else. A second connection saw zero
+                # playbooks, and a restart lost every registered policy --
+                # which is the entire claim of this store: "a restart loses the
+                # router's memory, not its policies."
+                self._conn.commit()
                 return True
 
     def read_all(self) -> list[tuple[str, str, str]]:
@@ -368,6 +378,10 @@ class PostgresPlaybookStore:
                             "VALUES (%s, %s, %s, %s, %s)",
                             (nxt, seal.event_count, seal.set_hash, seal.sealed_at, seal.signature),
                         )
+            # Commit: the seal is what makes a same-count substitution across a
+            # restart detectable. Uncommitted it vanished on close, so a
+            # reloaded policy set always looked unsealed.
+            self._conn.commit()
             return seal
 
     def seals(self) -> list[PlaybookSeal]:

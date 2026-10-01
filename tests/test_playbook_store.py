@@ -114,6 +114,13 @@ def test_update_and_delete_are_refused_by_the_schema(store, tmp_path: Path) -> N
         with pytest.raises(psycopg.errors.Error, match="append-only"):
             with store._conn.cursor() as cur:
                 cur.execute("UPDATE playbooks SET payload = 'x' WHERE playbook_id = 'pb-mom'")
+        # The refused statement left the transaction aborted, so the connection
+        # must be returned to a usable state before store.count() queries it.
+        # Without this the next statement raises InFailedSqlTransaction, which
+        # is the database reporting the aborted state rather than the store
+        # reporting anything -- and the count that proves the row survived is
+        # exactly what could not be read.
+        store._conn.rollback()
     assert store.count() == 1
 
 

@@ -71,11 +71,24 @@ def test_a_dollar_quoted_function_body_stays_one_statement() -> None:
     """
     statements = _statements(V4.postgres)
     functions = [s for s in statements if "CREATE OR REPLACE FUNCTION" in s]
-    assert len(functions) == 1
-    body = functions[0]
-    assert body.count("$$") == 2
-    assert "RAISE EXCEPTION" in body
-    assert body.rstrip().endswith("LANGUAGE plpgsql")
+    # v4 now defines three functions, not one. The sequencing and chain checks
+    # moved out of trigger WHEN clauses because PostgreSQL forbids a subquery
+    # inside one -- so the assertion became a property of each body rather than
+    # a count of them. Every dollar-quoted body must survive intact.
+    assert len(functions) == 3, (
+        "v4's three guard functions are expected; a change here should be "
+        f"deliberate: {[f.split(chr(10))[0] for f in functions]}"
+    )
+    for body in functions:
+        assert body.count("$$") == 2, (
+            f"a dollar-quoted body must contain exactly one $$ pair: {body[:80]!r}"
+        )
+        assert "RAISE EXCEPTION" in body
+        assert body.rstrip().endswith("LANGUAGE plpgsql")
+        assert not body.rstrip().endswith(";"), (
+            "the terminating semicolon is consumed so the statement is ready "
+            "for execute(): see the splitter docstring"
+        )
 
 
 def test_a_semicolon_inside_a_string_literal_does_not_split() -> None:

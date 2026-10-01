@@ -507,9 +507,15 @@ class PostgresDecisionSink:
                             ),
                         )
             except self._psycopg.errors.Error as exc:
+                # transaction() already rolled the failed insert back.
                 raise AppendOnlyViolation(
                     f"append refused by the ledger schema: {exc}"
                 ) from exc
+            # Commit: transaction() brackets the statement but does not commit
+            # it. Uncommitted, the decision was visible only to this connection
+            # and lost when it closed -- on a log whose purpose is a durable
+            # record of what was decided and why.
+            self._conn.commit()
 
     def seal(self, secret: bytes) -> GovernanceSeal | None:
         """Anchor the current head. ``None`` when the log is empty."""
@@ -530,6 +536,11 @@ class PostgresDecisionSink:
                             "VALUES (%s, %s, %s, %s, %s)",
                             (seq, seal.seq, seal.chain_hash, seal.sealed_at, seal.signature),
                         )
+                # Commit: the seal is the external anchor that makes truncation
+                # of this log detectable afterwards. Uncommitted it vanished on
+                # close, and a restarted log then reported itself unanchored --
+                # the anchoring mechanism causing the doubt it exists to settle.
+                self._conn.commit()
                 return seal
 
     def seals(self) -> list[GovernanceSeal]:

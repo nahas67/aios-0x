@@ -229,9 +229,16 @@ class PostgresDatasetVersionSink:
                                 (seq, dataset_key, event_type, supersedes, recorded_at, payload),
                             )
                 except self._psycopg.errors.Error as exc:
+                    # transaction() already rolled the failed insert back.
                     raise AppendOnlyViolation(
                         f"append refused by the ledger schema: {exc}"
                     ) from exc
+                # Commit explicitly: `transaction()` brackets the statement but
+                # leaves it in the connection's open transaction, so the version
+                # was invisible to any other connection and lost when the sink
+                # closed. A dataset version that does not outlive its process is
+                # the unreproducible backtest this ledger exists to prevent.
+                self._conn.commit()
         return ExperimentEvent(
             seq=seq,
             experiment_id=dataset_key,
@@ -262,6 +269,11 @@ class PostgresDatasetVersionSink:
                             "VALUES (%s, %s, %s, %s, %s)",
                             (head, seal.event_count, seal.max_seq, seal.sealed_at, seal.signature),
                         )
+                # Commit: the seal is the external anchor that makes truncation
+                # of this ledger detectable after the fact, so it is the one row
+                # that must outlive this process. Uncommitted, it vanished on
+                # close and a restarted ledger reported itself unanchored.
+                self._conn.commit()
                 return seal
 
     def seals(self) -> list[ExperimentSeal]:
