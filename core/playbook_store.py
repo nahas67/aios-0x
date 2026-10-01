@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from core.decision_sink import AppendOnlyViolation
+from core.decision_sink import AppendOnlyViolation, ts_str
 from core.migrations import apply_sqlite_migrations
 
 __all__ = [
@@ -259,7 +259,7 @@ class SqlitePlaybookStore:
             PlaybookSeal(
                 event_count=int(r["event_count"]),
                 set_hash=str(r["set_hash"]),
-                sealed_at=str(r["sealed_at"]),
+                sealed_at=ts_str(r["sealed_at"]),
                 signature=str(r["signature"]),
             )
             for r in rows
@@ -381,7 +381,7 @@ class PostgresPlaybookStore:
             PlaybookSeal(
                 event_count=int(r[0]),
                 set_hash=str(r[1]),
-                sealed_at=str(r[2]),
+                sealed_at=ts_str(r[2]),
                 signature=str(r[3]),
             )
             for r in rows

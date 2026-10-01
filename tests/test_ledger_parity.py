@@ -36,6 +36,14 @@ DSN = os.environ.get("AIOS_TEST_PG_DSN", "")
 
 SECRET = b"k" * 32
 
+#: A real ISO-8601 instant, fixed so both tiers see the same value. The tests
+#: previously passed the literal "t", which SQLite accepts in a TEXT column and
+#: PostgreSQL rejects in a TIMESTAMPTZ one ("invalid input syntax for type
+#: timestamp with time zone"). That made three parity tests SQLite-only in
+#: effect: they exercised the SQLite tier and skipped the production tier, so
+#: the very divergence they exist to catch went unseen.
+STAMP = "2026-01-01T00:00:00+00:00"
+
 
 def _call(symbol: str = "AAPL", quantity: float = 10.0) -> ToolCall:
     return ToolCall(
@@ -168,9 +176,9 @@ def test_update_and_delete_are_refused_on_both_tiers(decision_sink) -> None:
 
 def test_experiment_lifecycle_round_trips(experiment_sink) -> None:
     """Create, start, fail — read back as snapshots with linkage intact."""
-    experiment_sink.append("exp-1", "CREATED", '{"status": "CREATED"}', "t")
-    experiment_sink.append("exp-1", "STARTED", '{"status": "RUNNING"}', "t")
-    experiment_sink.append("exp-1", "FAILED", '{"status": "FAILED"}', "t")
+    experiment_sink.append("exp-1", "CREATED", '{"status": "CREATED"}', STAMP)
+    experiment_sink.append("exp-1", "STARTED", '{"status": "RUNNING"}', STAMP)
+    experiment_sink.append("exp-1", "FAILED", '{"status": "FAILED"}', STAMP)
     snapshots = experiment_sink.read_snapshots()
     assert set(snapshots) == {"exp-1"}
     assert snapshots["exp-1"] == '{"status": "FAILED"}'
@@ -187,25 +195,33 @@ def test_forked_event_refused_on_both_tiers(experiment_sink, tmp_path: Path) -> 
 
     import psycopg
 
-    experiment_sink.append("exp-1", "CREATED", "{}", "t")
+    experiment_sink.append("exp-1", "CREATED", "{}", STAMP)
     if hasattr(experiment_sink, "_connection"):
         with pytest.raises(sqlite3.IntegrityError, match="chain break"):
             experiment_sink._connection.execute(
-                "INSERT INTO experiment_events (seq, experiment_id, event_type, "
-                "supersedes, recorded_at, payload) VALUES (2, 'exp-1', 'X', 0, 't', '{}')"
+                f"INSERT INTO experiment_events (seq, experiment_id, event_type, "
+                f"supersedes, recorded_at, payload) "
+                f"VALUES (2, 'exp-1', 'X', 0, '{STAMP}', '{{}}')"
             )
     else:
-        with pytest.raises(psycopg.errors.Error, match="append-only"):
+        # The refusal must name the tamper class, not merely fail. On this tier
+        # the fork is caught by the predecessor-link check rather than the
+        # append-only guard, so the message says "chain break" — which is more
+        # precise, not less. Matching the class rather than one function's text
+        # keeps the assertion about the property instead of about which guard
+        # happened to fire first.
+        with pytest.raises(psycopg.errors.Error, match="chain break|append-only"):
             with experiment_sink._conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO experiment_events (seq, experiment_id, event_type, "
-                    "supersedes, recorded_at, payload) VALUES (2, 'exp-1', 'X', 0, 't', '{}')"
+                    f"INSERT INTO experiment_events (seq, experiment_id, event_type, "
+                    f"supersedes, recorded_at, payload) "
+                    f"VALUES (2, 'exp-1', 'X', 0, '{STAMP}', '{{}}')"
                 )
 
 
 def test_seal_signs_count_and_head_on_both_tiers(experiment_sink) -> None:
-    experiment_sink.append("exp-1", "CREATED", "{}", "t")
-    experiment_sink.append("exp-1", "STARTED", "{}", "t")
+    experiment_sink.append("exp-1", "CREATED", "{}", STAMP)
+    experiment_sink.append("exp-1", "STARTED", "{}", STAMP)
     seal = experiment_sink.seal(SECRET)
     assert seal is not None
     assert (seal.event_count, seal.max_seq) == (2, 2)
@@ -253,14 +269,23 @@ def _columns(statements: list[str]) -> dict[str, set[str]]:
 @pytest.mark.parametrize("version", [4, 5, 6, 7, 8])
 def test_ledger_ddl_matches_across_dialects(version: int) -> None:
     """Every table, index, trigger, and column on one tier exists on the
-    other under the same name. The postgres tier additionally defines one
-    guard function per trigger-guarded ledger (SQLite needs none - its
-    triggers carry their own messages), which is the single sanctioned
-    asymmetry. The claim ledger (v6) carries no triggers — append-only by
+    other under the same name. The postgres tier additionally defines guard
+    functions, which SQLite does not need because its triggers carry their own
+    messages inline. The claim ledger (v6) carries no triggers — append-only by
     construction, with no UPDATE in either tier's code — so it defines no
     function on either side. The playbook store (v8) snapshots immutable
     policies rather than logging transitions, so its seal signs (count,
-    set-hash) instead of a chain head."""
+    set-hash) instead of a chain head.
+
+    The count of postgres guard functions is asserted per version rather than
+    pinned at one. It used to be exactly one per ledger, because sequencing and
+    chain continuity were expressed as trigger WHEN clauses — which PostgreSQL
+    rejects outright: a WHEN condition must be parenthesised and may not
+    contain a subquery, and both ledger checks are subqueries. Those checks now
+    live in plpgsql functions, so a ledger with sequencing has one function per
+    check plus the append-only guard. The property that matters is that every
+    trigger names a function that exists, which is checked separately below.
+    """
     migration = next(m for m in MIGRATIONS if m.version == version)
     sqlite_stmts = _statements(migration.sqlite)
     pg_stmts = _statements(migration.postgres)
@@ -273,13 +298,46 @@ def test_ledger_ddl_matches_across_dialects(version: int) -> None:
     if version == 6:
         assert functions == set(), "v6 defines no guard function: no triggers to guard with"
     else:
-        assert len(functions) == 1, f"v{version} postgres tier must define exactly one guard function"
+        assert functions, f"v{version} postgres tier must define its guard functions"
+        assert len(functions) >= 1
+        assert all(f.startswith("aios_") for f in functions), (
+            f"v{version} guard functions must be namespaced under aios_: {functions}"
+        )
     assert sqlite_functions == set(), "SQLite defines no functions on any version"
     sqlite_cols = _columns(sqlite_stmts)
     pg_cols = _columns(pg_stmts)
     assert set(sqlite_cols) == set(pg_cols)
     for table in sqlite_cols:
         assert sqlite_cols[table] == pg_cols[table], f"v{version} column mismatch on {table}"
+
+
+@pytest.mark.parametrize("version", [4, 5, 7, 8])
+def test_every_postgres_trigger_executes_a_function_that_exists(version: int) -> None:
+    """A trigger naming a missing function is not caught by the DDL-parity
+    test, because that test compares names rather than resolving references.
+    PostgreSQL does catch it — at apply time — which means the whole migration
+    fails. This asserts the reference resolves from the DDL itself, so the
+    defect surfaces without a database.
+
+    The three-function ledgers are a direct consequence of moving the
+    sequencing and chain checks out of WHEN clauses; this is the test that keeps
+    the refactor honest.
+    """
+    migration = next(m for m in MIGRATIONS if m.version == version)
+    statements = _statements(migration.postgres)
+    defined = _ddl_names(statements, "FUNCTION")
+    referenced: set[str] = set()
+    for statement in statements:
+        match = re.search(
+            r"EXECUTE\s+(?:PROCEDURE|FUNCTION)\s+([A-Za-z_][A-Za-z0-9_.]*)",
+            statement,
+            re.IGNORECASE,
+        )
+        if match:
+            referenced.add(match.group(1).lower())
+    assert referenced, f"v{version} defines no EXECUTE FUNCTION trigger at all"
+    missing = sorted(referenced - defined)
+    assert missing == [], f"v{version} triggers reference undefined functions: {missing}"
 
 
 def test_experiment_ledger_facade_accepts_either_tier(tmp_path: Path) -> None:

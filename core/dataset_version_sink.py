@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from core.decision_sink import AppendOnlyViolation
+from core.decision_sink import AppendOnlyViolation, ts_str
 from core.experiment_sink import (
     ExperimentEvent,
     ExperimentLedgerAudit,
@@ -66,7 +66,7 @@ def _to_event(row: dict[str, Any]) -> ExperimentEvent:
         experiment_id=str(row["dataset_key"]),
         event_type=str(row["event_type"]),
         supersedes=int(row["supersedes"]),
-        recorded_at=str(row["recorded_at"]),
+        recorded_at=ts_str(row["recorded_at"]),
         payload=str(row["payload"]),
     )
 
@@ -148,7 +148,7 @@ class SqliteDatasetVersionSink:
             ExperimentSeal(
                 event_count=int(r["event_count"]),
                 max_seq=int(r["max_seq"]),
-                sealed_at=str(r["sealed_at"]),
+                sealed_at=ts_str(r["sealed_at"]),
                 signature=str(r["signature"]),
             )
             for r in rows
@@ -275,7 +275,7 @@ class PostgresDatasetVersionSink:
             ExperimentSeal(
                 event_count=int(r[0]),
                 max_seq=int(r[1]),
-                sealed_at=str(r[2]),
+                sealed_at=ts_str(r[2]),
                 signature=str(r[3]),
             )
             for r in rows
@@ -293,7 +293,7 @@ class PostgresDatasetVersionSink:
                 experiment_id=str(r[1]),
                 event_type=str(r[2]),
                 supersedes=int(r[3]),
-                recorded_at=str(r[4]),
+                recorded_at=ts_str(r[4]),
                 payload=str(r[5]),
             )
             for r in rows

@@ -782,6 +782,45 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Sequencing and chaining are enforced in a FUNCTION body, not in a WHEN
+-- clause, because PostgreSQL rejects both forms this needs: a WHEN condition
+-- must be parenthesised, and PostgreSQL forbids a subquery inside it outright
+-- ("cannot use subquery in trigger WHEN condition"). The ledger's continuity
+-- checks are inherently subqueries -- "is this seq the next one", "does this
+-- chain hash match the current head" -- so they cannot be expressed as a WHEN
+-- condition at all. Moving them into plpgsql is the only way to keep the
+-- guarantee while keeping the DDL valid.
+--
+-- This was not a latent style problem. The unparenthesised WHEN clauses made
+-- every one of these CREATE TRIGGER statements a syntax error, so migration v4
+-- could not be applied to PostgreSQL by any machine, and the sequencing and
+-- chain guarantees the ledger claims to enforce have never actually run on the
+-- Postgres tier. Verified against a live database rather than assumed.
+CREATE OR REPLACE FUNCTION aios_governance_seq_is_next()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.seq <> (SELECT COALESCE(MAX(seq), 0) + 1 FROM governance_decisions) THEN
+        RAISE EXCEPTION 'sequence break: seq must be the next integer';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION aios_governance_chains_to_head()
+RETURNS TRIGGER AS $$
+DECLARE
+    head TEXT;
+BEGIN
+    SELECT chain_hash INTO head FROM governance_decisions
+        ORDER BY seq DESC LIMIT 1;
+    IF head IS NOT NULL AND NEW.previous_chain_hash IS DISTINCT FROM head THEN
+        RAISE EXCEPTION
+            'chain break: previous_chain_hash does not match the current head';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 DROP TRIGGER IF EXISTS trg_governance_no_update ON governance_decisions;
 CREATE TRIGGER trg_governance_no_update
     BEFORE UPDATE ON governance_decisions
@@ -795,19 +834,12 @@ CREATE TRIGGER trg_governance_no_delete
 DROP TRIGGER IF EXISTS trg_governance_seq_is_next ON governance_decisions;
 CREATE TRIGGER trg_governance_seq_is_next
     BEFORE INSERT ON governance_decisions
-    FOR EACH ROW
-    WHEN NEW.seq <> (SELECT COALESCE(MAX(seq), 0) + 1 FROM governance_decisions)
-    EXECUTE FUNCTION aios_governance_append_only();
+    FOR EACH ROW EXECUTE FUNCTION aios_governance_seq_is_next();
 
 DROP TRIGGER IF EXISTS trg_governance_chains_to_head ON governance_decisions;
 CREATE TRIGGER trg_governance_chains_to_head
     BEFORE INSERT ON governance_decisions
-    FOR EACH ROW
-    WHEN EXISTS (SELECT 1 FROM governance_decisions)
-     AND NEW.previous_chain_hash <> (
-         SELECT chain_hash FROM governance_decisions ORDER BY seq DESC LIMIT 1
-     )
-    EXECUTE FUNCTION aios_governance_append_only();
+    FOR EACH ROW EXECUTE FUNCTION aios_governance_chains_to_head();
 
 DROP TRIGGER IF EXISTS trg_governance_seals_no_update ON governance_seals;
 CREATE TRIGGER trg_governance_seals_no_update
@@ -948,22 +980,43 @@ CREATE TRIGGER trg_experiment_no_delete
     BEFORE DELETE ON experiment_events
     FOR EACH ROW EXECUTE FUNCTION aios_experiment_append_only();
 
+-- Per-experiment sequencing and supersedes linkage, in function bodies because
+-- PostgreSQL forbids a subquery inside a trigger WHEN condition. See the v4 note
+-- above: the WHEN form is not merely unparenthesised, it is unrepresentable.
+CREATE OR REPLACE FUNCTION aios_experiment_seq_is_next()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.seq <> (SELECT COALESCE(MAX(seq), 0) + 1 FROM experiment_events) THEN
+        RAISE EXCEPTION 'sequence break: seq must be the next integer';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION aios_experiment_links_to_predecessor()
+RETURNS TRIGGER AS $$
+DECLARE
+    head BIGINT;
+BEGIN
+    SELECT COALESCE(MAX(seq), 0) INTO head FROM experiment_events
+        WHERE experiment_id = NEW.experiment_id;
+    IF NEW.supersedes IS DISTINCT FROM head THEN
+        RAISE EXCEPTION
+            'chain break: supersedes does not match the experiment head';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 DROP TRIGGER IF EXISTS trg_experiment_seq_is_next ON experiment_events;
 CREATE TRIGGER trg_experiment_seq_is_next
     BEFORE INSERT ON experiment_events
-    FOR EACH ROW
-    WHEN NEW.seq <> (SELECT COALESCE(MAX(seq), 0) + 1 FROM experiment_events)
-    EXECUTE FUNCTION aios_experiment_append_only();
+    FOR EACH ROW EXECUTE FUNCTION aios_experiment_seq_is_next();
 
 DROP TRIGGER IF EXISTS trg_experiment_links_to_predecessor ON experiment_events;
 CREATE TRIGGER trg_experiment_links_to_predecessor
     BEFORE INSERT ON experiment_events
-    FOR EACH ROW
-    WHEN NEW.supersedes <> (
-        SELECT COALESCE(MAX(seq), 0) FROM experiment_events
-        WHERE experiment_id = NEW.experiment_id
-    )
-    EXECUTE FUNCTION aios_experiment_append_only();
+    FOR EACH ROW EXECUTE FUNCTION aios_experiment_links_to_predecessor();
 
 DROP TRIGGER IF EXISTS trg_experiment_seals_no_update ON experiment_seals;
 CREATE TRIGGER trg_experiment_seals_no_update
@@ -1171,22 +1224,46 @@ CREATE TRIGGER trg_dataset_version_no_delete
     BEFORE DELETE ON dataset_version_events
     FOR EACH ROW EXECUTE FUNCTION aios_dataset_version_append_only();
 
+-- Per-key sequencing and supersedes linkage, in function bodies because
+-- PostgreSQL forbids a subquery inside a trigger WHEN condition (see the v4
+-- note). IS DISTINCT FROM rather than <>, so a NULL head on a first write
+-- compares equal instead of yielding NULL and silently passing.
+CREATE OR REPLACE FUNCTION aios_dataset_version_seq_is_next()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.seq <> (
+        SELECT COALESCE(MAX(seq), 0) + 1 FROM dataset_version_events
+    ) THEN
+        RAISE EXCEPTION 'sequence break: seq must be the next integer';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION aios_dataset_version_links_to_predecessor()
+RETURNS TRIGGER AS $$
+DECLARE
+    head BIGINT;
+BEGIN
+    SELECT COALESCE(MAX(seq), 0) INTO head FROM dataset_version_events
+        WHERE dataset_key = NEW.dataset_key;
+    IF NEW.supersedes IS DISTINCT FROM head THEN
+        RAISE EXCEPTION
+            'chain break: supersedes does not match the dataset-version head';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 DROP TRIGGER IF EXISTS trg_dataset_version_seq_is_next ON dataset_version_events;
 CREATE TRIGGER trg_dataset_version_seq_is_next
     BEFORE INSERT ON dataset_version_events
-    FOR EACH ROW
-    WHEN NEW.seq <> (SELECT COALESCE(MAX(seq), 0) + 1 FROM dataset_version_events)
-    EXECUTE FUNCTION aios_dataset_version_append_only();
+    FOR EACH ROW EXECUTE FUNCTION aios_dataset_version_seq_is_next();
 
 DROP TRIGGER IF EXISTS trg_dataset_version_links_to_predecessor ON dataset_version_events;
 CREATE TRIGGER trg_dataset_version_links_to_predecessor
     BEFORE INSERT ON dataset_version_events
-    FOR EACH ROW
-    WHEN NEW.supersedes <> (
-        SELECT COALESCE(MAX(seq), 0) FROM dataset_version_events
-        WHERE dataset_key = NEW.dataset_key
-    )
-    EXECUTE FUNCTION aios_dataset_version_append_only();
+    FOR EACH ROW EXECUTE FUNCTION aios_dataset_version_links_to_predecessor();
 
 DROP TRIGGER IF EXISTS trg_dataset_version_seals_no_update ON dataset_version_seals;
 CREATE TRIGGER trg_dataset_version_seals_no_update

@@ -57,6 +57,7 @@ __all__ = [
     "build_decision_ledger",
     "build_postgres_decision_sink",
     "build_sqlite_decision_sink",
+    "ts_str",
 ]
 
 
@@ -359,7 +360,7 @@ class SqliteDecisionSink:
             GovernanceSeal(
                 seq=int(r["seq"]),
                 chain_hash=str(r["chain_hash"]),
-                sealed_at=str(r["sealed_at"]),
+                sealed_at=ts_str(r["sealed_at"]),
                 signature=str(r["signature"]),
             )
             for r in rows
@@ -398,6 +399,30 @@ class SqliteDecisionSink:
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def ts_str(value: object) -> str:
+    """Render a stored timestamp back to the exact string that was signed.
+
+    Every seal's HMAC is computed over ``f"{seq}|{chain_hash}|{sealed_at}"``
+    using the ISO-8601 string produced by :func:`_now`. Reading the column back
+    must therefore reproduce that same string, and it does not: SQLite stores
+    TEXT and hands it back unchanged, while PostgreSQL stores TIMESTAMPTZ and
+    hands back a ``datetime``. ``str(datetime)`` renders a space where
+    ``isoformat()`` renders ``T``, so the recomputed HMAC covers different bytes
+    and every Postgres seal fails its own verification -- which reads as "the
+    log was tampered with" when nothing was tampered with.
+
+    The fix belongs on the read, not on the writer. Re-signing in the dialect's
+    own representation would make seals portable but forgeable-by-rewrite in a
+    different way: the signature would no longer be a function of the canonical
+    fields. Normalising the read keeps one canonical string on both tiers.
+    """
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, str):
+        return value
+    return str(value)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -518,7 +543,7 @@ class PostgresDecisionSink:
             GovernanceSeal(
                 seq=int(r[0]),
                 chain_hash=str(r[1]),
-                sealed_at=str(r[2]),
+                sealed_at=ts_str(r[2]),
                 signature=str(r[3]),
             )
             for r in rows

@@ -44,7 +44,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from core.decision_sink import AppendOnlyViolation
+from core.decision_sink import AppendOnlyViolation, ts_str
 from core.migrations import apply_sqlite_migrations
 
 __all__ = [
@@ -335,7 +335,7 @@ class SqliteExperimentSink:
             ExperimentSeal(
                 event_count=int(r["event_count"]),
                 max_seq=int(r["max_seq"]),
-                sealed_at=str(r["sealed_at"]),
+                sealed_at=ts_str(r["sealed_at"]),
                 signature=str(r["signature"]),
             )
             for r in rows
@@ -354,7 +354,7 @@ class SqliteExperimentSink:
                 experiment_id=str(r["experiment_id"]),
                 event_type=str(r["event_type"]),
                 supersedes=int(r["supersedes"]),
-                recorded_at=str(r["recorded_at"]),
+                recorded_at=ts_str(r["recorded_at"]),
                 payload=str(r["payload"]),
             )
             for r in rows
@@ -503,7 +503,7 @@ class PostgresExperimentSink:
             ExperimentSeal(
                 event_count=int(r[0]),
                 max_seq=int(r[1]),
-                sealed_at=str(r[2]),
+                sealed_at=ts_str(r[2]),
                 signature=str(r[3]),
             )
             for r in rows
@@ -521,7 +521,7 @@ class PostgresExperimentSink:
                 experiment_id=str(r[1]),
                 event_type=str(r[2]),
                 supersedes=int(r[3]),
-                recorded_at=str(r[4]),
+                recorded_at=ts_str(r[4]),
                 payload=str(r[5]),
             )
             for r in rows

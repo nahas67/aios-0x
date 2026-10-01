@@ -638,7 +638,21 @@ class PostgresClaimLedger:
                             _claim_params(claim),
                         )
             except self._psycopg.errors.UniqueViolation as exc:
-                with self._conn.cursor() as cur3:
+                # dict_row, because _row_to_claim expects a mapping. A plain
+                # cursor yields a positional tuple, and dict(tuple) raises
+                # "element #0 has length 7; 2 is required" -- so the idempotent
+                # re-record path raised a TypeError-shaped ValueError instead of
+                # recognising the identical claim it was written to absorb.
+                #
+                # No rollback here. The `transaction()` block above has already
+                # rolled back the failed INSERT when the exception escaped it.
+                # Calling self._conn.rollback() as well rolled back the *outer*
+                # transaction too, which is wider than the failed statement: it
+                # discarded the first, already-successful insert as well. An
+                # idempotent re-record therefore returned the right claim and
+                # then deleted it from the ledger. Verified by counting rows on
+                # both sides of the call.
+                with self._conn.cursor(row_factory=self._psycopg.rows.dict_row) as cur3:
                     cur3.execute(
                         "SELECT * FROM claims WHERE claim_id = %s", (claim.claim_id,)
                     )
@@ -646,7 +660,6 @@ class PostgresClaimLedger:
                 if row is not None and _same_assertion(
                     _row_to_claim(dict(row)), claim
                 ):
-                    self._conn.rollback()
                     return _row_to_claim(dict(row))
                 raise ClaimLedgerError(
                     f"claim {claim.claim_id} already recorded: {exc}"

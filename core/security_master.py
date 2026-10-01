@@ -233,6 +233,29 @@ class InstrumentIdentity(BaseModel):
             return False
         return self.recorded_to is None or moment < self.recorded_to
 
+    @staticmethod
+    def _digest_value(value: object) -> str:
+        """Render one field for the digest, normalising across dialects.
+
+        Decimals are compared by value, not by scale. PostgreSQL's NUMERIC
+        round-trips Decimal("0.01") as Decimal("0.010000000000") because the
+        column declares a scale, while SQLite's storage leaves it untouched --
+        so hashing ``str(value)`` made the *same belief* hash differently per
+        tier. The consequence was not a cosmetic mismatch: ``SecurityMaster.upsert``
+        uses this digest to decide a re-assertion is a no-op, so on the
+        production tier the no-op never fired, the re-assertion fell through to
+        the insert, and the primary key refused it. A feed reload crashed
+        against Postgres and worked against SQLite.
+
+        Normalising with ``normalize()`` compares 0.01 and 0.010000000000 as
+        equal while still distinguishing 0.01 from 0.1. A Decimal whose exponent
+        is positive cannot arise from ``gt=0`` normalisation here, but
+        ``normalize()`` on such a value is a no-op rather than an error.
+        """
+        if isinstance(value, Decimal):
+            return str(value.normalize())
+        return str(value)
+
     def identity_digest(self) -> str:
         """Stable digest of the *content* that varies between revisions.
 
@@ -241,7 +264,7 @@ class InstrumentIdentity(BaseModel):
         refuses the second as a no-op rather than churning the history.
         """
         payload = "|".join(
-            str(value)
+            self._digest_value(value)
             for value in (
                 self.instrument_id,
                 self.listing_id,
