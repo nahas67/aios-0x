@@ -49,12 +49,12 @@ const LIFECYCLE_STAGES = [
 function MetricRow({ entry }: { entry: MetricEntry }) {
   return (
     <div className="flex items-center justify-between gap-3 text-[10px]">
-      <span className="text-slate-500 truncate">{entry.key}</span>
+      <span className="text-text-subtle truncate">{entry.key}</span>
       <span
         className={
           entry.numeric
-            ? "text-slate-200 font-mono-num font-bold"
-            : "text-slate-500 italic"
+            ? "text-text-strong font-mono-num font-bold"
+            : "text-text-subtle italic"
         }
       >
         {entry.display}
@@ -66,55 +66,55 @@ function MetricRow({ entry }: { entry: MetricEntry }) {
 function EntryInspector({ entry }: { entry: ModelGovernanceEntry }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+      <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
         <div>
-          <div className="text-[10px] text-cyan-400 uppercase tracking-widest font-bold">
+          <div className="text-[10px] text-accent uppercase tracking-widest font-bold">
             REGISTRY RECORD
           </div>
-          <h3 className="text-base font-bold text-white mt-0.5 break-all">{entry.id}</h3>
+          <h3 className="text-base font-bold text-text-strong mt-0.5 break-all">{entry.id}</h3>
         </div>
-        <span className="text-[10px] px-2 py-0.5 rounded bg-white/[0.04] text-slate-300 border border-white/[0.10] font-bold shrink-0">
+        <span className="text-[10px] px-2 py-0.5 rounded bg-surface-veil text-text border border-border-subtle font-bold shrink-0">
           {entry.status ?? "STATUS UNKNOWN"}
         </span>
       </div>
 
       <div className="space-y-2 text-xs">
-        <div className="p-2 rounded bg-black/40 border border-white/[0.05] flex justify-between gap-3">
-          <span className="text-slate-400 shrink-0">MODEL ID:</span>
-          <span className="text-slate-200 font-mono text-[11px] truncate">{entry.name}</span>
+        <div className="p-2 rounded bg-surface-sunken border border-border-subtle flex justify-between gap-3">
+          <span className="text-text-muted shrink-0">MODEL ID:</span>
+          <span className="text-text-strong font-mono text-[11px] truncate">{entry.name}</span>
         </div>
-        <div className="p-2 rounded bg-black/40 border border-white/[0.05] flex justify-between gap-3">
-          <span className="text-slate-400 shrink-0">VERSION:</span>
-          <span className="text-slate-200 font-mono text-[11px]">
+        <div className="p-2 rounded bg-surface-sunken border border-border-subtle flex justify-between gap-3">
+          <span className="text-text-muted shrink-0">VERSION:</span>
+          <span className="text-text-strong font-mono text-[11px]">
             {entry.version || "unknown"}
           </span>
         </div>
-        <div className="p-2 rounded bg-black/40 border border-white/[0.05] flex justify-between gap-3">
-          <span className="text-slate-400 shrink-0">MODEL TYPE:</span>
-          <span className="text-slate-200 font-mono text-[11px]">
+        <div className="p-2 rounded bg-surface-sunken border border-border-subtle flex justify-between gap-3">
+          <span className="text-text-muted shrink-0">MODEL TYPE:</span>
+          <span className="text-text-strong font-mono text-[11px]">
             {entry.modelType ?? "unknown"}
           </span>
         </div>
-        <div className="p-2 rounded bg-black/40 border border-white/[0.05] flex justify-between gap-3">
-          <span className="text-slate-400 shrink-0">ARTIFACT HASH:</span>
-          <span className="text-cyan-300 font-mono select-all text-[11px] break-all">
+        <div className="p-2 rounded bg-surface-sunken border border-border-subtle flex justify-between gap-3">
+          <span className="text-text-muted shrink-0">ARTIFACT HASH:</span>
+          <span className="text-accent font-mono select-all text-[11px] break-all">
             {entry.artifactHash ?? "not recorded"}
           </span>
         </div>
-        <div className="p-2 rounded bg-black/40 border border-white/[0.05] flex justify-between gap-3">
-          <span className="text-slate-400 shrink-0">REGISTERED AT:</span>
-          <span className="text-slate-200 font-mono text-[11px]">
+        <div className="p-2 rounded bg-surface-sunken border border-border-subtle flex justify-between gap-3">
+          <span className="text-text-muted shrink-0">REGISTERED AT:</span>
+          <span className="text-text-strong font-mono text-[11px]">
             {entry.createdAt ?? "not recorded"}
           </span>
         </div>
       </div>
 
       <div>
-        <div className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1.5">
+        <div className="text-[10px] text-text-muted uppercase tracking-widest font-bold mb-1.5">
           DECLARED EVALUATION METRICS
         </div>
         {entry.metrics.length === 0 ? (
-          <div className="text-[10px] text-slate-500 italic">
+          <div className="text-[10px] text-text-subtle italic">
             No metrics recorded for this version.
           </div>
         ) : (
@@ -128,7 +128,7 @@ function EntryInspector({ entry }: { entry: ModelGovernanceEntry }) {
 
       {entry.walkForward.length > 0 && (
         <div>
-          <div className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1.5">
+          <div className="text-[10px] text-text-muted uppercase tracking-widest font-bold mb-1.5">
             WALK-FORWARD
           </div>
           <div className="space-y-1">
@@ -168,7 +168,7 @@ export const ModelGovernanceWorkspace: React.FC = () => {
 
   if (snapshot.state === "loading") {
     return (
-      <div className="pb-12 font-mono text-xs text-slate-500 p-4">
+      <div className="pb-12 font-mono text-xs text-text-subtle p-4">
         Reading the model registry...
       </div>
     );
@@ -188,9 +188,9 @@ export const ModelGovernanceWorkspace: React.FC = () => {
   if (snapshot.state === "absent") {
     return (
       <div className="pb-12 font-mono space-y-4">
-        <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 flex items-center gap-2">
-          <Binary className="w-4 h-4 text-cyan-400" />
-          <h2 className="text-sm font-bold tracking-wider text-slate-100 uppercase">
+        <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 flex items-center gap-2">
+          <Binary className="w-4 h-4 text-accent" />
+          <h2 className="text-sm font-bold tracking-wider text-text-strong uppercase">
             MODEL GOVERNANCE
           </h2>
         </div>
@@ -206,31 +206,31 @@ export const ModelGovernanceWorkspace: React.FC = () => {
   return (
     <div className="space-y-4 pb-12 font-mono">
       {/* Header */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Binary className="w-4 h-4 text-cyan-400" />
-            <h2 className="text-sm font-bold tracking-wider text-slate-100 uppercase">
+            <Binary className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold tracking-wider text-text-strong uppercase">
               MODEL GOVERNANCE
             </h2>
           </div>
-          <div className="text-xs text-slate-400 mt-0.5">
+          <div className="text-xs text-text-muted mt-0.5">
             Model registry &middot; evaluation records &middot; claim-gated reporting
           </div>
         </div>
 
         <div className="flex items-center gap-3 text-xs">
-          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded">
-            <span className="text-slate-400">REGISTERED VERSIONS:</span>{" "}
-            <span className="text-emerald-400 font-bold">{entries.length}</span>
+          <div className="bg-surface-veil border border-border-subtle px-3 py-1.5 rounded">
+            <span className="text-text-muted">REGISTERED VERSIONS:</span>{" "}
+            <span className="text-positive font-bold">{entries.length}</span>
           </div>
-          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded">
-            <span className="text-slate-400">EVALUATION RECORDS:</span>{" "}
-            <span className="text-cyan-300 font-bold">{evaluationCount}</span>
+          <div className="bg-surface-veil border border-border-subtle px-3 py-1.5 rounded">
+            <span className="text-text-muted">EVALUATION RECORDS:</span>{" "}
+            <span className="text-accent font-bold">{evaluationCount}</span>
           </div>
-          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded">
-            <span className="text-slate-400">REPORTABLE CLAIMS:</span>{" "}
-            <span className={reportable > 0 ? "text-emerald-400 font-bold" : "text-amber-300 font-bold"}>
+          <div className="bg-surface-veil border border-border-subtle px-3 py-1.5 rounded">
+            <span className="text-text-muted">REPORTABLE CLAIMS:</span>{" "}
+            <span className={reportable > 0 ? "text-positive font-bold" : "text-warning font-bold"}>
               {reportable} / {entries.length}
             </span>
           </div>
@@ -241,18 +241,18 @@ export const ModelGovernanceWorkspace: React.FC = () => {
           The registry does not report per-stage progress, so no stage is marked
           passed. Marking all eight "PASSED" is exactly the fiction this view
           used to render, and a stage list with no state beside it is honest. */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl">
-        <div className="text-[10px] text-cyan-400 uppercase tracking-widest font-bold mb-3">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl">
+        <div className="text-[10px] text-accent uppercase tracking-widest font-bold mb-3">
           LIFECYCLE VOCABULARY
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
           {LIFECYCLE_STAGES.map((stage) => (
             <div
               key={stage}
-              className="p-2 rounded bg-white/[0.02] border border-white/[0.06] text-center"
+              className="p-2 rounded bg-surface-veil border border-border-subtle text-center"
             >
-              <div className="text-[10px] font-bold text-slate-300">{stage}</div>
-              <div className="mt-1 text-[8px] text-slate-600 flex items-center justify-center gap-1">
+              <div className="text-[10px] font-bold text-text">{stage}</div>
+              <div className="mt-1 text-[8px] text-text-subtle flex items-center justify-center gap-1">
                 <CircleSlash className="w-2.5 h-2.5" /> NOT REPORTED
               </div>
             </div>
@@ -263,7 +263,7 @@ export const ModelGovernanceWorkspace: React.FC = () => {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
         {/* Registry */}
         <div className="xl:col-span-6 space-y-3">
-          <div className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
+          <div className="text-[10px] uppercase text-text-muted font-bold tracking-wider">
             REGISTERED MODEL VERSIONS
           </div>
 
@@ -275,32 +275,32 @@ export const ModelGovernanceWorkspace: React.FC = () => {
                 onClick={() => setSelectedId(entry.id)}
                 className={`p-3.5 rounded border transition-all cursor-pointer ${
                   isSelected
-                    ? "bg-cyan-950/30 border-cyan-500/50"
-                    : "bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]"
+                    ? "bg-info-bg border-accent"
+                    : "bg-surface-veil border-border-subtle hover:bg-surface-veil"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <div className="font-bold text-white flex items-center gap-2 min-w-0">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+                  <div className="font-bold text-text-strong flex items-center gap-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
                     <span className="truncate">{entry.name}</span>
                   </div>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-300 border border-white/[0.10] shrink-0">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface-veil text-text border border-border-subtle shrink-0">
                     {entry.status ?? "STATUS UNKNOWN"}
                   </span>
                 </div>
 
-                <div className="text-[11px] text-slate-400 mt-1">
+                <div className="text-[11px] text-text-muted mt-1">
                   version <span className="font-mono">{entry.version || "unknown"}</span>
                   {entry.modelType ? ` · ${entry.modelType}` : ""}
                 </div>
 
-                <div className="mt-2.5 pt-2 border-t border-white/[0.04] text-[10px]">
+                <div className="mt-2.5 pt-2 border-t border-border-subtle text-[10px]">
                   {entry.claimStatus === "REPORTABLE" ? (
-                    <span className="text-emerald-400 flex items-center gap-1">
+                    <span className="text-positive flex items-center gap-1">
                       <CheckCircle2 className="w-2.5 h-2.5" /> claim companions present
                     </span>
                   ) : (
-                    <span className="text-amber-300">
+                    <span className="text-warning">
                       NOT REPORTABLE &mdash; missing{" "}
                       {entry.missingClaimFields.length} of 14 required companions
                     </span>
@@ -312,14 +312,14 @@ export const ModelGovernanceWorkspace: React.FC = () => {
         </div>
 
         {/* Inspector */}
-        <div className="xl:col-span-6 bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl space-y-3">
+        <div className="xl:col-span-6 bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl space-y-3">
           <EntryInspector entry={active} />
 
           <div
             className={`p-3 rounded border text-xs flex items-start gap-2 ${
               active.claimStatus === "REPORTABLE"
-                ? "bg-emerald-950/20 border-emerald-800/40 text-emerald-300"
-                : "bg-amber-950/20 border-amber-800/40 text-amber-200"
+                ? "bg-positive-bg border-positive text-positive"
+                : "bg-warning-bg border-warning text-warning"
             }`}
           >
             <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />

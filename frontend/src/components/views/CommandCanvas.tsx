@@ -63,7 +63,7 @@ export const CommandCanvas: React.FC<CommandCanvasProps> = ({
     equityQ.loading || intelQ.loading || portfolioQ.loading || riskQ.loading ||
     agentsQ.loading || ordersQ.loading || regimesQ.loading || executionsQ.loading;
   if (loading) {
-    return <div className="text-xs text-slate-400 font-mono p-8">Loading command canvas from live endpoints…</div>;
+    return <div className="text-xs text-text-muted font-mono p-8">Loading command canvas from live endpoints…</div>;
   }
 
   const firstError =

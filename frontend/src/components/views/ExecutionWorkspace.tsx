@@ -52,7 +52,7 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
   };
 
   if (ordersQ.loading) {
-    return <div className="text-xs text-slate-400 font-mono p-8">Loading orders from /api/v1/orders…</div>;
+    return <div className="text-xs text-text-muted font-mono p-8">Loading orders from /api/v1/orders…</div>;
   }
   if (ordersQ.error || !ordersQ.data) {
     return <Unavailable title="Execution unavailable" reason={ordersQ.error ?? "no orders payload"} />;
@@ -77,18 +77,18 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
   return (
     <div className="space-y-4 pb-12 font-mono">
       {/* Header */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-cyan-400" />
-            <h2 className="text-sm font-bold tracking-wider text-slate-100 uppercase">
+            <Zap className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold tracking-wider text-text-strong uppercase">
               INSTITUTIONAL EXECUTION WORKSPACE & ORDER ROUTER
             </h2>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-info-bg text-accent border border-accent">
               FRAME 8 & 16
             </span>
           </div>
-          <div className="text-xs text-slate-400 mt-0.5">
+          <div className="text-xs text-text-muted mt-0.5">
             {orders.length} orders • Source: /api/v1/orders
           </div>
         </div>
@@ -96,7 +96,7 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="px-3 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.4)] flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded bg-accent hover:bg-accent text-text-strong font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.4)] flex items-center gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>DISPATCH NEW ORDER</span>
@@ -105,28 +105,28 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
       </div>
 
       {/* Order state summary from the live payload */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl">
-        <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl">
+        <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
           <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-xs font-bold uppercase text-white tracking-wider">
+            <Activity className="w-4 h-4 text-accent" />
+            <h3 className="text-xs font-bold uppercase text-text-strong tracking-wider">
               ORDER STATES (BACKEND-REPORTED)
             </h3>
           </div>
-          <span className="text-[10px] text-cyan-300 font-bold">
+          <span className="text-[10px] text-accent font-bold">
             {orders.length} ORDERS TRACKED
           </span>
         </div>
         {orders.length === 0 ? (
-          <div className="p-6 text-center text-slate-500 text-xs">
+          <div className="p-6 text-center text-text-subtle text-xs">
             No orders in the order manager yet. Dispatched orders will appear here.
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-3 text-xs">
             {(['FILLED', 'ROUTING', 'PARTIAL', 'CANCELLED'] as const).map((s) => (
-              <div key={s} className="p-2.5 rounded bg-white/[0.02] border border-white/[0.06] text-center">
-                <div className="text-[9px] text-slate-500 uppercase">{s}</div>
-                <div className="text-base font-mono-num font-bold text-white">
+              <div key={s} className="p-2.5 rounded bg-surface-veil border border-border-subtle text-center">
+                <div className="text-[9px] text-text-subtle uppercase">{s}</div>
+                <div className="text-base font-mono-num font-bold text-text-strong">
                   {orders.filter((o) => o.orderState === s).length}
                 </div>
               </div>
@@ -136,14 +136,14 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
       </div>
 
       {/* Sub-view switcher: Tape vs Order Book Liquidity Depth */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
+      <div className="flex items-center justify-between border-b border-border-subtle pb-2">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveTab('tape')}
             className={`px-3 py-1 rounded text-xs transition-colors flex items-center gap-1.5 ${
               activeTab === 'tape'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60 font-bold'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-info-bg text-accent border border-accent font-bold'
+                : 'text-text-muted hover:text-text-strong'
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
@@ -153,8 +153,8 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
             onClick={() => setActiveTab('depth')}
             className={`px-3 py-1 rounded text-xs transition-colors flex items-center gap-1.5 ${
               activeTab === 'depth'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60 font-bold'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-info-bg text-accent border border-accent font-bold'
+                : 'text-text-muted hover:text-text-strong'
             }`}
           >
             <BarChart2 className="w-3.5 h-3.5" />
@@ -164,15 +164,15 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
 
         {activeTab === 'depth' && (
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-slate-400">SELECT ASSET:</span>
+            <span className="text-[10px] text-text-muted">SELECT ASSET:</span>
             {['BTC/USD', 'ETH/USD', 'NVDA'].map((sym) => (
               <button
                 key={sym}
                 onClick={() => setSelectedAssetDepth(sym)}
                 className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
                   selectedAssetDepth === sym
-                    ? 'bg-cyan-900 text-cyan-200 font-bold'
-                    : 'bg-black/40 text-slate-400 hover:text-slate-200'
+                    ? 'bg-info-bg text-accent font-bold'
+                    : 'bg-surface-sunken text-text-muted hover:text-text-strong'
                 }`}
               >
                 {sym}
@@ -189,13 +189,13 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
           onSelectOrder={onSelectOrder}
         />
       ) : (
-        <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+        <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-border-subtle">
             <div>
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+              <h3 className="text-xs font-bold text-text-strong uppercase tracking-wider">
                 CONSOLIDATED ORDER BOOK DEPTH — {selectedAssetDepth}
               </h3>
-              <p className="text-[10px] text-slate-400">No L2 depth feed is published by the backend</p>
+              <p className="text-[10px] text-text-muted">No L2 depth feed is published by the backend</p>
             </div>
           </div>
           <Unavailable
@@ -206,15 +206,15 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
       )}
 
       {/* Institutional Execution Venues Grid */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl">
-        <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl">
+        <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
           <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-xs font-bold uppercase text-white tracking-wider">
+            <Layers className="w-4 h-4 text-accent" />
+            <h3 className="text-xs font-bold uppercase text-text-strong tracking-wider">
               CONNECTED INSTITUTIONAL VENUES & SMART ORDER ROUTING
             </h3>
           </div>
-          <span className="text-[10px] text-slate-400 flex items-center gap-1">
+          <span className="text-[10px] text-text-muted flex items-center gap-1">
             VENUE TELEMETRY NOT PUBLISHED
           </span>
         </div>
@@ -229,11 +229,11 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 my-3">
             {venueNames.map((name) => (
-              <div key={name} className="p-3 rounded bg-white/[0.02] border border-white/[0.06] text-xs">
-                <div className="font-bold text-white truncate flex items-center justify-between">
+              <div key={name} className="p-3 rounded bg-surface-veil border border-border-subtle text-xs">
+                <div className="font-bold text-text-strong truncate flex items-center justify-between">
                   <span>{name}</span>
                 </div>
-                <div className="mt-2 text-[11px] text-slate-400">
+                <div className="mt-2 text-[11px] text-text-muted">
                   Derived from /api/v1/orders rows. No latency / fill-rate telemetry published.
                 </div>
               </div>

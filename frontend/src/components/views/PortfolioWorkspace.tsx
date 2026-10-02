@@ -49,7 +49,7 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
   const portfolioQuery = useApi(() => portfolioApi.portfolio(), [tick]);
 
   if (positionsQuery.loading || portfolioQuery.loading) {
-    return <div className="text-xs text-slate-400 font-mono p-8">Loading portfolio from /api/v1/positions + /portfolio…</div>;
+    return <div className="text-xs text-text-muted font-mono p-8">Loading portfolio from /api/v1/positions + /portfolio…</div>;
   }
   if (positionsQuery.error || !positionsQuery.data) {
     return <Unavailable title="Portfolio unavailable" reason={positionsQuery.error ?? "no positions payload"} />;
@@ -109,41 +109,41 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
   return (
     <div className="space-y-4 pb-12 font-mono">
       {/* Portfolio Header & Stat Ribbon */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <PieChart className="w-4 h-4 text-cyan-400" />
-            <h2 className="text-sm font-bold tracking-wider text-slate-100 uppercase">
+            <PieChart className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold tracking-wider text-text-strong uppercase">
               PORTFOLIO INTELLIGENCE &amp; POSITION DISPERSION
             </h2>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-bold">
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-info-bg text-accent border border-accent font-bold">
               FRAME 2 / 15
             </span>
           </div>
-          <div className="text-xs text-slate-400 mt-0.5">
-            Active Holdings: <strong className="text-white">{positions.length} Positions</strong> • NAV ${(portfolioQuery.data.nav / 1000000).toFixed(2)}M • Source: /api/v1/portfolio
+          <div className="text-xs text-text-muted mt-0.5">
+            Active Holdings: <strong className="text-text-strong">{positions.length} Positions</strong> • NAV ${(portfolioQuery.data.nav / 1000000).toFixed(2)}M • Source: /api/v1/portfolio
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-xs">
-          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded">
-            <div className="text-[10px] text-slate-400">TOTAL INVESTED NOTIONAL</div>
-            <div className="text-sm font-mono-num font-bold text-white">${(totalNotional / 1000000).toFixed(2)}M</div>
+          <div className="bg-surface-veil border border-border-subtle px-3 py-1.5 rounded">
+            <div className="text-[10px] text-text-muted">TOTAL INVESTED NOTIONAL</div>
+            <div className="text-sm font-mono-num font-bold text-text-strong">${(totalNotional / 1000000).toFixed(2)}M</div>
           </div>
-          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded">
-            <div className="text-[10px] text-slate-400">NET UNREALIZED P&amp;L</div>
-            <div className={`text-sm font-mono-num font-bold flex items-center gap-1 ${totalUnrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <div className="bg-surface-veil border border-border-subtle px-3 py-1.5 rounded">
+            <div className="text-[10px] text-text-muted">NET UNREALIZED P&amp;L</div>
+            <div className={`text-sm font-mono-num font-bold flex items-center gap-1 ${totalUnrealizedPnl >= 0 ? 'text-positive' : 'text-destructive'}`}>
               <TrendingUp className="w-3.5 h-3.5" />
               {totalUnrealizedPnl >= 0 ? '+' : ''}${(totalUnrealizedPnl / 1000).toFixed(1)}k
             </div>
           </div>
-          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded">
-            <div className="text-[10px] text-slate-400">REALIZED P&amp;L (CLOSED)</div>
-            <div className="text-sm font-mono-num font-bold text-slate-200">${portfolioQuery.data.realized_pnl.toLocaleString()}</div>
+          <div className="bg-surface-veil border border-border-subtle px-3 py-1.5 rounded">
+            <div className="text-[10px] text-text-muted">REALIZED P&amp;L (CLOSED)</div>
+            <div className="text-sm font-mono-num font-bold text-text-strong">${portfolioQuery.data.realized_pnl.toLocaleString()}</div>
           </div>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="px-3 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs flex items-center gap-1 shadow-[0_0_12px_rgba(0,240,255,0.4)]"
+            className="px-3 py-1.5 rounded bg-accent hover:bg-accent text-text-strong font-bold text-xs flex items-center gap-1 shadow-[0_0_12px_rgba(0,240,255,0.4)]"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>ADD HOLDING</span>
@@ -161,30 +161,30 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
       />
 
       {/* Positions Table Filter Bar */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-3.5 shadow-2xl">
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-3.5 shadow-2xl">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border-subtle">
           {/* Search */}
-          <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded border border-white/[0.08] w-72">
-            <Search className="w-3.5 h-3.5 text-slate-500" />
+          <div className="flex items-center gap-2 bg-surface-sunken px-3 py-1 rounded border border-border-strong w-72">
+            <Search className="w-3.5 h-3.5 text-text-subtle" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search symbol, strategy, or agent..."
-              className="bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none w-full"
+              className="bg-transparent text-xs text-text-strong placeholder-text-subtle focus:outline-none w-full"
             />
           </div>
 
           {/* Asset Class Filter */}
-          <div className="flex flex-wrap items-center gap-1 bg-black/40 p-0.5 rounded border border-white/[0.06] text-[10px]">
+          <div className="flex flex-wrap items-center gap-1 bg-surface-sunken p-0.5 rounded border border-border-subtle text-[10px]">
             {['ALL', 'POLYMARKET', 'GLOBAL_EQUITY', 'COMMODITY', 'FX', 'US_EQUITY', 'CRYPTO', 'RATES'].map(cls => (
               <button
                 key={cls}
                 onClick={() => setFilterClass(cls)}
                 className={`px-2 py-1 rounded transition-colors uppercase ${
                   filterClass === cls
-                    ? 'bg-cyan-950 text-cyan-300 font-bold border border-cyan-800'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-info-bg text-accent font-bold border border-accent'
+                    : 'text-text-muted hover:text-text-strong'
                 }`}
               >
                 {cls.replace('_', ' ')}
@@ -197,7 +197,7 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
         <div className="overflow-x-auto my-2">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-white/[0.06] text-slate-500 text-[9px] uppercase tracking-wider">
+              <tr className="border-b border-border-subtle text-text-subtle text-[9px] uppercase tracking-wider">
                 <th className="py-2 px-2.5">SYMBOL</th>
                 <th className="py-2 px-2">CLASS</th>
                 <th className="py-2 px-2">SIDE</th>
@@ -212,55 +212,55 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
                 <th className="py-2 px-2 text-center">ACTION</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.03]">
+            <tbody className="divide-y divide-surface-veil">
               {filteredPositions.map((pos) => {
                 const isPos = pos.unrealizedPnlUsd >= 0;
                 return (
                   <tr
                     key={pos.id}
                     onClick={() => onSelectPosition(pos)}
-                    className="hover:bg-cyan-950/20 cursor-pointer transition-colors group"
+                    className="hover:bg-info-bg cursor-pointer transition-colors group"
                   >
-                    <td className="py-2.5 px-2.5 font-bold text-white group-hover:text-cyan-300 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                    <td className="py-2.5 px-2.5 font-bold text-text-strong group-hover:text-accent flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent"></span>
                       {pos.symbol}
                     </td>
-                    <td className="py-2.5 px-2 text-slate-400 text-[10px]">{pos.assetClass}</td>
+                    <td className="py-2.5 px-2 text-text-muted text-[10px]">{pos.assetClass}</td>
                     <td className="py-2.5 px-2">
                       <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
                         pos.side === 'LONG'
-                          ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/50'
-                          : 'bg-rose-950/40 text-rose-400 border border-rose-800/50'
+                          ? 'bg-positive-bg text-positive border border-positive'
+                          : 'bg-destructive-bg text-destructive border border-destructive'
                       }`}>
                         {pos.side}
                       </span>
                     </td>
-                    <td className="py-2.5 px-2 text-right font-mono-num text-slate-300">
+                    <td className="py-2.5 px-2 text-right font-mono-num text-text">
                       {pos.size.toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-2 text-right font-mono-num text-slate-400">
+                    <td className="py-2.5 px-2 text-right font-mono-num text-text-muted">
                       ${pos.entryPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="py-2.5 px-2 text-right font-mono-num text-white font-semibold">
+                    <td className="py-2.5 px-2 text-right font-mono-num text-text-strong font-semibold">
                       ${pos.markPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="py-2.5 px-2 text-right font-mono-num text-slate-200">
+                    <td className="py-2.5 px-2 text-right font-mono-num text-text-strong">
                       ${(pos.notionalUsd / 1000).toFixed(1)}k
                     </td>
-                    <td className={`py-2.5 px-2 text-right font-mono-num font-bold ${isPos ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <td className={`py-2.5 px-2 text-right font-mono-num font-bold ${isPos ? 'text-positive' : 'text-destructive'}`}>
                       {isPos ? '+' : ''}${pos.unrealizedPnlUsd.toLocaleString()} ({isPos ? '+' : ''}{pos.unrealizedPnlPct.toFixed(2)}%)
                     </td>
-                    <td className="py-2.5 px-2 text-right font-mono-num text-slate-300">
+                    <td className="py-2.5 px-2 text-right font-mono-num text-text">
                       {(pos.exposurePct || 0).toFixed(2)}%
                     </td>
-                    <td className="py-2.5 px-2 text-slate-300 text-[11px] truncate max-w-[120px]">
+                    <td className="py-2.5 px-2 text-text text-[11px] truncate max-w-[120px]">
                       {pos.strategy || '—'}
                     </td>
-                    <td className="py-2.5 px-2 text-cyan-400 text-[11px] truncate max-w-[100px]">
+                    <td className="py-2.5 px-2 text-accent text-[11px] truncate max-w-[100px]">
                       {pos.originatingAgent || '—'}
                     </td>
                     <td className="py-2.5 px-2 text-center">
-                      <span className="text-[10px] text-cyan-400 px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800/60 group-hover:bg-cyan-900">
+                      <span className="text-[10px] text-accent px-2 py-0.5 rounded bg-info-bg border border-accent group-hover:bg-info-bg">
                         Inspect
                       </span>
                     </td>
@@ -271,7 +271,7 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
           </table>
         </div>
         {filteredPositions.length === 0 && (
-          <div className="p-6 text-center text-slate-500 text-xs">
+          <div className="p-6 text-center text-text-subtle text-xs">
             No open positions. The paper engine holds no positions yet.
           </div>
         )}
@@ -279,18 +279,18 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
 
       {/* Add Holding Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in font-mono">
-          <div className="bg-[#0d0f17] border border-cyan-500/40 rounded-md w-full max-w-lg shadow-[0_0_50px_rgba(0,240,255,0.2)] overflow-hidden">
-            <div className="p-4 border-b border-white/[0.08] flex items-center justify-between bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-sunken backdrop-blur-sm animate-fade-in font-mono">
+          <div className="bg-[var(--color-surface-1)] border border-accent rounded-md w-full max-w-lg shadow-[0_0_50px_rgba(0,240,255,0.2)] overflow-hidden">
+            <div className="p-4 border-b border-border-strong flex items-center justify-between bg-surface-sunken">
               <div className="flex items-center gap-2">
-                <Plus className="w-5 h-5 text-cyan-400" />
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                <Plus className="w-5 h-5 text-accent" />
+                <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider">
                   ADD NEW PORTFOLIO POSITION
                 </h3>
               </div>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-white"
+                className="p-1 rounded text-text-muted hover:text-text-strong"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -299,21 +299,21 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
             <form onSubmit={handleAddNewPosition} className="p-5 space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] text-slate-400 block mb-1">Symbol</label>
+                  <label className="text-[10px] text-text-muted block mb-1">Symbol</label>
                   <input
                     type="text"
                     value={newSymbol}
                     onChange={(e) => setNewSymbol(e.target.value)}
-                    className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono"
+                    className="w-full bg-surface-deep border border-border-strong rounded px-3 py-2 text-text-strong font-mono"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 block mb-1">Asset Class</label>
+                  <label className="text-[10px] text-text-muted block mb-1">Asset Class</label>
                   <select
                     value={newClass}
                     onChange={(e) => setNewClass(e.target.value as typeof newClass)}
-                    className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono"
+                    className="w-full bg-surface-deep border border-border-strong rounded px-3 py-2 text-text-strong font-mono"
                   >
                     <option value="POLYMARKET">POLYMARKET PREDICTION</option>
                     <option value="GLOBAL_EQUITY">GLOBAL EQUITY (INTL)</option>
@@ -328,47 +328,47 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-[10px] text-slate-400 block mb-1">Side</label>
+                  <label className="text-[10px] text-text-muted block mb-1">Side</label>
                   <select
                     value={newSide}
                     onChange={(e) => setNewSide(e.target.value as typeof newSide)}
-                    className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono"
+                    className="w-full bg-surface-deep border border-border-strong rounded px-3 py-2 text-text-strong font-mono"
                   >
                     <option value="LONG">LONG</option>
                     <option value="SHORT">SHORT</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 block mb-1">Size / Units</label>
+                  <label className="text-[10px] text-text-muted block mb-1">Size / Units</label>
                   <input
                     type="number"
                     step="any"
                     value={newSize}
                     onChange={(e) => setNewSize(e.target.value)}
-                    className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono"
+                    className="w-full bg-surface-deep border border-border-strong rounded px-3 py-2 text-text-strong font-mono"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 block mb-1">Mark Price ($)</label>
+                  <label className="text-[10px] text-text-muted block mb-1">Mark Price ($)</label>
                   <input
                     type="number"
                     step="any"
                     value={newPrice}
                     onChange={(e) => setNewPrice(e.target.value)}
-                    className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono"
+                    className="w-full bg-surface-deep border border-border-strong rounded px-3 py-2 text-text-strong font-mono"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-400 block mb-1">Strategy Tag</label>
+                <label className="text-[10px] text-text-muted block mb-1">Strategy Tag</label>
                 <input
                   type="text"
                   value={newStrategy}
                   onChange={(e) => setNewStrategy(e.target.value)}
-                  className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono"
+                  className="w-full bg-surface-deep border border-border-strong rounded px-3 py-2 text-text-strong font-mono"
                   required
                 />
               </div>
@@ -377,13 +377,13 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 rounded bg-white/[0.04] text-slate-300 hover:text-white"
+                  className="px-4 py-2 rounded bg-surface-veil text-text hover:text-text-strong"
                 >
                   CANCEL
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold"
+                  className="px-5 py-2 rounded bg-accent hover:bg-accent text-text-strong font-bold"
                 >
                   RECORD POSITION
                 </button>

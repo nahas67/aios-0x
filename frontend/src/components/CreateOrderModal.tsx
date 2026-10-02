@@ -50,24 +50,24 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in font-mono">
-      <div className="bg-[#0d0f17] border border-cyan-500/40 rounded-md w-full max-w-xl shadow-[0_0_50px_rgba(0,240,255,0.2)] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-surface-sunken backdrop-blur-sm animate-fade-in font-mono">
+      <div className="bg-[var(--color-surface-1)] border border-accent rounded-md w-full max-w-xl shadow-[0_0_50px_rgba(0,240,255,0.2)] overflow-hidden">
         {/* Header */}
-        <div className="p-4 border-b border-white/[0.08] flex items-center justify-between bg-black/40">
+        <div className="p-4 border-b border-border-strong flex items-center justify-between bg-surface-sunken">
           <div className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-cyan-400" />
+            <Zap className="w-5 h-5 text-accent" />
             <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+              <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider">
                 INSTITUTIONAL ALGORITHMIC ORDER STAGING
               </h3>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-text-muted">
                 Parameter review only — submission is not wired
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+            className="p-1 rounded text-text-muted hover:text-text-strong hover:bg-surface-raised transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -75,7 +75,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
 
         <form onSubmit={handleDispatch} className="p-5 space-y-4 text-xs">
           {/* Not-wired notice */}
-          <div className="rounded border border-amber-800/50 bg-amber-950/20 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
+          <div className="rounded border border-warning bg-warning-bg px-3 py-2 text-[11px] leading-relaxed text-warning">
             Order routing is not wired: the backend publishes orders read-only. Submitting
             this form stages parameters for review and reports honestly — no order id,
             fill, or slippage is generated.
@@ -84,7 +84,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
           {/* Asset & Direction Selection */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 block">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
                 Target Instrument
               </label>
               <select
@@ -98,7 +98,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
                   else if (e.target.value.includes('SPY')) setPrice('562.10');
                   else if (e.target.value.includes('AAPL')) setPrice('228.40');
                 }}
-                className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono focus:border-cyan-500 focus:outline-none"
+                className="w-full bg-surface-deep border border-border-strong rounded px-3 py-2 text-text-strong font-mono focus:border-accent focus:outline-none"
               >
                 <option value="BTC/USD">BTC/USD (Bitcoin Spot)</option>
                 <option value="ETH/USD">ETH/USD (Ethereum Spot)</option>
@@ -112,7 +112,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
             </div>
 
             <div>
-              <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 block">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
                 Execution Side
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -121,8 +121,8 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
                   onClick={() => setSide('BUY')}
                   className={`py-2 rounded font-bold transition-all flex items-center justify-center gap-1.5 border ${
                     side === 'BUY'
-                      ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
-                      : 'bg-black/40 border-white/[0.08] text-slate-400 hover:text-slate-200'
+                      ? 'bg-positive-bg border-positive text-positive shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+                      : 'bg-surface-sunken border-border-strong text-text-muted hover:text-text-strong'
                   }`}
                 >
                   <ArrowUpRight className="w-3.5 h-3.5" />
@@ -133,8 +133,8 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
                   onClick={() => setSide('SELL')}
                   className={`py-2 rounded font-bold transition-all flex items-center justify-center gap-1.5 border ${
                     side === 'SELL'
-                      ? 'bg-rose-950/80 border-rose-500 text-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.3)]'
-                      : 'bg-black/40 border-white/[0.08] text-slate-400 hover:text-slate-200'
+                      ? 'bg-destructive-bg border-destructive text-destructive shadow-[0_0_12px_rgba(244,63,94,0.3)]'
+                      : 'bg-surface-sunken border-border-strong text-text-muted hover:text-text-strong'
                   }`}
                 >
                   <ArrowDownRight className="w-3.5 h-3.5" />
@@ -147,7 +147,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
           {/* Size & Reference Price */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 block">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
                 Order Quantity
               </label>
               <div className="relative">
@@ -156,18 +156,18 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
                   step="any"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono focus:border-cyan-500 focus:outline-none"
+                  className="w-full bg-surface-deep border border-border-strong rounded px-3 py-2 text-text-strong font-mono focus:border-accent focus:outline-none"
                   placeholder="0.00"
                   required
                 />
-                <span className="absolute right-3 top-2 text-[10px] text-slate-500 font-mono">
+                <span className="absolute right-3 top-2 text-[10px] text-text-subtle font-mono">
                   {symbol.split('/')[0].split('-')[0]}
                 </span>
               </div>
             </div>
 
             <div>
-              <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 block">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
                 Benchmark / Limit Price ($)
               </label>
               <input
@@ -175,7 +175,7 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
                 step="any"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono focus:border-cyan-500 focus:outline-none"
+                className="w-full bg-surface-deep border border-border-strong rounded px-3 py-2 text-text-strong font-mono focus:border-accent focus:outline-none"
                 placeholder="0.00"
                 required
               />
@@ -185,13 +185,13 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
           {/* Slicing Algorithm & Venue Routing */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 block">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
                 Algorithmic Slicer
               </label>
               <select
                 value={orderType}
                 onChange={(e) => setOrderType(e.target.value as never)}
-                className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono focus:border-cyan-500 focus:outline-none"
+                className="w-full bg-surface-deep border border-border-strong rounded px-3 py-2 text-text-strong font-mono focus:border-accent focus:outline-none"
               >
                 <option value="TWAP">TWAP (Time-Weighted Average Price)</option>
                 <option value="VWAP">VWAP (Volume-Weighted Average Price)</option>
@@ -202,13 +202,13 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
             </div>
 
             <div>
-              <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 block">
+              <label className="text-[10px] text-text-muted uppercase tracking-wider mb-1 block">
                 Venue Routing Gateway
               </label>
               <select
                 value={venue}
                 onChange={(e) => setVenue(e.target.value)}
-                className="w-full bg-black/60 border border-white/[0.1] rounded px-3 py-2 text-white font-mono focus:border-cyan-500 focus:outline-none"
+                className="w-full bg-surface-deep border border-border-strong rounded px-3 py-2 text-text-strong font-mono focus:border-accent focus:outline-none"
               >
                 <option value="AUTO_SOR">Auto Smart Order Routing (Lowest Cost)</option>
                 <option value="Binance Institutional">Binance Institutional FIX 4.4</option>
@@ -222,13 +222,13 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
 
           {/* Slicing Fine-Tuning */}
           {orderType !== 'MARKET' && (
-            <div className="p-3 rounded bg-white/[0.02] border border-white/[0.06] grid grid-cols-3 gap-3">
+            <div className="p-3 rounded bg-surface-veil border border-border-subtle grid grid-cols-3 gap-3">
               <div>
-                <label className="text-[10px] text-slate-400 block mb-1">Duration Window</label>
+                <label className="text-[10px] text-text-muted block mb-1">Duration Window</label>
                 <select
                   value={durationMinutes}
                   onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                  className="w-full bg-black/60 border border-white/[0.1] rounded px-2 py-1 text-xs text-slate-200 font-mono"
+                  className="w-full bg-surface-deep border border-border-strong rounded px-2 py-1 text-xs text-text-strong font-mono"
                 >
                   <option value={5}>5 Minutes</option>
                   <option value={15}>15 Minutes</option>
@@ -239,11 +239,11 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-400 block mb-1">Micro Slices</label>
+                <label className="text-[10px] text-text-muted block mb-1">Micro Slices</label>
                 <select
                   value={slicesCount}
                   onChange={(e) => setSlicesCount(Number(e.target.value))}
-                  className="w-full bg-black/60 border border-white/[0.1] rounded px-2 py-1 text-xs text-slate-200 font-mono"
+                  className="w-full bg-surface-deep border border-border-strong rounded px-2 py-1 text-xs text-text-strong font-mono"
                 >
                   <option value={6}>6 Slices</option>
                   <option value={12}>12 Slices</option>
@@ -253,35 +253,35 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-400 block mb-1">Max Slippage Cap</label>
+                <label className="text-[10px] text-text-muted block mb-1">Max Slippage Cap</label>
                 <div className="flex items-center gap-1">
                   <input
                     type="number"
                     step="0.1"
                     value={maxSlippageBps}
                     onChange={(e) => setMaxSlippageBps(Number(e.target.value))}
-                    className="w-full bg-black/60 border border-white/[0.1] rounded px-2 py-1 text-xs text-slate-200 font-mono"
+                    className="w-full bg-surface-deep border border-border-strong rounded px-2 py-1 text-xs text-text-strong font-mono"
                   />
-                  <span className="text-[10px] text-slate-500">BPS</span>
+                  <span className="text-[10px] text-text-subtle">BPS</span>
                 </div>
               </div>
             </div>
           )}
 
           {/* Staged calculation */}
-          <div className="p-3 rounded bg-black/40 border border-white/[0.08] space-y-2">
+          <div className="p-3 rounded bg-surface-sunken border border-border-strong space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">STAGED NOTIONAL:</span>
-              <span className="text-white font-bold font-mono">
+              <span className="text-text-muted">STAGED NOTIONAL:</span>
+              <span className="text-text-strong font-bold font-mono">
                 ${totalNotional.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/[0.04]">
-              <span className="text-slate-500 flex items-center gap-1">
+            <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border-subtle">
+              <span className="text-text-subtle flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Pre-trade firewall: not evaluated client-side
               </span>
-              <span className="text-slate-500 text-[10px]">
+              <span className="text-text-subtle text-[10px]">
                 NOT SENT
               </span>
             </div>
@@ -292,14 +292,14 @@ export const CreateOrderModal: React.FC<CreateOrderModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 transition-colors"
+              className="px-4 py-2 rounded bg-surface-veil hover:bg-surface-raised text-text transition-colors"
             >
               CANCEL
             </button>
             <button
               type="submit"
               disabled={!amount || parseFloat(amount) <= 0}
-              className="px-5 py-2 rounded font-bold flex items-center gap-2 transition-all bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.12] text-slate-200"
+              className="px-5 py-2 rounded font-bold flex items-center gap-2 transition-all bg-surface-raised hover:bg-surface-overlay border border-border-strong text-text-strong"
             >
               <Zap className="w-4 h-4" />
               <span>STAGE {side} ORDER (NOT SENT)</span>

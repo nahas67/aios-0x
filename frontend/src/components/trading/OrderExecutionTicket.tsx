@@ -93,40 +93,40 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
   };
 
   return (
-    <div className="bg-[#08090d] border border-white/[0.08] rounded-xl flex flex-col overflow-hidden font-mono text-xs select-none">
+    <div className="bg-[var(--color-surface-0)] border border-border-strong rounded-xl flex flex-col overflow-hidden font-mono text-xs select-none">
       {/* Header */}
-      <div className="bg-[#0b0d13] border-b border-white/[0.08] px-3.5 py-2.5 flex items-center justify-between">
+      <div className="bg-[var(--color-surface-2)] border-b border-border-strong px-3.5 py-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Zap className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="font-bold text-slate-100 text-[11px] uppercase tracking-wider">Algorithmic Order Ticket</span>
+          <Zap className="w-3.5 h-3.5 text-accent" />
+          <span className="font-bold text-text-strong text-[11px] uppercase tracking-wider">Algorithmic Order Ticket</span>
         </div>
 
         {/* Preset staging helper */}
         <button
           onClick={handleApplyPreset}
-          className="px-2 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[10px] text-slate-300 font-semibold flex items-center gap-1 transition-all"
+          className="px-2 py-1 rounded bg-surface-veil hover:bg-surface-raised border border-border-strong text-[10px] text-text font-semibold flex items-center gap-1 transition-all"
           title="Fill the form with default TWAP parameters"
         >
-          <Sparkles className="w-3 h-3 text-slate-400" />
+          <Sparkles className="w-3 h-3 text-text-muted" />
           Stage TWAP preset
         </button>
       </div>
 
       <div className="p-3.5 space-y-3">
         {/* Not-wired notice */}
-        <div className="rounded-lg border border-amber-800/50 bg-amber-950/20 px-2.5 py-2 text-[10px] leading-relaxed text-amber-200">
+        <div className="rounded-lg border border-warning bg-warning-bg px-2.5 py-2 text-[10px] leading-relaxed text-warning">
           Order routing is not wired: the backend publishes orders read-only and accepts no
           submissions over HTTP. This ticket stages parameters for review only.
         </div>
 
         {/* BUY / SELL SIDE TOGGLE */}
-        <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/50 border border-white/10 rounded-lg">
+        <div className="grid grid-cols-2 gap-1.5 p-1 bg-surface-deep border border-border-subtle rounded-lg">
           <button
             onClick={() => setSide('BUY')}
             className={`py-1.5 rounded font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
               side === 'BUY'
-                ? 'bg-emerald-600 text-white shadow-[0_0_12px_rgba(16,185,129,0.35)]'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                ? 'bg-positive text-text-strong shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                : 'text-text-muted hover:text-text-strong hover:bg-surface-veil'
             }`}
           >
             <ArrowUpRight className="w-3.5 h-3.5" />
@@ -136,8 +136,8 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
             onClick={() => setSide('SELL')}
             className={`py-1.5 rounded font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
               side === 'SELL'
-                ? 'bg-rose-600 text-white shadow-[0_0_12px_rgba(244,63,94,0.35)]'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                ? 'bg-destructive text-text-strong shadow-[0_0_12px_rgba(244,63,94,0.35)]'
+                : 'text-text-muted hover:text-text-strong hover:bg-surface-veil'
             }`}
           >
             <ArrowDownRight className="w-3.5 h-3.5" />
@@ -147,9 +147,9 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
 
         {/* ORDER TYPE SELECTOR */}
         <div>
-          <div className="text-[10px] text-slate-400 uppercase font-bold mb-1 flex items-center justify-between">
+          <div className="text-[10px] text-text-muted uppercase font-bold mb-1 flex items-center justify-between">
             <span>Execution Algorithm</span>
-            <span className="text-cyan-300 font-normal text-[9px]">{orderType === 'TWAP' ? 'Time-Weighted Slicing' : orderType === 'VWAP' ? 'Volume Participation' : 'Direct Fill'}</span>
+            <span className="text-accent font-normal text-[9px]">{orderType === 'TWAP' ? 'Time-Weighted Slicing' : orderType === 'VWAP' ? 'Volume Participation' : 'Direct Fill'}</span>
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-1">
             {(['MARKET', 'LIMIT', 'STOP_LIMIT', 'TWAP', 'VWAP', 'POV'] as OrderType[]).map(type => (
@@ -158,8 +158,8 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
                 onClick={() => setOrderType(type)}
                 className={`py-1 px-1.5 rounded text-[10px] font-semibold transition-all text-center truncate ${
                   orderType === type
-                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-600/60 shadow-[0_0_8px_rgba(0,240,255,0.2)] font-bold'
-                    : 'bg-white/[0.02] text-slate-400 border border-white/[0.06] hover:bg-white/[0.05]'
+                    ? 'bg-info-bg text-accent border border-accent shadow-[0_0_8px_rgba(0,240,255,0.2)] font-bold'
+                    : 'bg-surface-veil text-text-muted border border-border-subtle hover:bg-surface-raised'
                 }`}
               >
                 {type}
@@ -170,22 +170,22 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
 
         {/* TWAP / VWAP SLICER CONFIGURATION (If TWAP or VWAP selected) */}
         {(orderType === 'TWAP' || orderType === 'VWAP') && (
-          <div className="bg-cyan-950/20 border border-cyan-800/30 rounded-lg p-2.5 space-y-2">
+          <div className="bg-info-bg border border-accent rounded-lg p-2.5 space-y-2">
             <div className="flex items-center justify-between text-[10px]">
-              <span className="text-cyan-300 font-bold flex items-center gap-1">
-                <Clock className="w-3 h-3 text-cyan-400" />
+              <span className="text-accent font-bold flex items-center gap-1">
+                <Clock className="w-3 h-3 text-accent" />
                 TWAP Duration & Slicing Window
               </span>
-              <span className="text-slate-400 font-mono-num">{twapMinutes}m / {twapSlices} Slices</span>
+              <span className="text-text-muted font-mono-num">{twapMinutes}m / {twapSlices} Slices</span>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-[10px]">
               <div>
-                <label className="text-slate-400 text-[9px] block mb-0.5">Execution Window</label>
+                <label className="text-text-muted text-[9px] block mb-0.5">Execution Window</label>
                 <select
                   value={twapMinutes}
                   onChange={(e) => setTwapMinutes(Number(e.target.value))}
-                  className="w-full bg-[#050608] border border-white/10 rounded px-2 py-1 text-slate-200 text-[10px] outline-none focus:border-cyan-500"
+                  className="w-full bg-[var(--color-surface-deep)] border border-border-subtle rounded px-2 py-1 text-text-strong text-[10px] outline-none focus:border-accent"
                 >
                   <option value={5}>5 Minutes (Fast)</option>
                   <option value={15}>15 Minutes (Standard)</option>
@@ -196,11 +196,11 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
               </div>
 
               <div>
-                <label className="text-slate-400 text-[9px] block mb-0.5">Slice Quantity</label>
+                <label className="text-text-muted text-[9px] block mb-0.5">Slice Quantity</label>
                 <select
                   value={twapSlices}
                   onChange={(e) => setTwapSlices(Number(e.target.value))}
-                  className="w-full bg-[#050608] border border-white/10 rounded px-2 py-1 text-slate-200 text-[10px] outline-none focus:border-cyan-500"
+                  className="w-full bg-[var(--color-surface-deep)] border border-border-subtle rounded px-2 py-1 text-text-strong text-[10px] outline-none focus:border-accent"
                 >
                   <option value={4}>4 Slices</option>
                   <option value={8}>8 Slices</option>
@@ -216,7 +216,7 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
         <div className="grid grid-cols-2 gap-2.5">
           {/* Limit Price (if not market) */}
           <div>
-            <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">
+            <label className="text-[9px] uppercase font-bold text-text-muted block mb-1">
               {orderType === 'MARKET' ? 'Estimated Fill Price' : 'Limit Price (USD)'}
             </label>
             <input
@@ -225,13 +225,13 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
               disabled={orderType === 'MARKET'}
               onChange={(e) => setLimitPrice(Number(e.target.value))}
               step="any"
-              className="w-full bg-[#050608] border border-white/10 rounded px-2.5 py-1.5 text-slate-100 font-mono-num text-xs outline-none focus:border-cyan-500 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full bg-[var(--color-surface-deep)] border border-border-subtle rounded px-2.5 py-1.5 text-text-strong font-mono-num text-xs outline-none focus:border-accent disabled:opacity-60 disabled:cursor-not-allowed"
             />
           </div>
 
           {/* Size / Units */}
           <div>
-            <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">
+            <label className="text-[9px] uppercase font-bold text-text-muted block mb-1">
               Quantity ({symbol.split('/')[0]})
             </label>
             <input
@@ -239,19 +239,19 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
               value={quantity}
               onChange={(e) => setQuantity(Math.max(0.01, Number(e.target.value)))}
               step="any"
-              className="w-full bg-[#050608] border border-white/10 rounded px-2.5 py-1.5 text-slate-100 font-mono-num text-xs outline-none focus:border-cyan-500 font-bold"
+              className="w-full bg-[var(--color-surface-deep)] border border-border-subtle rounded px-2.5 py-1.5 text-text-strong font-mono-num text-xs outline-none focus:border-accent font-bold"
             />
           </div>
         </div>
 
         {/* QUICK ALLOCATION PRESETS */}
         <div className="flex items-center gap-1 text-[9px]">
-          <span className="text-slate-400 mr-1 uppercase font-bold">Alloc %:</span>
+          <span className="text-text-muted mr-1 uppercase font-bold">Alloc %:</span>
           {[10, 25, 50, 100].map(pct => (
             <button
               key={pct}
               onClick={() => handleQuickPercent(pct)}
-              className="flex-1 py-1 rounded bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-slate-300 font-semibold transition-all"
+              className="flex-1 py-1 rounded bg-surface-veil border border-border-strong hover:bg-surface-raised text-text font-semibold transition-all"
             >
               {pct}%
             </button>
@@ -259,43 +259,43 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
         </div>
 
         {/* STOP LOSS & TAKE PROFIT GUARDRAILS */}
-        <div className="grid grid-cols-2 gap-2.5 bg-black/40 border border-white/[0.06] rounded-lg p-2.5">
+        <div className="grid grid-cols-2 gap-2.5 bg-surface-sunken border border-border-subtle rounded-lg p-2.5">
           <div>
             <div className="flex items-center justify-between text-[9px] mb-1">
-              <span className="text-rose-400 font-bold uppercase">Stop Loss</span>
-              <span className="text-slate-400 font-mono-num">Est -${slLossUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+              <span className="text-destructive font-bold uppercase">Stop Loss</span>
+              <span className="text-text-muted font-mono-num">Est -${slLossUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
             </div>
             <input
               type="number"
               value={stopLossPrice}
               onChange={(e) => setStopLossPrice(Number(e.target.value))}
               step="any"
-              className="w-full bg-[#050608] border border-rose-900/40 rounded px-2 py-1 text-rose-300 font-mono-num text-[11px] outline-none focus:border-rose-500"
+              className="w-full bg-[var(--color-surface-deep)] border border-destructive rounded px-2 py-1 text-destructive font-mono-num text-[11px] outline-none focus:border-destructive"
             />
           </div>
 
           <div>
             <div className="flex items-center justify-between text-[9px] mb-1">
-              <span className="text-emerald-400 font-bold uppercase">Take Profit</span>
-              <span className="text-slate-400 font-mono-num">Est +${tpGainUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+              <span className="text-positive font-bold uppercase">Take Profit</span>
+              <span className="text-text-muted font-mono-num">Est +${tpGainUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
             </div>
             <input
               type="number"
               value={takeProfitPrice}
               onChange={(e) => setTakeProfitPrice(Number(e.target.value))}
               step="any"
-              className="w-full bg-[#050608] border border-emerald-900/40 rounded px-2 py-1 text-emerald-300 font-mono-num text-[11px] outline-none focus:border-emerald-500"
+              className="w-full bg-[var(--color-surface-deep)] border border-positive rounded px-2 py-1 text-positive font-mono-num text-[11px] outline-none focus:border-positive"
             />
           </div>
         </div>
 
         {/* VENUE ROUTING */}
         <div>
-          <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Smart Order Router (SOR) Gateway</label>
+          <label className="text-[9px] uppercase font-bold text-text-muted block mb-1">Smart Order Router (SOR) Gateway</label>
           <select
             value={selectedVenue}
             onChange={(e) => setSelectedVenue(e.target.value)}
-            className="w-full bg-[#050608] border border-white/10 rounded px-2 py-1.5 text-slate-200 text-[10px] outline-none focus:border-cyan-500"
+            className="w-full bg-[var(--color-surface-deep)] border border-border-subtle rounded px-2 py-1.5 text-text-strong text-[10px] outline-none focus:border-accent"
           >
             <option value="Polymarket CLOB & Polygon">Polymarket CLOB (L2 Polygon State)</option>
             <option value="Interactive Brokers Global FIX">Interactive Brokers Direct (TSE/Euronext/HKEX)</option>
@@ -308,40 +308,40 @@ export const OrderExecutionTicket: React.FC<OrderTicketProps> = ({
         </div>
 
         {/* STAGED PARAMS SUMMARY */}
-        <div className="bg-[#050608] border border-white/[0.06] rounded-lg p-2.5 space-y-1.5 text-[10px]">
-          <div className="flex items-center justify-between text-slate-400">
+        <div className="bg-[var(--color-surface-deep)] border border-border-subtle rounded-lg p-2.5 space-y-1.5 text-[10px]">
+          <div className="flex items-center justify-between text-text-muted">
             <span>Staged Notional:</span>
-            <span className="text-slate-100 font-bold font-mono-num">${notionalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="text-text-strong font-bold font-mono-num">${notionalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
 
-          <div className="flex items-center justify-between text-slate-400">
+          <div className="flex items-center justify-between text-text-muted">
             <span>Portfolio Exposure:</span>
-            <span className="text-slate-500 font-mono-num">— (no live NAV in this ticket)</span>
+            <span className="text-text-subtle font-mono-num">— (no live NAV in this ticket)</span>
           </div>
 
-          <div className="flex items-center justify-between text-slate-400">
+          <div className="flex items-center justify-between text-text-muted">
             <span>Risk / Reward Ratio:</span>
-            <span className="text-emerald-400 font-bold font-mono-num">1 : {riskRewardRatio}</span>
+            <span className="text-positive font-bold font-mono-num">1 : {riskRewardRatio}</span>
           </div>
 
-          <div className="pt-1 border-t border-white/[0.06] flex items-center justify-between text-[9px]">
-            <span className="text-slate-500 flex items-center gap-1 font-bold">
-              <ShieldCheck className="w-3 h-3 text-slate-500" />
+          <div className="pt-1 border-t border-border-subtle flex items-center justify-between text-[9px]">
+            <span className="text-text-subtle flex items-center gap-1 font-bold">
+              <ShieldCheck className="w-3 h-3 text-text-subtle" />
               Pre-trade firewall: not evaluated client-side
             </span>
-            <span className="text-slate-500">NOT SENT</span>
+            <span className="text-text-subtle">NOT SENT</span>
           </div>
         </div>
 
         {/* STAGE BUTTON (dispatch unwired) */}
         <button
           onClick={handleExecuteTrade}
-          className="w-full py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.1] text-slate-300"
+          className="w-full py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer bg-surface-veil hover:bg-surface-raised border border-border-strong text-text"
         >
           <Zap className="w-3.5 h-3.5" />
           STAGE {side} ORDER • ${notionalUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })} (NOT SENT)
         </button>
-        <div className="text-[9px] text-slate-500 text-center -mt-1">
+        <div className="text-[9px] text-text-subtle text-center -mt-1">
           Category: {category} • Venue preference recorded locally only
         </div>
       </div>

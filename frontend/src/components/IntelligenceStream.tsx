@@ -40,40 +40,40 @@ export const IntelligenceStream: React.FC<IntelligenceStreamProps> = ({
   const getRiskBadge = (risk: IntelligenceItem['riskImpact']) => {
     switch (risk) {
       case 'LOW':
-        return 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40';
+        return 'text-positive bg-positive-bg border-positive';
       case 'MEDIUM':
-        return 'text-amber-400 bg-amber-950/40 border-amber-800/40';
+        return 'text-warning bg-warning-bg border-warning';
       case 'HIGH':
       case 'CRITICAL':
-        return 'text-red-400 bg-red-950/40 border-red-800/40 animate-pulse';
+        return 'text-destructive bg-destructive border-destructive animate-pulse';
     }
   };
 
   const getActionBadge = (action: IntelligenceItem['action']) => {
     switch (action) {
       case 'WATCH':
-        return 'text-cyan-400 bg-cyan-950/50 border-cyan-800/50';
+        return 'text-accent bg-info-bg border-accent';
       case 'ACCUMULATE':
-        return 'text-emerald-300 bg-emerald-950/60 border-emerald-600/60 font-semibold';
+        return 'text-positive bg-positive-bg border-positive font-semibold';
       case 'TRIM':
-        return 'text-amber-300 bg-amber-950/60 border-amber-600/60';
+        return 'text-warning bg-warning-bg border-warning';
       case 'REBALANCE':
-        return 'text-violet-300 bg-violet-950/60 border-violet-600/60';
+        return 'text-violet bg-violet border-violet';
       case 'HEDGE':
-        return 'text-rose-300 bg-rose-950/60 border-rose-600/60 font-semibold';
+        return 'text-destructive bg-destructive-bg border-destructive font-semibold';
     }
   };
 
   return (
-    <div className={`bg-[#0d0f17] border border-white/[0.08] rounded-md p-3.5 flex flex-col justify-between shadow-2xl ${className}`}>
+    <div className={`bg-[var(--color-surface-1)] border border-border-strong rounded-md p-3.5 flex flex-col justify-between shadow-2xl ${className}`}>
       {/* Stream Header */}
-      <div className="flex items-center justify-between pb-2.5 border-b border-white/[0.06]">
+      <div className="flex items-center justify-between pb-2.5 border-b border-border-subtle">
         <div className="flex items-center gap-2">
-          <BrainCircuit className="w-4 h-4 text-cyan-400" />
-          <h3 className="text-xs font-mono font-bold tracking-wider text-slate-100 uppercase">
+          <BrainCircuit className="w-4 h-4 text-accent" />
+          <h3 className="text-xs font-mono font-bold tracking-wider text-text-strong uppercase">
             INVESTMENT INTELLIGENCE
           </h3>
-          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800/50">
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-info-bg text-accent border border-accent">
             MULTI-AGENT STREAM
           </span>
         </div>
@@ -81,10 +81,10 @@ export const IntelligenceStream: React.FC<IntelligenceStreamProps> = ({
         <button
           onClick={handleRefresh}
           disabled={!onRefresh}
-          className="text-slate-400 hover:text-slate-200 p-1 rounded hover:bg-white/[0.04] transition-colors disabled:opacity-40"
+          className="text-text-muted hover:text-text-strong p-1 rounded hover:bg-surface-veil transition-colors disabled:opacity-40"
           title={onRefresh ? "Refetch opportunities from /api/v1/opportunities" : "No refetch source"}
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-cyan-400' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-accent' : ''}`} />
         </button>
       </div>
 
@@ -96,8 +96,8 @@ export const IntelligenceStream: React.FC<IntelligenceStreamProps> = ({
             onClick={() => setFilter(cat)}
             className={`px-2 py-0.5 rounded transition-all whitespace-nowrap ${
               filter === cat
-                ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 font-medium'
-                : 'text-slate-400 hover:text-slate-200 bg-white/[0.02] border border-white/[0.05]'
+                ? 'bg-info-bg text-accent border border-accent font-medium'
+                : 'text-text-muted hover:text-text-strong bg-surface-veil border border-border-subtle'
             }`}
           >
             {cat}
@@ -111,49 +111,49 @@ export const IntelligenceStream: React.FC<IntelligenceStreamProps> = ({
           <div
             key={item.id}
             onClick={() => onSelectItem(item)}
-            className="group p-2.5 rounded bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-cyan-500/30 transition-all cursor-pointer relative"
+            className="group p-2.5 rounded bg-surface-veil hover:bg-surface-raised border border-border-subtle hover:border-accent transition-all cursor-pointer relative"
           >
             {/* Top row: Category & Timestamp */}
-            <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pb-1">
-              <span className="text-cyan-400/80 uppercase">{item.category}</span>
+            <div className="flex items-center justify-between text-[10px] font-mono text-text-subtle pb-1">
+              <span className="text-accent uppercase">{item.category}</span>
               <span>{item.timestamp}</span>
             </div>
 
             {/* Headline */}
-            <h4 className="text-[12px] font-medium text-slate-200 group-hover:text-cyan-200 transition-colors leading-snug">
+            <h4 className="text-[12px] font-medium text-text-strong group-hover:text-accent transition-colors leading-snug">
               {item.headline}
             </h4>
 
             {/* Detail */}
-            <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+            <p className="text-[11px] text-text-muted mt-1 line-clamp-2 leading-relaxed">
               {item.detail}
             </p>
 
             {/* Metrics Matrix Strip */}
-            <div className="mt-2.5 pt-2 border-t border-white/[0.05] grid grid-cols-4 gap-2 text-center text-[10px] font-mono">
-              <div className="bg-black/30 p-1 rounded border border-white/[0.04]">
-                <div className="text-slate-500 text-[8px] uppercase tracking-wider">CONFIDENCE</div>
-                <div className="font-mono-num font-semibold text-cyan-300">
+            <div className="mt-2.5 pt-2 border-t border-border-subtle grid grid-cols-4 gap-2 text-center text-[10px] font-mono">
+              <div className="bg-surface-sunken p-1 rounded border border-border-subtle">
+                <div className="text-text-subtle text-[8px] uppercase tracking-wider">CONFIDENCE</div>
+                <div className="font-mono-num font-semibold text-accent">
                   {item.confidencePct.toFixed(1)}%
                 </div>
               </div>
 
-              <div className="bg-black/30 p-1 rounded border border-white/[0.04]">
-                <div className="text-slate-500 text-[8px] uppercase tracking-wider">SUPPORT</div>
-                <div className="font-mono-num font-semibold text-emerald-400">
+              <div className="bg-surface-sunken p-1 rounded border border-border-subtle">
+                <div className="text-text-subtle text-[8px] uppercase tracking-wider">SUPPORT</div>
+                <div className="font-mono-num font-semibold text-positive">
                   {item.supportAgents} agts
                 </div>
               </div>
 
-              <div className="bg-black/30 p-1 rounded border border-white/[0.04]">
-                <div className="text-slate-500 text-[8px] uppercase tracking-wider">COUNTER</div>
-                <div className="font-mono-num font-semibold text-slate-400">
+              <div className="bg-surface-sunken p-1 rounded border border-border-subtle">
+                <div className="text-text-subtle text-[8px] uppercase tracking-wider">COUNTER</div>
+                <div className="font-mono-num font-semibold text-text-muted">
                   {item.counterAgents} agts
                 </div>
               </div>
 
-              <div className="bg-black/30 p-1 rounded border border-white/[0.04]">
-                <div className="text-slate-500 text-[8px] uppercase tracking-wider">RISK</div>
+              <div className="bg-surface-sunken p-1 rounded border border-border-subtle">
+                <div className="text-text-subtle text-[8px] uppercase tracking-wider">RISK</div>
                 <div className={`font-mono-num font-semibold rounded px-0.5 border ${getRiskBadge(item.riskImpact)}`}>
                   {item.riskImpact}
                 </div>
@@ -162,7 +162,7 @@ export const IntelligenceStream: React.FC<IntelligenceStreamProps> = ({
 
             {/* Action Footer */}
             <div className="mt-2 flex items-center justify-between text-[10px] font-mono">
-              <span className="text-slate-500">RECOMMENDED ACTION:</span>
+              <span className="text-text-subtle">RECOMMENDED ACTION:</span>
               <span className={`px-2 py-0.5 rounded border text-[10px] tracking-wide uppercase ${getActionBadge(item.action)}`}>
                 {item.action}
               </span>
@@ -172,10 +172,10 @@ export const IntelligenceStream: React.FC<IntelligenceStreamProps> = ({
       </div>
 
       {/* Footer Info */}
-      <div className="pt-2.5 mt-2 border-t border-white/[0.06] text-[10px] font-mono text-slate-500 flex items-center justify-between">
+      <div className="pt-2.5 mt-2 border-t border-border-subtle text-[10px] font-mono text-text-subtle flex items-center justify-between">
         <span>GATEWAY: QDRANT VECTOR MEMORY</span>
-        <span className="text-emerald-400 flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span className="text-positive flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-positive animate-pulse"></span>
           ACTIVE LISTENER
         </span>
       </div>

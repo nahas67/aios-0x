@@ -80,20 +80,20 @@ export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
         onClick={() => onSelectTab(item.id)}
         className={`group w-full flex items-center gap-2.5 px-2 py-2 rounded transition-all text-left relative ${
           isActive
-            ? 'bg-cyan-950/40 text-cyan-300 font-medium border border-cyan-700/40 shadow-[0_0_12px_rgba(0,240,255,0.12)]'
-            : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.04] border border-transparent'
+            ? 'bg-info-bg text-accent font-medium border border-accent shadow-[0_0_12px_rgba(0,240,255,0.12)]'
+            : 'text-text-muted hover:text-text-strong hover:bg-surface-veil border border-transparent'
         }`}
         title={!isExpanded ? item.label : undefined}
       >
         {/* Active bar */}
         {isActive && (
-          <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-cyan-400 rounded-r shadow-[0_0_6px_#00f0ff]" />
+          <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-accent rounded-r shadow-[0_0_6px_var(--color-accent)]" />
         )}
 
         <div className="flex items-center justify-center shrink-0 w-6 h-6">
           <Icon
             className={`w-4 h-4 transition-transform group-hover:scale-105 ${
-              isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-slate-200'
+              isActive ? 'text-accent' : 'text-text-muted group-hover:text-text-strong'
             }`}
           />
         </div>
@@ -112,12 +112,12 @@ export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
           <span
             className={`ml-auto text-[9px] font-mono px-1 rounded border leading-tight ${
               item.badgeColor === 'amber'
-                ? 'bg-amber-950/80 text-amber-300 border-amber-800/60'
+                ? 'bg-warning-bg text-warning border-warning'
                 : item.badgeColor === 'cyan'
-                ? 'bg-cyan-950/80 text-cyan-300 border-cyan-800/60'
+                ? 'bg-info-bg text-accent border-accent'
                 : item.badgeColor === 'violet'
-                ? 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60'
-                : 'bg-white/[0.04] text-slate-400 border-white/[0.06]'
+                ? 'bg-violet text-violet border-violet'
+                : 'bg-surface-veil text-text-muted border-border-subtle'
             } ${!isExpanded ? 'absolute top-1 right-1 px-0.5 text-[8px]' : ''}`}
           >
             {item.badge}
@@ -164,7 +164,7 @@ export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
     <aside
       onMouseEnter={() => setIsExpanded(true)}
       onMouseLeave={() => setIsExpanded(false)}
-      className={`fixed left-0 top-11 bottom-0 z-30 bg-[#090a0f] border-r border-white/[0.07] flex flex-col justify-between transition-all duration-200 select-none ${
+      className={`fixed left-0 top-11 bottom-0 z-30 bg-[var(--color-surface-rail)] border-r border-border-subtle flex flex-col justify-between transition-all duration-200 select-none ${
         isExpanded ? 'w-48 shadow-[8px_0_24px_rgba(0,0,0,0.6)]' : 'w-14'
       }`}
     >
@@ -183,7 +183,7 @@ export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
               {/* Layer headers only when expanded: the collapsed rail is 14px wide, and a
                   heading reduced to a stray glyph there is noise, not information. */}
               {isExpanded && (
-                <div className="px-2 pt-2 pb-0.5 text-[9px] font-mono uppercase tracking-wider text-slate-600 truncate">
+                <div className="px-2 pt-2 pb-0.5 text-[9px] font-mono uppercase tracking-wider text-text-subtle truncate">
                   {section.label}
                 </div>
               )}
@@ -194,13 +194,13 @@ export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
       </div>
 
       {/* Rail Footer Toggle */}
-      <div className="p-2 border-t border-white/[0.06] text-slate-500 flex items-center justify-between text-[11px]">
+      <div className="p-2 border-t border-border-subtle text-text-subtle flex items-center justify-between text-[11px]">
         {isExpanded ? (
           <div className="flex items-center justify-between w-full px-1">
-            <span className="font-mono text-[10px] text-slate-500 uppercase tracking-wider">EXPANDED</span>
+            <span className="font-mono text-[10px] text-text-subtle uppercase tracking-wider">EXPANDED</span>
             <button 
               onClick={() => setIsExpanded(false)}
-              className="text-slate-400 hover:text-slate-200"
+              className="text-text-muted hover:text-text-strong"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -209,7 +209,7 @@ export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
           <div className="w-full flex justify-center py-1">
             <button 
               onClick={() => setIsExpanded(true)}
-              className="text-slate-500 hover:text-slate-300"
+              className="text-text-subtle hover:text-text"
               title="Expand rail"
             >
               <ChevronRight className="w-3.5 h-3.5" />

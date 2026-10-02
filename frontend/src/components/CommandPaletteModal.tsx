@@ -108,11 +108,11 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       );
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/75 backdrop-blur-md flex items-start justify-center pt-20 px-4 animate-fade-in font-mono">
-      <div className="w-full max-w-2xl bg-[#0d0f17] border border-white/[0.12] rounded-lg shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-surface-sunken backdrop-blur-md flex items-start justify-center pt-20 px-4 animate-fade-in font-mono">
+      <div className="w-full max-w-2xl bg-[var(--color-surface-1)] border border-border-strong rounded-lg shadow-2xl overflow-hidden flex flex-col">
         {/* Input Bar */}
-        <div className="p-3.5 border-b border-white/[0.08] flex items-center gap-3">
-          <Search className="w-5 h-5 text-cyan-400 shrink-0" />
+        <div className="p-3.5 border-b border-border-strong flex items-center gap-3">
+          <Search className="w-5 h-5 text-accent shrink-0" />
           <input
             type="text"
             value={query}
@@ -121,10 +121,10 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
               setSelectedIndex(0);
             }}
             placeholder="Type a command, instrument, agent thesis, or constitution clause..."
-            className="w-full bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none font-sans"
+            className="w-full bg-transparent text-sm text-text-strong placeholder-text-subtle focus:outline-none font-sans"
             autoFocus
           />
-          <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/[0.08] text-slate-400">
+          <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-raised border border-border-strong text-text-muted">
             ESC
           </kbd>
         </div>
@@ -132,7 +132,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         {/* Results List */}
         <div className="max-h-96 overflow-y-auto p-2 space-y-1">
           {filteredItems.length === 0 ? (
-            <div className="p-6 text-center text-slate-500 text-xs">
+            <div className="p-6 text-center text-text-subtle text-xs">
               No matching institutional commands or symbols found.
             </div>
           ) : (
@@ -142,33 +142,33 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                 onClick={item.action}
                 className={`p-2.5 rounded flex items-center justify-between cursor-pointer transition-colors ${
                   idx === selectedIndex 
-                    ? 'bg-cyan-950/40 border border-cyan-700/50 text-white shadow-sm' 
-                    : 'text-slate-300 hover:bg-white/[0.04]'
+                    ? 'bg-info-bg border border-accent text-text-strong shadow-sm' 
+                    : 'text-text hover:bg-surface-veil'
                 }`}
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-mono px-1 rounded bg-white/[0.04] text-slate-400 border border-white/[0.06] uppercase">
+                    <span className="text-[9px] font-mono px-1 rounded bg-surface-veil text-text-muted border border-border-subtle uppercase">
                       {item.category}
                     </span>
-                    <span className="text-xs font-semibold text-slate-100">{item.title}</span>
+                    <span className="text-xs font-semibold text-text-strong">{item.title}</span>
                   </div>
                   {item.subtitle && (
-                    <div className="text-[11px] text-slate-400 mt-0.5 pl-14 truncate max-w-lg">
+                    <div className="text-[11px] text-text-muted mt-0.5 pl-14 truncate max-w-lg">
                       {item.subtitle}
                     </div>
                   )}
                 </div>
 
-                <ArrowRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <ArrowRight className="w-3.5 h-3.5 text-text-subtle shrink-0" />
               </div>
             ))
           )}
         </div>
 
         {/* Footer info */}
-        <div className="p-2 border-t border-white/[0.06] bg-black/40 text-[10px] text-slate-500 flex items-center justify-between px-3">
-          <span>Navigate with <strong className="text-slate-400">↑ ↓</strong> • Select with <strong className="text-slate-400">ENTER</strong></span>
+        <div className="p-2 border-t border-border-subtle bg-surface-sunken text-[10px] text-text-subtle flex items-center justify-between px-3">
+          <span>Navigate with <strong className="text-text-muted">↑ ↓</strong> • Select with <strong className="text-text-muted">ENTER</strong></span>
           <span>AIOS-0X GLOBAL DISCOVERY ENGINE</span>
         </div>
       </div>

@@ -16,22 +16,22 @@ export const MarketRegimeField: React.FC<MarketRegimeFieldProps> = ({
   const getTrendColor = (trend: MarketRegimeItem['trend']) => {
     switch (trend) {
       case 'STRONG_BULL':
-        return 'text-emerald-400 bg-emerald-950/60 border-emerald-700/60';
+        return 'text-positive bg-positive-bg border-positive';
       case 'BULL':
-        return 'text-emerald-300 bg-emerald-950/40 border-emerald-800/40';
+        return 'text-positive bg-positive-bg border-positive';
       case 'SIDEWAYS':
-        return 'text-slate-400 bg-white/[0.04] border-white/[0.08]';
+        return 'text-text-muted bg-surface-veil border-border-strong';
       case 'BEAR':
-        return 'text-rose-300 bg-rose-950/40 border-rose-800/40';
+        return 'text-destructive bg-destructive-bg border-destructive';
       case 'STRONG_BEAR':
-        return 'text-rose-400 bg-rose-950/60 border-rose-700/60';
+        return 'text-destructive bg-destructive-bg border-destructive';
     }
   };
 
   // Micro SVG Sparkline — empty when the backend publishes no price series.
   const renderSparkline = (points: number[], isPositive: boolean) => {
     if (points.length < 2) {
-      return <span className="text-[9px] font-mono text-slate-600">NO PRICE FEED</span>;
+      return <span className="text-[9px] font-mono text-text-subtle">NO PRICE FEED</span>;
     }
     const min = Math.min(...points);
     const max = Math.max(...points);
@@ -45,7 +45,7 @@ export const MarketRegimeField: React.FC<MarketRegimeFieldProps> = ({
       return `${x},${y}`;
     });
 
-    const strokeColor = isPositive ? '#10b981' : '#f43f5e';
+    const strokeColor = isPositive ? 'var(--color-positive)' : 'var(--color-destructive)';
 
     return (
       <svg width={width} height={height} className="overflow-visible">
@@ -62,21 +62,21 @@ export const MarketRegimeField: React.FC<MarketRegimeFieldProps> = ({
   };
 
   return (
-    <div className={`bg-[#0d0f17] border border-white/[0.08] rounded-md p-3.5 shadow-2xl flex flex-col justify-between ${className}`}>
+    <div className={`bg-[var(--color-surface-1)] border border-border-strong rounded-md p-3.5 shadow-2xl flex flex-col justify-between ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between pb-2.5 border-b border-white/[0.06]">
+      <div className="flex items-center justify-between pb-2.5 border-b border-border-subtle">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-cyan-400" />
-          <h3 className="text-xs font-mono font-bold tracking-wider text-slate-100 uppercase">
+          <Activity className="w-4 h-4 text-accent" />
+          <h3 className="text-xs font-mono font-bold tracking-wider text-text-strong uppercase">
             MARKET REGIME STATE FIELD
           </h3>
-          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 border border-white/[0.06]">
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-surface-veil text-text-muted border border-border-subtle">
             REAL-TIME FACTOR DISPERSION
           </span>
         </div>
 
-        <div className="text-[10px] font-mono text-slate-500">
-          SOURCE: <span className="text-cyan-300 font-bold">/api/v1/regimes (LABELS ONLY)</span>
+        <div className="text-[10px] font-mono text-text-subtle">
+          SOURCE: <span className="text-accent font-bold">/api/v1/regimes (LABELS ONLY)</span>
         </div>
       </div>
 
@@ -88,23 +88,23 @@ export const MarketRegimeField: React.FC<MarketRegimeFieldProps> = ({
             <div
               key={inst.symbol}
               onClick={() => onSelectInstrument && onSelectInstrument(inst)}
-              className="p-2.5 rounded bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-cyan-500/40 transition-all cursor-pointer group flex flex-col justify-between shadow-sm"
+              className="p-2.5 rounded bg-surface-veil hover:bg-surface-raised border border-border-subtle hover:border-accent transition-all cursor-pointer group flex flex-col justify-between shadow-sm"
             >
               {/* Row 1: Symbol & Price */}
               <div>
                 <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="font-bold text-white group-hover:text-cyan-300 transition-colors">
+                  <span className="font-bold text-text-strong group-hover:text-accent transition-colors">
                     {inst.symbol}
                   </span>
-                  <span className={`text-[10px] font-mono-num font-semibold ${isPos ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <span className={`text-[10px] font-mono-num font-semibold ${isPos ? 'text-positive' : 'text-destructive'}`}>
                     {isPos ? '+' : ''}{inst.change24hPct.toFixed(2)}%
                   </span>
                 </div>
 
-                <div className="text-[11px] font-mono-num text-slate-300 mt-0.5">
+                <div className="text-[11px] font-mono-num text-text mt-0.5">
                   {inst.price > 0
                     ? `$${inst.price >= 100 ? inst.price.toLocaleString(undefined, { minimumFractionDigits: 2 }) : inst.price.toFixed(2)}`
-                    : <span className="text-slate-600">— no price feed</span>}
+                    : <span className="text-text-subtle">— no price feed</span>}
                 </div>
               </div>
 
@@ -119,16 +119,16 @@ export const MarketRegimeField: React.FC<MarketRegimeFieldProps> = ({
               </div>
 
               {/* Row 3: Regime & Confidence */}
-              <div className="pt-1.5 border-t border-white/[0.04] text-[9px] font-mono space-y-1 text-slate-400">
+              <div className="pt-1.5 border-t border-border-subtle text-[9px] font-mono space-y-1 text-text-muted">
                 <div className="flex justify-between">
                   <span>REGIME:</span>
-                  <span className="text-slate-200 font-medium truncate max-w-[80px]" title={inst.regime}>
+                  <span className="text-text-strong font-medium truncate max-w-[80px]" title={inst.regime}>
                     {inst.regime}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>VOL / CONF:</span>
-                  <span className="text-cyan-300 font-mono-num">
+                  <span className="text-accent font-mono-num">
                     {inst.volatility} ({inst.confidencePct}%)
                   </span>
                 </div>
@@ -139,9 +139,9 @@ export const MarketRegimeField: React.FC<MarketRegimeFieldProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="pt-2 border-t border-white/[0.06] text-[10px] font-mono text-slate-500 flex items-center justify-between">
+      <div className="pt-2 border-t border-border-subtle text-[10px] font-mono text-text-subtle flex items-center justify-between">
         <span>SOURCE: /api/v1/regimes</span>
-        <span className="text-slate-400">{instruments.length} INSTRUMENTS LABELED</span>
+        <span className="text-text-muted">{instruments.length} INSTRUMENTS LABELED</span>
       </div>
     </div>
   );

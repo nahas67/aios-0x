@@ -57,21 +57,21 @@ export const CapitalAllocationMap: React.FC<CapitalAllocationMapProps> = ({
   });
 
   return (
-    <div className={`bg-[#0d0f17] border border-white/[0.08] rounded-md p-3.5 shadow-2xl flex flex-col justify-between ${className}`}>
+    <div className={`bg-[var(--color-surface-1)] border border-border-strong rounded-md p-3.5 shadow-2xl flex flex-col justify-between ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+      <div className="flex items-center justify-between pb-2 border-b border-border-subtle">
         <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-cyan-400" />
-          <h3 className="text-xs font-mono font-bold tracking-wider text-slate-100 uppercase">
+          <Layers className="w-4 h-4 text-accent" />
+          <h3 className="text-xs font-mono font-bold tracking-wider text-text-strong uppercase">
             CAPITAL ALLOCATION ENGINE
           </h3>
-          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 border border-white/[0.06]">
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-surface-veil text-text-muted border border-border-subtle">
             FRACTIONAL KELLY OPTIMIZED
           </span>
         </div>
 
-        <div className="text-[11px] font-mono text-slate-400">
-          TOTAL EXPOSURE: <span className="text-cyan-300 font-bold">{segments.reduce((acc, s) => acc + s.currentExposurePct, 0).toFixed(1)}%</span>
+        <div className="text-[11px] font-mono text-text-muted">
+          TOTAL EXPOSURE: <span className="text-accent font-bold">{segments.reduce((acc, s) => acc + s.currentExposurePct, 0).toFixed(1)}%</span>
         </div>
       </div>
 
@@ -142,24 +142,24 @@ export const CapitalAllocationMap: React.FC<CapitalAllocationMapProps> = ({
 
             {/* Concentric Center Info */}
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none p-6">
-              <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest">
+              <span className="text-[9px] font-mono text-text-subtle uppercase tracking-widest">
                 ALLOCATED
               </span>
-              <span className="text-xl font-mono-num font-bold text-white tracking-tight">
+              <span className="text-xl font-mono-num font-bold text-text-strong tracking-tight">
                 {activeSegment ? activeSegment.currentExposurePct.toFixed(1) : '100'}%
               </span>
-              <span className="text-[10px] font-mono text-slate-400 max-w-[120px] truncate mt-0.5">
+              <span className="text-[10px] font-mono text-text-muted max-w-[120px] truncate mt-0.5">
                 {activeSegment ? activeSegment.name.split(' ')[0] : 'Total Portfolio'}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-[10px] font-mono text-slate-500 mt-1">
+          <div className="flex items-center gap-3 text-[10px] font-mono text-text-subtle mt-1">
             <span className="flex items-center gap-1">
-              <span className="w-2.5 h-1 bg-cyan-400 inline-block rounded"></span> CURRENT
+              <span className="w-2.5 h-1 bg-accent inline-block rounded"></span> CURRENT
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2.5 h-0.5 border-t border-dashed border-cyan-400 inline-block"></span> TARGET
+              <span className="w-2.5 h-0.5 border-t border-dashed border-accent inline-block"></span> TARGET
             </span>
           </div>
         </div>
@@ -179,8 +179,8 @@ export const CapitalAllocationMap: React.FC<CapitalAllocationMapProps> = ({
                 onMouseLeave={() => setHoveredId(null)}
                 className={`p-2 rounded border transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-white/[0.05] border-cyan-500/40 shadow-[0_0_12px_rgba(0,240,255,0.08)]'
-                    : 'bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.03]'
+                    ? 'bg-surface-raised border-accent shadow-[0_0_12px_rgba(0,240,255,0.08)]'
+                    : 'bg-surface-veil border-border-subtle hover:bg-surface-veil'
                 }`}
               >
                 <div className="flex items-center justify-between text-xs">
@@ -189,14 +189,14 @@ export const CapitalAllocationMap: React.FC<CapitalAllocationMapProps> = ({
                       className="w-2 h-2 rounded-full shrink-0" 
                       style={{ backgroundColor: seg.color }}
                     />
-                    <span className="font-medium text-slate-200">{seg.name}</span>
+                    <span className="font-medium text-text-strong">{seg.name}</span>
                   </div>
 
                   <div className="flex items-center gap-3 font-mono text-[11px]">
-                    <span className="text-slate-400">
+                    <span className="text-text-muted">
                       ${(seg.notionalUsd / 1000000).toFixed(1)}M
                     </span>
-                    <span className="font-mono-num font-bold text-white">
+                    <span className="font-mono-num font-bold text-text-strong">
                       {seg.currentExposurePct.toFixed(1)}%
                     </span>
                   </div>
@@ -204,7 +204,7 @@ export const CapitalAllocationMap: React.FC<CapitalAllocationMapProps> = ({
 
                 {/* Progress bar comparing Current vs Target */}
                 <div className="mt-1.5 flex items-center gap-2">
-                  <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden relative">
+                  <div className="flex-1 h-1.5 bg-surface-sunken rounded-full overflow-hidden relative">
                     <div
                       className="h-full rounded-full transition-all duration-300"
                       style={{
@@ -214,30 +214,30 @@ export const CapitalAllocationMap: React.FC<CapitalAllocationMapProps> = ({
                     />
                     {/* Target indicator line */}
                     <div
-                      className="absolute top-0 bottom-0 w-0.5 bg-white shadow-sm"
+                      className="absolute top-0 bottom-0 w-0.5 bg-surface-raised shadow-sm"
                       style={{ left: `${seg.targetExposurePct}%` }}
                       title={`Target: ${seg.targetExposurePct}%`}
                     />
                   </div>
 
-                  <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                  <span className="text-[10px] font-mono text-text-muted shrink-0">
                     tgt {seg.targetExposurePct.toFixed(0)}%
                   </span>
                 </div>
 
                 {/* Micro Institutional Risk Factor Grid */}
-                <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] font-mono pt-1.5 border-t border-white/[0.04]">
+                <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] font-mono pt-1.5 border-t border-border-subtle">
                   <div>
-                    <span className="text-slate-500">RISK CONTRIB:</span>{' '}
-                    <span className="text-slate-300 font-medium font-mono-num">{seg.riskContributionPct.toFixed(1)}%</span>
+                    <span className="text-text-subtle">RISK CONTRIB:</span>{' '}
+                    <span className="text-text font-medium font-mono-num">{seg.riskContributionPct.toFixed(1)}%</span>
                   </div>
                   <div>
-                    <span className="text-slate-500">CORRELATION:</span>{' '}
-                    <span className="text-slate-300 font-medium font-mono-num">{seg.correlation.toFixed(2)}</span>
+                    <span className="text-text-subtle">CORRELATION:</span>{' '}
+                    <span className="text-text font-medium font-mono-num">{seg.correlation.toFixed(2)}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500">DD CONTRIB:</span>{' '}
-                    <span className="text-amber-400 font-medium font-mono-num">{seg.drawdownContributionPct.toFixed(2)}%</span>
+                    <span className="text-text-subtle">DD CONTRIB:</span>{' '}
+                    <span className="text-warning font-medium font-mono-num">{seg.drawdownContributionPct.toFixed(2)}%</span>
                   </div>
                 </div>
               </div>

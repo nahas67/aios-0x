@@ -280,7 +280,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050608] text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
+    <div className="min-h-screen bg-[var(--color-surface-deep)] text-text-strong flex flex-col font-sans selection:bg-accent selection:text-accent">
       {/* Persistent Institutional Top System Bar */}
       <TopSystemBar
         autonomy={autonomy}
@@ -445,8 +445,8 @@ export default function App() {
 
       {/* Global Notification Toast */}
       {notificationToast && (
-        <div className="fixed bottom-4 right-4 z-50 bg-[#0d0f17]/95 border border-cyan-500/50 rounded-lg p-3 shadow-2xl text-xs font-mono text-cyan-200 flex items-center gap-2.5 backdrop-blur-md animate-fade-in">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+        <div className="fixed bottom-4 right-4 z-50 bg-[var(--color-surface-1)]//95 border border-accent rounded-lg p-3 shadow-2xl text-xs font-mono text-accent flex items-center gap-2.5 backdrop-blur-md animate-fade-in">
+          <span className="w-2 h-2 rounded-full bg-accent animate-ping"></span>
           <span>{notificationToast}</span>
         </div>
       )}

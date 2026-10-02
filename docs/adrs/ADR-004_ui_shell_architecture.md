@@ -33,7 +33,18 @@ rule against fake data.
 
 ## Status
 
-ACCEPTED — 2026-08-23
+SUPERSEDED by [ADR-008](ADR-008_supersede_adr004_ui_shell_and_tokens.md) — 2026-10-02.
+
+Decision 1 (keep the zero-dependency vanilla SPA, reject React/Next/Tailwind) was
+**reversed**: the repository now runs React 19 + Vite + Tailwind v4 with a two-entry
+build, because the scale conditions under which this ADR declined the build chain no
+longer hold.
+
+Decision 2 (design tokens) was **never implemented** and is now adopted through
+[ADR-008](ADR-008_supersede_adr004_ui_shell_and_tokens.md), using the shipped palette
+rather than this ADR's aspirational one so that adoption causes no visual regression.
+
+Retained as the record of what was decided and why.
 
 ## Consequences
 

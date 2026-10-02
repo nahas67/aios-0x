@@ -196,59 +196,59 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
   return (
     <div
       ref={containerRef}
-      className={`bg-[#08090d] border border-white/[0.08] rounded-xl flex flex-col overflow-hidden font-mono select-none transition-all ${
-        isFullscreen ? 'fixed inset-4 z-50 shadow-2xl border-cyan-500/40 bg-[#07080c]' : ''
+      className={`bg-[var(--color-surface-0)] border border-border-strong rounded-xl flex flex-col overflow-hidden font-mono select-none transition-all ${
+        isFullscreen ? 'fixed inset-4 z-50 shadow-2xl border-accent bg-[var(--color-surface-deep)]' : ''
       }`}
     >
       {/* 1. TOP PRO-CHART HEADER & TICKER BANNER */}
-      <div className="bg-[#0b0d13] border-b border-white/[0.08] px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="bg-[var(--color-surface-2)] border-b border-border-strong px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
         {/* Left: Asset Ticker Info */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-100 text-sm tracking-wider">{symbol}</span>
-            <span className="text-[10px] text-slate-400 font-sans hidden sm:inline max-w-[140px] truncate">
+            <span className="font-bold text-text-strong text-sm tracking-wider">{symbol}</span>
+            <span className="text-[10px] text-text-muted font-sans hidden sm:inline max-w-[140px] truncate">
               {name}
             </span>
-            <span className="px-1.5 py-0.5 rounded bg-cyan-950/70 border border-cyan-700/40 text-[9px] text-cyan-300 font-semibold uppercase">
+            <span className="px-1.5 py-0.5 rounded bg-info-bg border border-accent text-[9px] text-accent font-semibold uppercase">
               {category}
             </span>
           </div>
 
-          <div className="h-4 w-px bg-white/10" />
+          <div className="h-4 w-px bg-surface-raised" />
 
           {/* Latest real close + cached-session change (honestly labeled) */}
           <div className="flex items-baseline gap-2">
-            <span className="text-base font-bold text-slate-100 font-mono-num">
+            <span className="text-base font-bold text-text-strong font-mono-num">
               {latest ? formatPrice(latest.close, symbol) : "—"}
             </span>
             <span className={`flex items-center gap-0.5 text-[11px] font-bold ${
-              (sessionChangePct ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              (sessionChangePct ?? 0) >= 0 ? 'text-positive' : 'text-destructive'
             }`}>
               {sessionChangePct === null ? (
-                <span className="text-slate-500">session: —</span>
+                <span className="text-text-subtle">session: —</span>
               ) : (
                 <>{sessionChangePct >= 0 ? '+' : ''}{sessionChangePct.toFixed(2)}% cached</>
               )}
             </span>
           </div>
 
-          <div className="hidden lg:flex items-center gap-4 text-[10px] text-slate-400 pl-2 border-l border-white/10">
-            <div>Session High: <span className="text-slate-200 font-mono-num">{latest ? formatPrice(Math.max(...bars.map(b => b.high)), symbol) : "—"}</span></div>
-            <div>Session Low: <span className="text-slate-200 font-mono-num">{latest ? formatPrice(Math.min(...bars.map(b => b.low)), symbol) : "—"}</span></div>
-            <div>Bars: <span className="text-slate-200 font-mono-num">{bars.length} real</span></div>
+          <div className="hidden lg:flex items-center gap-4 text-[10px] text-text-muted pl-2 border-l border-border-subtle">
+            <div>Session High: <span className="text-text-strong font-mono-num">{latest ? formatPrice(Math.max(...bars.map(b => b.high)), symbol) : "—"}</span></div>
+            <div>Session Low: <span className="text-text-strong font-mono-num">{latest ? formatPrice(Math.min(...bars.map(b => b.low)), symbol) : "—"}</span></div>
+            <div>Bars: <span className="text-text-strong font-mono-num">{bars.length} real</span></div>
           </div>
         </div>
 
         {/* Right: Chart Controls & Mode Switcher */}
         <div className="flex items-center gap-2">
           {/* Native vs TradingView Pro API Engine Toggle */}
-          <div className="bg-black/50 border border-white/10 p-0.5 rounded-lg flex items-center gap-0.5">
+          <div className="bg-surface-deep border border-border-subtle p-0.5 rounded-lg flex items-center gap-0.5">
             <button
               onClick={() => setChartEngine('NATIVE')}
               className={`px-2.5 py-1 rounded text-[10px] font-semibold transition-all flex items-center gap-1 ${
                 chartEngine === 'NATIVE'
-                  ? 'bg-cyan-600 text-white shadow-[0_0_10px_rgba(0,240,255,0.3)]'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                  ? 'bg-accent text-text-strong shadow-[0_0_10px_rgba(0,240,255,0.3)]'
+                  : 'text-text-muted hover:text-text-strong hover:bg-surface-veil'
               }`}
               title="Native SVG engine over the backend candle feed"
             >
@@ -259,8 +259,8 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
               onClick={() => setChartEngine('TRADINGVIEW')}
               className={`px-2.5 py-1 rounded text-[10px] font-semibold transition-all flex items-center gap-1 ${
                 chartEngine === 'TRADINGVIEW'
-                  ? 'bg-indigo-600 text-white shadow-[0_0_10px_rgba(99,102,241,0.3)]'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                  ? 'bg-violet text-text-strong shadow-[0_0_10px_rgba(99,102,241,0.3)]'
+                  : 'text-text-muted hover:text-text-strong hover:bg-surface-veil'
               }`}
               title="Official TradingView Advanced Real-Time Charting Library"
             >
@@ -270,15 +270,15 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
           </div>
 
           {/* Timeframe Selector */}
-          <div className="hidden md:flex bg-black/40 border border-white/10 rounded p-0.5 gap-0.5 text-[10px]">
+          <div className="hidden md:flex bg-surface-sunken border border-border-subtle rounded p-0.5 gap-0.5 text-[10px]">
             {(['1m', '5m', '15m', '1h', '4h', '1D', '1W'] as TimeFrame[]).map(tf => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
                 className={`px-2 py-0.5 rounded font-medium transition-all ${
                   timeframe === tf
-                    ? 'bg-white/15 text-cyan-300 font-bold border border-cyan-500/30'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]'
+                    ? 'bg-surface-raised text-accent font-bold border border-accent'
+                    : 'text-text-muted hover:text-text-strong hover:bg-surface-raised'
                 }`}
               >
                 {tf}
@@ -289,22 +289,22 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
           {/* Manual feed refresh (no auto tick timer) */}
           <button
             onClick={() => candlesQ.refresh()}
-            className="p-1.5 rounded border text-[10px] transition-all flex items-center gap-1 bg-white/[0.04] text-slate-300 border-white/10 hover:text-white"
+            className="p-1.5 rounded border text-[10px] transition-all flex items-center gap-1 bg-surface-veil text-text border-border-subtle hover:text-text-strong"
             title="Fetch the latest real bar from /api/v1/market/candles"
           >
-            <RefreshCw className={`w-3 h-3 ${candlesQ.loading ? 'animate-spin text-cyan-400' : ''}`} />
+            <RefreshCw className={`w-3 h-3 ${candlesQ.loading ? 'animate-spin text-accent' : ''}`} />
             <span className="text-[9px] font-bold uppercase">{candlesQ.loading ? 'Fetching' : 'Refresh'}</span>
           </button>
 
           {/* Screenshot / Snapshot */}
           <button
             onClick={handleTakeSnapshot}
-            className="p-1.5 rounded bg-white/[0.04] border border-white/10 text-slate-400 hover:text-slate-200 hover:bg-white/[0.08] relative"
+            className="p-1.5 rounded bg-surface-veil border border-border-subtle text-text-muted hover:text-text-strong hover:bg-surface-raised relative"
             title="Capture Chart Snapshot"
           >
             <span className="text-[10px] font-bold px-0.5">PNG</span>
             {snapshotTaken && (
-              <span className="absolute -top-7 right-0 bg-cyan-900 border border-cyan-400 text-cyan-100 text-[9px] px-1.5 py-0.5 rounded shadow-lg whitespace-nowrap">
+              <span className="absolute -top-7 right-0 bg-info-bg border border-accent text-accent text-[9px] px-1.5 py-0.5 rounded shadow-lg whitespace-nowrap">
                 Captured!
               </span>
             )}
@@ -313,7 +313,7 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
           {/* Fullscreen Toggle */}
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-1.5 rounded bg-white/[0.04] border border-white/10 text-slate-400 hover:text-slate-200 hover:bg-white/[0.08]"
+            className="p-1.5 rounded bg-surface-veil border border-border-subtle text-text-muted hover:text-text-strong hover:bg-surface-raised"
             title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Chart'}
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
@@ -323,18 +323,18 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
 
       {/* 2. SECONDARY TOOLBAR: STYLE + SERVER INDICATOR READOUTS */}
       {chartEngine === 'NATIVE' && (
-        <div className="bg-[#090b10] border-b border-white/[0.06] px-3.5 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+        <div className="bg-[var(--color-surface-rail)] border-b border-border-subtle px-3.5 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
           {/* Chart Style Switcher */}
           <div className="flex items-center gap-1 text-[10px]">
-            <span className="text-slate-400 text-[9px] uppercase font-bold mr-1">Style:</span>
+            <span className="text-text-muted text-[9px] uppercase font-bold mr-1">Style:</span>
             {(['CANDLE', 'HEIKIN', 'LINE', 'AREA'] as ChartStyle[]).map(style => (
               <button
                 key={style}
                 onClick={() => setChartStyle(style)}
                 className={`px-2 py-0.5 rounded transition-all ${
                   chartStyle === style
-                    ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-700/40 font-bold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                    ? 'bg-info-bg text-accent border border-accent font-bold'
+                    : 'text-text-muted hover:text-text-strong hover:bg-surface-veil'
                 }`}
               >
                 {style}
@@ -343,21 +343,21 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
           </div>
 
           {/* Server-side indicator readouts (null → "—", never computed here) */}
-          <div className="flex items-center gap-3 text-[10px] text-slate-400">
+          <div className="flex items-center gap-3 text-[10px] text-text-muted">
             <span title="Server-computed EMA(20), null when the series is too short">
-              EMA20: <strong className="text-cyan-300 font-mono-num">{fmtInd(indicators?.ema20)}</strong>
+              EMA20: <strong className="text-accent font-mono-num">{fmtInd(indicators?.ema20)}</strong>
             </span>
             <span title="Server-computed EMA(50), null when the series is too short">
-              EMA50: <strong className="text-violet-300 font-mono-num">{fmtInd(indicators?.ema50)}</strong>
+              EMA50: <strong className="text-violet font-mono-num">{fmtInd(indicators?.ema50)}</strong>
             </span>
             <span title="Server-computed RSI(14), null when the series is too short">
-              RSI14: <strong className="text-purple-300 font-mono-num">{fmtInd(indicators?.rsi14)}</strong>
+              RSI14: <strong className="text-violet font-mono-num">{fmtInd(indicators?.rsi14)}</strong>
             </span>
             <span title="Server-computed MACD, null when the series is too short">
-              MACD: <strong className="text-emerald-300 font-mono-num">{fmtInd(indicators?.macd)}</strong>
+              MACD: <strong className="text-positive font-mono-num">{fmtInd(indicators?.macd)}</strong>
             </span>
             <span title="Server-computed Bollinger(20,2σ), null when the series is too short">
-              BB: <strong className="text-indigo-300 font-mono-num">
+              BB: <strong className="text-violet font-mono-num">
                 {indicators?.bollinger
                   ? `${indicators.bollinger.upper}/${indicators.bollinger.middle}/${indicators.bollinger.lower}`
                   : "—"}
@@ -366,9 +366,9 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
           </div>
 
           {/* Position overlays count */}
-          <div className="flex items-center gap-1.5 border-l border-white/10 pl-2">
-            <span className="px-2 py-0.5 rounded text-[10px] flex items-center gap-1 bg-emerald-950/60 text-emerald-300 border border-emerald-700/50 font-bold">
-              <Layers className="w-3 h-3 text-emerald-400" />
+          <div className="flex items-center gap-1.5 border-l border-border-subtle pl-2">
+            <span className="px-2 py-0.5 rounded text-[10px] flex items-center gap-1 bg-positive-bg text-positive border border-positive font-bold">
+              <Layers className="w-3 h-3 text-positive" />
               Positions ({symbolPositions.length})
             </span>
           </div>
@@ -376,10 +376,10 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
       )}
 
       {/* 3. MAIN CHART BODY: NATIVE SVG ENGINE vs TRADINGVIEW WIDGET */}
-      <div className="flex-1 relative bg-[#06070a] overflow-hidden flex">
+      <div className="flex-1 relative bg-[var(--color-surface-deep)] overflow-hidden flex">
         {chartEngine === 'TRADINGVIEW' ? (
           /* TRADINGVIEW OFFICIAL ADVANCED WIDGET EMBED */
-          <div className="w-full h-[540px] relative bg-[#08090d] flex flex-col items-center justify-center">
+          <div className="w-full h-[540px] relative bg-[var(--color-surface-0)] flex flex-col items-center justify-center">
             {/* Embedded TradingView Advanced Real-Time Widget */}
             <iframe
               id={`tradingview_widget_${symbol.replace(/[^a-zA-Z0-9]/g, '_')}`}
@@ -394,13 +394,13 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
             />
 
             {/* TradingView API Sync Overlay Banner */}
-            <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-md border border-indigo-500/30 rounded px-2.5 py-1 text-[10px] text-slate-300 flex items-center gap-2 pointer-events-auto">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              <span>TradingView Feed: <strong className="text-cyan-300 font-mono">{tvSymbol}</strong></span>
+            <div className="absolute top-2 right-2 bg-surface-sunken backdrop-blur-md border border-violet rounded px-2.5 py-1 text-[10px] text-text flex items-center gap-2 pointer-events-auto">
+              <span className="w-2 h-2 rounded-full bg-positive animate-ping" />
+              <span>TradingView Feed: <strong className="text-accent font-mono">{tvSymbol}</strong></span>
               {onOpenSettings && (
                 <button
                   onClick={onOpenSettings}
-                  className="text-indigo-300 hover:text-indigo-100 underline text-[9px]"
+                  className="text-violet hover:text-violet underline text-[9px]"
                 >
                   Configure API
                 </button>
@@ -408,7 +408,7 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
             </div>
           </div>
         ) : candlesQ.loading && bars.length === 0 ? (
-          <div className="w-full p-8 text-xs text-slate-400 font-mono">
+          <div className="w-full p-8 text-xs text-text-muted font-mono">
             Loading real bars from /api/v1/market/candles…
           </div>
         ) : candlesQ.error && bars.length === 0 ? (
@@ -421,8 +421,8 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
           </div>
         ) : bars.length === 0 ? (
           <div className="w-full p-8 text-center">
-            <div className="text-[11px] text-slate-300 font-semibold font-mono">No bars for {symbol} ({timeframe}) yet</div>
-            <div className="text-[10px] text-slate-500 mt-1 font-mono">
+            <div className="text-[11px] text-text font-semibold font-mono">No bars for {symbol} ({timeframe}) yet</div>
+            <div className="text-[10px] text-text-subtle mt-1 font-mono">
               The feed answered but carried no candles. Press Refresh to fetch the latest real bar.
             </div>
           </div>
@@ -430,12 +430,12 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
           /* NATIVE SVG ENGINE OVER REAL BARS */
           <div className="w-full flex-1 relative select-none">
             {/* OHLCV Crosshair Inspection Banner */}
-            <div className="absolute top-2 left-3 z-10 bg-black/75 backdrop-blur-sm border border-white/10 rounded px-2.5 py-1 text-[10px] flex flex-wrap items-center gap-3 text-slate-300 font-mono">
-              <div>O: <span className="text-slate-100 font-bold">{formatPrice((hoveredCandle ?? latest)?.open, symbol)}</span></div>
-              <div>H: <span className="text-emerald-400 font-bold">{formatPrice((hoveredCandle ?? latest)?.high, symbol)}</span></div>
-              <div>L: <span className="text-rose-400 font-bold">{formatPrice((hoveredCandle ?? latest)?.low, symbol)}</span></div>
-              <div>C: <span className="text-slate-100 font-bold">{formatPrice((hoveredCandle ?? latest)?.close, symbol)}</span></div>
-              <div>Vol: <span className="text-cyan-300 font-bold">{((hoveredCandle ?? latest)?.volume ?? 0).toLocaleString()}</span></div>
+            <div className="absolute top-2 left-3 z-10 bg-surface-sunken backdrop-blur-sm border border-border-subtle rounded px-2.5 py-1 text-[10px] flex flex-wrap items-center gap-3 text-text font-mono">
+              <div>O: <span className="text-text-strong font-bold">{formatPrice((hoveredCandle ?? latest)?.open, symbol)}</span></div>
+              <div>H: <span className="text-positive font-bold">{formatPrice((hoveredCandle ?? latest)?.high, symbol)}</span></div>
+              <div>L: <span className="text-destructive font-bold">{formatPrice((hoveredCandle ?? latest)?.low, symbol)}</span></div>
+              <div>C: <span className="text-text-strong font-bold">{formatPrice((hoveredCandle ?? latest)?.close, symbol)}</span></div>
+              <div>Vol: <span className="text-accent font-bold">{((hoveredCandle ?? latest)?.volume ?? 0).toLocaleString()}</span></div>
             </div>
 
             {/* SVG Candlestick Drawing Layer */}
@@ -449,18 +449,18 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
               <defs>
                                 {/* Area Gradient for Line/Area chart style */}
                 <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#00f0ff" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="#00f0ff" stopOpacity="0.0" />
+                  <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0.0" />
                 </linearGradient>
 
                 <linearGradient id="bullVolume" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.4" />
-                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.1" />
+                  <stop offset="0%" stopColor="var(--color-positive)" stopOpacity="0.4" />
+                  <stop offset="100%" stopColor="var(--color-positive)" stopOpacity="0.1" />
                 </linearGradient>
 
                 <linearGradient id="bearVolume" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.4" />
-                  <stop offset="100%" stopColor="#f43f5e" stopOpacity="0.1" />
+                  <stop offset="0%" stopColor="var(--color-destructive)" stopOpacity="0.4" />
+                  <stop offset="100%" stopColor="var(--color-destructive)" stopOpacity="0.1" />
                 </linearGradient>
               </defs>
 
@@ -470,8 +470,8 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                 const gridPrice = maxPrice - ratio * priceRange;
                 return (
                   <g key={ratio}>
-                    <line x1="10" y1={y} x2={chartWidth - 60} y2={y} stroke="#ffffff" strokeOpacity="0.05" strokeDasharray="3 3" />
-                    <text x={chartWidth - 55} y={y + 3} fill="#64748b" fontSize="9" fontFamily="monospace">
+                    <line x1="10" y1={y} x2={chartWidth - 60} y2={y} stroke="var(--color-text-strong)" strokeOpacity="0.05" strokeDasharray="3 3" />
+                    <text x={chartWidth - 55} y={y + 3} fill="var(--color-text-subtle)" fontSize="9" fontFamily="monospace">
                       {formatPrice(gridPrice, symbol)}
                     </text>
                   </g>
@@ -510,7 +510,7 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                   <polyline
                     points={bars.map((c, i) => `${getX(i)},${getY(c.close)}`).join(' ')}
                     fill="none"
-                    stroke="#00f0ff"
+                    stroke="var(--color-accent)"
                     strokeWidth="2"
                   />
                 </>
@@ -521,7 +521,7 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                 <polyline
                   points={bars.map((c, i) => `${getX(i)},${getY(c.close)}`).join(' ')}
                   fill="none"
-                  stroke="#38bdf8"
+                  stroke="var(--color-accent-info)"
                   strokeWidth="2"
                 />
               )}
@@ -537,7 +537,7 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                 const bodyY = Math.min(openY, closeY);
                 const bodyHeight = Math.max(2, Math.abs(closeY - openY));
 
-                const color = isBull ? '#10b981' : '#f43f5e';
+                const color = isBull ? 'var(--color-positive)' : 'var(--color-destructive)';
 
                 return (
                   <g key={`candle-${i}`} className="transition-all hover:opacity-100">
@@ -579,7 +579,7 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                       y1={entryY}
                       x2={chartWidth - 60}
                       y2={entryY}
-                      stroke="#10b981"
+                      stroke="var(--color-positive)"
                       strokeWidth="1.5"
                       strokeDasharray="2 2"
                     />
@@ -588,12 +588,12 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                       y={entryY - 9}
                       width="115"
                       height="16"
-                      fill="#064e3b"
-                      stroke="#10b981"
+                      fill="var(--color-positive-bg)"
+                      stroke="var(--color-positive)"
                       strokeWidth="1"
                       rx="3"
                     />
-                    <text x={chartWidth - 170} y={entryY + 3} fill="#6ee7b7" fontSize="8" fontWeight="bold">
+                    <text x={chartWidth - 170} y={entryY + 3} fill="var(--color-positive-soft)" fontSize="8" fontWeight="bold">
                       POS: {pos.side} {pos.size} @ {formatPrice(pos.entryPrice, symbol)}
                     </text>
 
@@ -605,7 +605,7 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                           y1={slY}
                           x2={chartWidth - 60}
                           y2={slY}
-                          stroke="#ef4444"
+                          stroke="var(--color-destructive)"
                           strokeWidth="1"
                           strokeDasharray="4 2"
                         />
@@ -614,12 +614,12 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                           y={slY - 8}
                           width="50"
                           height="14"
-                          fill="#450a0a"
-                          stroke="#ef4444"
+                          fill="var(--color-destructive-bg)"
+                          stroke="var(--color-destructive)"
                           strokeWidth="0.8"
                           rx="2"
                         />
-                        <text x={chartWidth - 105} y={slY + 2} fill="#fca5a5" fontSize="8" fontWeight="bold">
+                        <text x={chartWidth - 105} y={slY + 2} fill="var(--color-destructive-soft)" fontSize="8" fontWeight="bold">
                           SL {formatPrice(pos.stopLossPrice!, symbol)}
                         </text>
                       </>
@@ -633,7 +633,7 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                           y1={tpY}
                           x2={chartWidth - 60}
                           y2={tpY}
-                          stroke="#06b6d4"
+                          stroke="var(--color-accent-soft)"
                           strokeWidth="1"
                           strokeDasharray="4 2"
                         />
@@ -642,12 +642,12 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                           y={tpY - 8}
                           width="50"
                           height="14"
-                          fill="#083344"
-                          stroke="#06b6d4"
+                          fill="var(--color-info-bg)"
+                          stroke="var(--color-accent-soft)"
                           strokeWidth="0.8"
                           rx="2"
                         />
-                        <text x={chartWidth - 105} y={tpY + 2} fill="#67e8f9" fontSize="8" fontWeight="bold">
+                        <text x={chartWidth - 105} y={tpY + 2} fill="var(--color-accent-glow)" fontSize="8" fontWeight="bold">
                           TP {formatPrice(pos.takeProfitPrice!, symbol)}
                         </text>
                       </>
@@ -666,7 +666,7 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                       y1={currentY}
                       x2={chartWidth - 60}
                       y2={currentY}
-                      stroke="#00f0ff"
+                      stroke="var(--color-accent)"
                       strokeWidth="1"
                       strokeDasharray="2 1"
                     />
@@ -675,13 +675,13 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                       y={currentY - 9}
                       width="55"
                       height="18"
-                      fill="#00f0ff"
+                      fill="var(--color-accent)"
                       rx="3"
                     />
                     <text
                       x={chartWidth - 54}
                       y={currentY + 4}
-                      fill="#040810"
+                      fill="var(--color-text-on-accent)"
                       fontSize="9"
                       fontWeight="bold"
                       fontFamily="monospace"
@@ -701,7 +701,7 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                     y1="10"
                     x2={mouseCoords.x}
                     y2={chartHeight - 10}
-                    stroke="#94a3b8"
+                    stroke="var(--color-text-muted)"
                     strokeWidth="0.8"
                     strokeDasharray="2 2"
                   />
@@ -711,7 +711,7 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                     y1={mouseCoords.y}
                     x2={chartWidth - 60}
                     y2={mouseCoords.y}
-                    stroke="#94a3b8"
+                    stroke="var(--color-text-muted)"
                     strokeWidth="0.8"
                     strokeDasharray="2 2"
                   />
@@ -721,15 +721,15 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
                     y={mouseCoords.y - 8}
                     width="55"
                     height="16"
-                    fill="#334155"
-                    stroke="#94a3b8"
+                    fill="var(--color-text-dim)"
+                    stroke="var(--color-text-muted)"
                     strokeWidth="0.8"
                     rx="2"
                   />
                   <text
                     x={chartWidth - 54}
                     y={mouseCoords.y + 4}
-                    fill="#f8fafc"
+                    fill="var(--color-text-strong)"
                     fontSize="8"
                     fontFamily="monospace"
                   >
@@ -743,27 +743,27 @@ export const TradingViewAdvancedChart: React.FC<TradingViewAdvancedChartProps> =
       </div>
 
       {/* 4. FOOTER STATUS BAR */}
-      <div className="bg-[#090a0f] border-t border-white/[0.06] px-3.5 py-1.5 flex flex-wrap items-center justify-between text-[10px] text-slate-400">
+      <div className="bg-[var(--color-surface-rail)] border-t border-border-subtle px-3.5 py-1.5 flex flex-wrap items-center justify-between text-[10px] text-text-muted">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full ${candlesQ.error ? 'bg-rose-400' : 'bg-emerald-400'}`} />
-            Feed: <strong className="text-slate-200">/api/v1/market/candles</strong>
+            <span className={`w-1.5 h-1.5 rounded-full ${candlesQ.error ? 'bg-destructive' : 'bg-positive'}`} />
+            Feed: <strong className="text-text-strong">/api/v1/market/candles</strong>
           </span>
-          <span className="text-slate-600">|</span>
-          <span>Timezone: <strong className="text-slate-200">{settings.marketClockTimezone || 'UTC'}</strong></span>
-          <span className="text-slate-600">|</span>
-          <span>Bars: <strong className="text-slate-200">{bars.length} real</strong></span>
+          <span className="text-text-subtle">|</span>
+          <span>Timezone: <strong className="text-text-strong">{settings.marketClockTimezone || 'UTC'}</strong></span>
+          <span className="text-text-subtle">|</span>
+          <span>Bars: <strong className="text-text-strong">{bars.length} real</strong></span>
           {feedSource && (
             <>
-              <span className="text-slate-600">|</span>
+              <span className="text-text-subtle">|</span>
               <span className="truncate max-w-[220px]" title={feedSource}>src: {feedSource.slice(0, 28)}…</span>
             </>
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-[9px] text-slate-500">
+        <div className="flex items-center gap-2 text-[9px] text-text-subtle">
           {candlesQ.error ? (
-            <span className="text-rose-400">last fetch failed — showing cached bars</span>
+            <span className="text-destructive">last fetch failed — showing cached bars</span>
           ) : (
             <span>staging via the order ticket (submission not wired)</span>
           )}

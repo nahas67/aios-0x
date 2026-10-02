@@ -3,6 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Theme bootstrap, before anything can paint (ADR-008).
+
+      Inlined deliberately and duplicated from `lib/theme.ts`'s THEME_BOOTSTRAP, because it
+      must run ahead of the stylesheet: React mounts after the CSS is parsed, so a theme
+      restored from storage any later flashes the default palette first — the single most
+      visible way a theme system can look broken. That rules out importing it.
+
+      `theme.test.ts` asserts this exact snippet appears in this file, so the two copies
+      cannot drift. If you change one, change the other or the test will fail.
+    -->
+    <script>
+      (function(){try{var t=localStorage.getItem('aios.theme');document.documentElement.dataset.theme=(t==='paper')?'paper':'dark-oled';}catch(e){document.documentElement.dataset.theme='dark-oled';}})();
+    </script>
     <title>AIOS-0X — Autonomous Investment Command Center</title>
     <meta name="description" content="AI-native institutional investment operating system combining real-time capital trajectory, multi-agent debate, deterministic risk firewalls, and decision provenance." />
     <meta property="og:title" content="AIOS-0X — Autonomous Investment Command Center" />

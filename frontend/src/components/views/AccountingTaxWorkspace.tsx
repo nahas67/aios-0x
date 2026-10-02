@@ -21,7 +21,7 @@ export const AccountingTaxWorkspace: React.FC = () => {
   const accounting = useApi(() => riskApi.accounting());
 
   if (accounting.loading) {
-    return <div className="text-xs text-slate-400 font-mono p-8">Loading ledger from /api/v1/accounting…</div>;
+    return <div className="text-xs text-text-muted font-mono p-8">Loading ledger from /api/v1/accounting…</div>;
   }
   if (accounting.error || !accounting.data) {
     return <Unavailable title="Accounting unavailable" reason={accounting.error ?? "no ledger payload"} />;
@@ -34,40 +34,40 @@ export const AccountingTaxWorkspace: React.FC = () => {
 
   const badge =
     adapted.balanced == null ? (
-      <span className="text-slate-400 font-bold">UNKNOWN (backend did not report balance)</span>
+      <span className="text-text-muted font-bold">UNKNOWN (backend did not report balance)</span>
     ) : adapted.balanced ? (
-      <span className="text-emerald-400 font-bold">BALANCED (DEBITS = CREDITS)</span>
+      <span className="text-positive font-bold">BALANCED (DEBITS = CREDITS)</span>
     ) : (
-      <span className="text-rose-400 font-bold">OUT OF BALANCE — HALT AND INVESTIGATE</span>
+      <span className="text-destructive font-bold">OUT OF BALANCE — HALT AND INVESTIGATE</span>
     );
 
   return (
     <div className="space-y-4 pb-12 font-mono">
       {/* Header */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <ReceiptText className="w-4 h-4 text-cyan-400" />
-            <h2 className="text-sm font-bold tracking-wider text-slate-100 uppercase">
+            <ReceiptText className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold tracking-wider text-text-strong uppercase">
               ACCOUNTING, TAX PROVISION & AUDITOR SIGN-OFF WORKSPACE
             </h2>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-info-bg text-accent border border-accent">
               FRAME 11
             </span>
           </div>
-          <div className="text-xs text-slate-400 mt-0.5">
+          <div className="text-xs text-text-muted mt-0.5">
             Double-Entry Ledger • Source: /api/v1/accounting
           </div>
         </div>
 
         <div className="flex items-center gap-3 text-xs">
-          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded">
-            <span className="text-slate-400">TRIAL BALANCE:</span>{' '}
+          <div className="bg-surface-veil border border-border-subtle px-3 py-1.5 rounded">
+            <span className="text-text-muted">TRIAL BALANCE:</span>{' '}
             {badge}
           </div>
-          <div className="bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded">
-            <span className="text-slate-400">TAX DUE:</span>{' '}
-            <span className="text-cyan-300 font-bold">
+          <div className="bg-surface-veil border border-border-subtle px-3 py-1.5 rounded">
+            <span className="text-text-muted">TAX DUE:</span>{' '}
+            <span className="text-accent font-bold">
               {adapted.taxDueMinor != null
                 ? `$${(adapted.taxDueMinor / 100).toLocaleString()}`
                 : "— (not computed)"}
@@ -77,19 +77,19 @@ export const AccountingTaxWorkspace: React.FC = () => {
       </div>
 
       {/* Controller / Auditor Sign-Off Banner */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded flex items-center justify-center bg-white/[0.03] text-slate-400 border border-white/[0.08]">
+          <div className="w-9 h-9 rounded flex items-center justify-center bg-surface-veil text-text-muted border border-border-strong">
             <FileCheck2 className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xs font-bold text-white flex items-center gap-2">
+            <div className="text-xs font-bold text-text-strong flex items-center gap-2">
               <span>FUND CONTROLLER & STATUTORY COMPLIANCE OVERSIGHT</span>
-              <span className="text-[9px] px-2 py-0.5 rounded font-bold bg-white/[0.04] text-slate-400 border border-white/[0.08]">
+              <span className="text-[9px] px-2 py-0.5 rounded font-bold bg-surface-veil text-text-muted border border-border-strong">
                 SIGN-OFF NOT WIRED
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">
+            <div className="text-[11px] text-text-muted mt-0.5">
               No controller sign-off flow exists server-side (no matching control action)
               {adapted.requiresSignoff ? ' — professional sign-off is still required out of band' : ''}
             </div>
@@ -99,7 +99,7 @@ export const AccountingTaxWorkspace: React.FC = () => {
         <div>
           <span
             title="No server-side sign-off flow exists"
-            className="px-4 py-2 rounded bg-white/[0.03] border border-white/[0.08] text-slate-500 text-xs font-bold font-mono inline-flex items-center gap-2 cursor-not-allowed"
+            className="px-4 py-2 rounded bg-surface-veil border border-border-strong text-text-subtle text-xs font-bold font-mono inline-flex items-center gap-2 cursor-not-allowed"
           >
             <CheckCircle2 className="w-4 h-4" />
             <span>SIGN-OFF NOT WIRED</span>
@@ -108,26 +108,26 @@ export const AccountingTaxWorkspace: React.FC = () => {
       </div>
 
       {/* General Ledger Table */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl">
-        <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl">
+        <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
           <div className="flex items-center gap-2">
-            <Scale className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-xs font-bold uppercase text-white tracking-wider">
+            <Scale className="w-4 h-4 text-accent" />
+            <h3 className="text-xs font-bold uppercase text-text-strong tracking-wider">
               GENERAL LEDGER CHART OF ACCOUNTS & BALANCES
             </h3>
           </div>
-          <span className="text-[10px] text-slate-400">SOURCE: accounts_minor (minor → USD)</span>
+          <span className="text-[10px] text-text-muted">SOURCE: accounts_minor (minor → USD)</span>
         </div>
 
         {adapted.rows.length === 0 ? (
-          <div className="p-6 text-center text-slate-500 text-xs">
+          <div className="p-6 text-center text-text-subtle text-xs">
             Ledger returned no accounts. No postings have been recorded yet.
           </div>
         ) : (
           <div className="overflow-x-auto my-3">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-white/[0.06] text-slate-500 text-[9px] uppercase tracking-wider">
+                <tr className="border-b border-border-subtle text-text-subtle text-[9px] uppercase tracking-wider">
                   <th className="py-2 px-2.5">ACCOUNT CODE</th>
                   <th className="py-2 px-2">ACCOUNT NAME</th>
                   <th className="py-2 px-2">TYPE</th>
@@ -135,21 +135,21 @@ export const AccountingTaxWorkspace: React.FC = () => {
                   <th className="py-2 px-2 text-center">INTEGRITY</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.03]">
+              <tbody className="divide-y divide-surface-veil">
                 {adapted.rows.map((acc) => (
-                  <tr key={acc.code} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-2 px-2.5 font-bold text-cyan-300">{acc.code}</td>
-                    <td className="py-2 px-2 text-white font-medium">{acc.name}</td>
+                  <tr key={acc.code} className="hover:bg-surface-veil transition-colors">
+                    <td className="py-2 px-2.5 font-bold text-accent">{acc.code}</td>
+                    <td className="py-2 px-2 text-text-strong font-medium">{acc.name}</td>
                     <td className="py-2 px-2">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-300 border border-white/[0.06]">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-veil text-text border border-border-subtle">
                         {acc.type}
                       </span>
                     </td>
-                    <td className="py-2 px-2 text-right font-mono-num font-bold text-slate-100">
+                    <td className="py-2 px-2 text-right font-mono-num font-bold text-text-strong">
                       ${acc.balanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-2 px-2 text-center">
-                      <span className={`text-[9px] flex items-center justify-center gap-1 ${adapted.balanced ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      <span className={`text-[9px] flex items-center justify-center gap-1 ${adapted.balanced ? 'text-positive' : 'text-text-subtle'}`}>
                         <CheckCircle2 className="w-3 h-3" /> {adapted.balanced ? 'VERIFIED' : '—'}
                       </span>
                     </td>
@@ -163,15 +163,15 @@ export const AccountingTaxWorkspace: React.FC = () => {
 
       {/* CA review queue */}
       {adapted.reviewQueue.length > 0 && (
-        <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl">
-          <h3 className="text-xs font-bold uppercase text-white tracking-wider pb-2 border-b border-white/[0.06]">
+        <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl">
+          <h3 className="text-xs font-bold uppercase text-text-strong tracking-wider pb-2 border-b border-border-subtle">
             CA REVIEW QUEUE ({adapted.reviewQueue.length})
           </h3>
           <div className="mt-2 space-y-1.5 text-xs">
             {adapted.reviewQueue.map((r, i) => (
-              <div key={i} className="flex items-center justify-between p-2 rounded bg-white/[0.02] border border-white/[0.05]">
-                <span className="text-slate-200">{r.subject_ref ?? "—"}</span>
-                <span className="text-[10px] text-amber-300">{r.state ?? "—"}</span>
+              <div key={i} className="flex items-center justify-between p-2 rounded bg-surface-veil border border-border-subtle">
+                <span className="text-text-strong">{r.subject_ref ?? "—"}</span>
+                <span className="text-[10px] text-warning">{r.state ?? "—"}</span>
               </div>
             ))}
           </div>

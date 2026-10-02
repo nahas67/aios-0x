@@ -94,79 +94,79 @@ export const PortfolioConcentrationHeatmap: React.FC<PortfolioConcentrationHeatm
   const getTileBg = (pos: Position) => {
     if (colorMode === 'PNL') {
       const pnl = pos.unrealizedPnlPct;
-      if (pnl >= 8) return 'bg-emerald-950/80 border-emerald-500/70 text-emerald-200';
-      if (pnl > 3) return 'bg-emerald-950/50 border-emerald-600/50 text-emerald-300';
-      if (pnl > 0) return 'bg-teal-950/40 border-teal-600/40 text-teal-300';
-      if (pnl === 0) return 'bg-slate-900/60 border-white/[0.08] text-slate-300';
-      if (pnl > -3) return 'bg-rose-950/40 border-rose-600/40 text-rose-300';
-      return 'bg-rose-950/80 border-rose-500/70 text-rose-200';
+      if (pnl >= 8) return 'bg-positive-bg border-positive text-positive';
+      if (pnl > 3) return 'bg-positive-bg border-positive text-positive';
+      if (pnl > 0) return 'bg-accent-soft border-accent-soft text-accent-soft';
+      if (pnl === 0) return 'bg-surface-deep border-border-strong text-text';
+      if (pnl > -3) return 'bg-destructive-bg border-destructive text-destructive';
+      return 'bg-destructive-bg border-destructive text-destructive';
     }
 
     if (colorMode === 'NOTIONAL') {
       const share = (pos.notionalUsd / totalNotional) * 100;
-      if (share >= 15) return 'bg-cyan-950/90 border-cyan-400 text-cyan-100';
-      if (share >= 8) return 'bg-cyan-950/60 border-cyan-600/60 text-cyan-200';
-      if (share >= 4) return 'bg-blue-950/40 border-blue-600/40 text-blue-300';
-      return 'bg-slate-900/50 border-white/[0.06] text-slate-300';
+      if (share >= 15) return 'bg-info-bg border-accent text-accent';
+      if (share >= 8) return 'bg-info-bg border-accent text-accent';
+      if (share >= 4) return 'bg-accent-info border-accent-info text-accent-info';
+      return 'bg-surface-deep border-border-subtle text-text';
     }
 
     if (colorMode === 'VAR_RISK') {
       const varContrib = pos.varContributionUsd || 50000;
-      if (varContrib > 200000) return 'bg-amber-950/80 border-amber-500 text-amber-200';
-      if (varContrib > 100000) return 'bg-amber-950/50 border-amber-600/50 text-amber-300';
-      return 'bg-slate-900/40 border-white/[0.06] text-slate-300';
+      if (varContrib > 200000) return 'bg-warning-bg border-warning text-warning';
+      if (varContrib > 100000) return 'bg-warning-bg border-warning text-warning';
+      return 'bg-surface-deep border-border-subtle text-text';
     }
 
     // EXPOSURE
     const exp = pos.exposurePct || 5;
-    if (exp >= 12) return 'bg-purple-950/80 border-purple-500 text-purple-200';
-    if (exp >= 6) return 'bg-indigo-950/50 border-indigo-600 text-indigo-300';
-    return 'bg-slate-900/40 border-white/[0.06] text-slate-300';
+    if (exp >= 12) return 'bg-violet border-violet text-violet';
+    if (exp >= 6) return 'bg-violet border-violet text-violet';
+    return 'bg-surface-deep border-border-subtle text-text';
   };
 
   const getAssetClassBadge = (assetClass: AssetClass | string) => {
     switch (assetClass) {
       case 'POLYMARKET':
-        return { label: 'POLYMARKET', bg: 'bg-pink-950/70 text-pink-300 border-pink-700/60' };
+        return { label: 'POLYMARKET', bg: 'bg-accent-magenta text-accent-magenta border-accent-magenta' };
       case 'GLOBAL_EQUITY':
-        return { label: 'GLOBAL EQUITY', bg: 'bg-cyan-950/70 text-cyan-300 border-cyan-700/60' };
+        return { label: 'GLOBAL EQUITY', bg: 'bg-info-bg text-accent border-accent' };
       case 'COMMODITY':
-        return { label: 'COMMODITY', bg: 'bg-amber-950/70 text-amber-300 border-amber-700/60' };
+        return { label: 'COMMODITY', bg: 'bg-warning-bg text-warning border-warning' };
       case 'FX':
-        return { label: 'FOREX / FX', bg: 'bg-emerald-950/70 text-emerald-300 border-emerald-700/60' };
+        return { label: 'FOREX / FX', bg: 'bg-positive-bg text-positive border-positive' };
       case 'US_EQUITY':
-        return { label: 'US EQUITY', bg: 'bg-sky-950/70 text-sky-300 border-sky-700/60' };
+        return { label: 'US EQUITY', bg: 'bg-info-bg text-accent-info border-accent-info' };
       case 'CRYPTO':
-        return { label: 'CRYPTO', bg: 'bg-indigo-950/70 text-indigo-300 border-indigo-700/60' };
+        return { label: 'CRYPTO', bg: 'bg-violet text-violet border-violet' };
       case 'RATES':
-        return { label: 'SOVEREIGN RATES', bg: 'bg-slate-800 text-slate-300 border-slate-600' };
+        return { label: 'SOVEREIGN RATES', bg: 'bg-surface-2 text-text border-border-subtle' };
       default:
-        return { label: assetClass, bg: 'bg-slate-800 text-slate-300 border-slate-600' };
+        return { label: assetClass, bg: 'bg-surface-2 text-text border-border-subtle' };
     }
   };
 
   return (
-    <div className={`bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl font-mono space-y-4 ${className}`}>
+    <div className={`bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl font-mono space-y-4 ${className}`}>
       {/* Visualizer Top Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border-subtle">
         <div className="flex items-center gap-2">
-          <Globe className="w-4 h-4 text-cyan-400" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-100">
+          <Globe className="w-4 h-4 text-accent" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-text-strong">
             MULTI-ASSET PORTFOLIO CONCENTRATION &amp; GLOBAL REGIME MAP
           </h3>
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800 font-semibold">
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-info-bg text-accent border border-accent font-semibold">
             GLOBAL ARBITRAGE &amp; MACRO
           </span>
         </div>
 
         {/* View Mode Switcher */}
-        <div className="flex items-center gap-1 bg-black/50 p-0.5 rounded border border-white/[0.08] text-[10px]">
+        <div className="flex items-center gap-1 bg-surface-deep p-0.5 rounded border border-border-strong text-[10px]">
           <button
             onClick={() => setViewMode('HEATMAP')}
             className={`px-2.5 py-1 rounded flex items-center gap-1 transition-all ${
               viewMode === 'HEATMAP'
-                ? 'bg-cyan-950 text-cyan-300 font-bold border border-cyan-800/80 shadow-[0_0_8px_rgba(0,240,255,0.2)]'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-info-bg text-accent font-bold border border-accent shadow-[0_0_8px_rgba(0,240,255,0.2)]'
+                : 'text-text-muted hover:text-text-strong'
             }`}
           >
             <Grid3X3 className="w-3 h-3" />
@@ -176,8 +176,8 @@ export const PortfolioConcentrationHeatmap: React.FC<PortfolioConcentrationHeatm
             onClick={() => setViewMode('GLOBAL_REGIONS')}
             className={`px-2.5 py-1 rounded flex items-center gap-1 transition-all ${
               viewMode === 'GLOBAL_REGIONS'
-                ? 'bg-cyan-950 text-cyan-300 font-bold border border-cyan-800/80 shadow-[0_0_8px_rgba(0,240,255,0.2)]'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-info-bg text-accent font-bold border border-accent shadow-[0_0_8px_rgba(0,240,255,0.2)]'
+                : 'text-text-muted hover:text-text-strong'
             }`}
           >
             <Globe className="w-3 h-3" />
@@ -187,8 +187,8 @@ export const PortfolioConcentrationHeatmap: React.FC<PortfolioConcentrationHeatm
             onClick={() => setViewMode('CLASS_MATRIX')}
             className={`px-2.5 py-1 rounded flex items-center gap-1 transition-all ${
               viewMode === 'CLASS_MATRIX'
-                ? 'bg-cyan-950 text-cyan-300 font-bold border border-cyan-800/80 shadow-[0_0_8px_rgba(0,240,255,0.2)]'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-info-bg text-accent font-bold border border-accent shadow-[0_0_8px_rgba(0,240,255,0.2)]'
+                : 'text-text-muted hover:text-text-strong'
             }`}
           >
             <Layers className="w-3 h-3" />
@@ -201,15 +201,15 @@ export const PortfolioConcentrationHeatmap: React.FC<PortfolioConcentrationHeatm
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
         {/* Asset Class Filter Pills */}
         <div className="flex flex-wrap items-center gap-1">
-          <span className="text-[10px] text-slate-500 mr-1 uppercase">Filter:</span>
+          <span className="text-[10px] text-text-subtle mr-1 uppercase">Filter:</span>
           {['ALL', 'POLYMARKET', 'GLOBAL_EQUITY', 'COMMODITY', 'FX', 'US_EQUITY', 'CRYPTO', 'RATES'].map(cls => (
             <button
               key={cls}
               onClick={() => setSelectedAssetClass(cls)}
               className={`px-2 py-0.5 rounded text-[10px] transition-all border ${
                 selectedAssetClass === cls
-                  ? 'bg-cyan-500 text-black font-bold border-cyan-400 shadow-[0_0_8px_rgba(0,240,255,0.4)]'
-                  : 'bg-white/[0.02] border-white/[0.06] text-slate-400 hover:text-slate-200'
+                  ? 'bg-accent text-text-strong font-bold border-accent shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                  : 'bg-surface-veil border-border-subtle text-text-muted hover:text-text-strong'
               }`}
             >
               {cls.replace('_', ' ')}
@@ -219,16 +219,16 @@ export const PortfolioConcentrationHeatmap: React.FC<PortfolioConcentrationHeatm
 
         {/* Color Metric Selector */}
         <div className="flex items-center gap-2 text-[10px]">
-          <span className="text-slate-500 uppercase">Color By:</span>
-          <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded border border-white/[0.06]">
+          <span className="text-text-subtle uppercase">Color By:</span>
+          <div className="flex items-center gap-1 bg-surface-sunken p-0.5 rounded border border-border-subtle">
             {(['PNL', 'NOTIONAL', 'VAR_RISK', 'EXPOSURE'] as ColorMode[]).map(mode => (
               <button
                 key={mode}
                 onClick={() => setColorMode(mode)}
                 className={`px-2 py-0.5 rounded ${
                   colorMode === mode
-                    ? 'bg-white/[0.12] text-white font-bold'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-surface-raised text-text-strong font-bold'
+                    : 'text-text-muted hover:text-text-strong'
                 }`}
               >
                 {mode.replace('_', ' ')}
@@ -262,15 +262,15 @@ export const PortfolioConcentrationHeatmap: React.FC<PortfolioConcentrationHeatm
                   <div>
                     <div className="flex items-start justify-between gap-1">
                       <div>
-                        <div className="flex items-center gap-1.5 font-bold text-sm text-white group-hover:text-cyan-300 transition-colors">
+                        <div className="flex items-center gap-1.5 font-bold text-sm text-text-strong group-hover:text-accent transition-colors">
                           <span>{pos.symbol}</span>
                           {pos.countryCode && (
-                            <span className="text-[10px] text-slate-400 px-1 rounded bg-black/40 border border-white/[0.08]">
+                            <span className="text-[10px] text-text-muted px-1 rounded bg-surface-sunken border border-border-strong">
                               {pos.countryCode}
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-slate-300 truncate max-w-[170px]" title={pos.name}>
+                        <div className="text-[10px] text-text truncate max-w-[170px]" title={pos.name}>
                           {pos.name}
                         </div>
                       </div>
@@ -282,47 +282,47 @@ export const PortfolioConcentrationHeatmap: React.FC<PortfolioConcentrationHeatm
 
                     {/* Specific multi-asset callouts */}
                     {pos.assetClass === 'POLYMARKET' && pos.polymarketOddsPct !== undefined && (
-                      <div className="mt-1.5 p-1 rounded bg-black/50 border border-pink-500/30 flex items-center justify-between text-[9px]">
-                        <span className="text-pink-300 font-bold">Odds: {pos.polymarketOddsPct}%</span>
-                        <span className="text-slate-400">Res: {pos.eventOutcomeDate || '2026'}</span>
+                      <div className="mt-1.5 p-1 rounded bg-surface-deep border border-accent-magenta flex items-center justify-between text-[9px]">
+                        <span className="text-accent-magenta font-bold">Odds: {pos.polymarketOddsPct}%</span>
+                        <span className="text-text-muted">Res: {pos.eventOutcomeDate || '2026'}</span>
                       </div>
                     )}
 
                     {pos.assetClass === 'GLOBAL_EQUITY' && pos.localCurrency && (
-                      <div className="mt-1.5 p-1 rounded bg-black/50 border border-cyan-500/30 flex items-center justify-between text-[9px]">
-                        <span className="text-cyan-300 font-semibold">{pos.exchange || 'International'}</span>
-                        <span className="text-slate-300 font-mono">Cur: {pos.localCurrency}</span>
+                      <div className="mt-1.5 p-1 rounded bg-surface-deep border border-accent flex items-center justify-between text-[9px]">
+                        <span className="text-accent font-semibold">{pos.exchange || 'International'}</span>
+                        <span className="text-text font-mono">Cur: {pos.localCurrency}</span>
                       </div>
                     )}
 
                     {pos.assetClass === 'COMMODITY' && (
-                      <div className="mt-1.5 p-1 rounded bg-black/50 border border-amber-500/30 flex items-center justify-between text-[9px]">
-                        <span className="text-amber-300 font-semibold">{pos.exchange || 'CME/ICE'}</span>
-                        <span className="text-slate-300">Roll: Active</span>
+                      <div className="mt-1.5 p-1 rounded bg-surface-deep border border-warning flex items-center justify-between text-[9px]">
+                        <span className="text-warning font-semibold">{pos.exchange || 'CME/ICE'}</span>
+                        <span className="text-text">Roll: Active</span>
                       </div>
                     )}
 
                     {pos.assetClass === 'FX' && (
-                      <div className="mt-1.5 p-1 rounded bg-black/50 border border-emerald-500/30 flex items-center justify-between text-[9px]">
-                        <span className="text-emerald-300 font-semibold">G10/EM Carry</span>
-                        <span className="text-slate-300">Side: {pos.side}</span>
+                      <div className="mt-1.5 p-1 rounded bg-surface-deep border border-positive flex items-center justify-between text-[9px]">
+                        <span className="text-positive font-semibold">G10/EM Carry</span>
+                        <span className="text-text">Side: {pos.side}</span>
                       </div>
                     )}
                   </div>
 
                   {/* Bottom: Notional, P&L, Weight */}
-                  <div className="mt-2 pt-2 border-t border-white/[0.06] flex items-end justify-between">
+                  <div className="mt-2 pt-2 border-t border-border-subtle flex items-end justify-between">
                     <div>
-                      <div className="text-[9px] text-slate-400">NOTIONAL</div>
-                      <div className="text-xs font-bold font-mono text-white">
+                      <div className="text-[9px] text-text-muted">NOTIONAL</div>
+                      <div className="text-xs font-bold font-mono text-text-strong">
                         ${(pos.notionalUsd / 1000000).toFixed(2)}M
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <div className="text-[9px] text-slate-400">P&amp;L ({notionalShare.toFixed(1)}% w)</div>
+                      <div className="text-[9px] text-text-muted">P&amp;L ({notionalShare.toFixed(1)}% w)</div>
                       <div className={`text-xs font-bold font-mono flex items-center justify-end gap-0.5 ${
-                        isPnlPos ? 'text-emerald-400' : 'text-rose-400'
+                        isPnlPos ? 'text-positive' : 'text-destructive'
                       }`}>
                         {isPnlPos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                         {isPnlPos ? '+' : ''}{pos.unrealizedPnlPct.toFixed(1)}%
@@ -343,27 +343,27 @@ export const PortfolioConcentrationHeatmap: React.FC<PortfolioConcentrationHeatm
             {regionBreakdown.map(([code, region]) => {
               const share = ((region.notional / totalNotional) * 100);
               return (
-                <div key={code} className="bg-black/40 border border-white/[0.08] rounded p-3 space-y-2.5">
-                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
+                <div key={code} className="bg-surface-sunken border border-border-strong rounded p-3 space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-border-subtle pb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-base">{region.flag}</span>
                       <div>
-                        <div className="text-xs font-bold text-white">{region.label}</div>
-                        <div className="text-[10px] text-slate-400">{region.positions.length} Positions Active</div>
+                        <div className="text-xs font-bold text-text-strong">{region.label}</div>
+                        <div className="text-[10px] text-text-muted">{region.positions.length} Positions Active</div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-xs font-bold font-mono text-cyan-300">
+                      <div className="text-xs font-bold font-mono text-accent">
                         ${(region.notional / 1000000).toFixed(2)}M
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono">{share.toFixed(1)}% of fund</div>
+                      <div className="text-[10px] text-text-muted font-mono">{share.toFixed(1)}% of fund</div>
                     </div>
                   </div>
 
                   {/* Mini bar */}
-                  <div className="w-full bg-white/[0.06] h-1.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-surface-raised h-1.5 rounded-full overflow-hidden">
                     <div
-                      className="bg-cyan-400 h-full rounded-full transition-all"
+                      className="bg-accent h-full rounded-full transition-all"
                       style={{ width: `${Math.min(share * 2.5, 100)}%` }}
                     />
                   </div>
@@ -374,7 +374,7 @@ export const PortfolioConcentrationHeatmap: React.FC<PortfolioConcentrationHeatm
                       <span
                         key={p.id}
                         onClick={() => onSelectPosition && onSelectPosition(p)}
-                        className="text-[10px] px-2 py-0.5 rounded bg-white/[0.04] hover:bg-cyan-950/80 hover:text-cyan-300 border border-white/[0.06] cursor-pointer transition-colors"
+                        className="text-[10px] px-2 py-0.5 rounded bg-surface-veil hover:bg-info-bg hover:text-accent border border-border-subtle cursor-pointer transition-colors"
                       >
                         {p.symbol} ({p.unrealizedPnlPct >= 0 ? '+' : ''}{p.unrealizedPnlPct.toFixed(1)}%)
                       </span>
@@ -397,32 +397,32 @@ export const PortfolioConcentrationHeatmap: React.FC<PortfolioConcentrationHeatm
               const isPositive = data.pnl >= 0;
 
               return (
-                <div key={cls} className="bg-black/40 border border-white/[0.08] rounded p-3.5 space-y-3">
+                <div key={cls} className="bg-surface-sunken border border-border-strong rounded p-3.5 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className={`text-[9px] px-2 py-0.5 rounded border uppercase font-bold ${badge.bg}`}>
                       {badge.label}
                     </span>
-                    <span className="text-xs font-mono font-bold text-white">
+                    <span className="text-xs font-mono font-bold text-text-strong">
                       {share.toFixed(1)}%
                     </span>
                   </div>
 
                   <div>
-                    <div className="text-[10px] text-slate-400">Total Notional</div>
-                    <div className="text-sm font-bold font-mono text-white">
+                    <div className="text-[10px] text-text-muted">Total Notional</div>
+                    <div className="text-sm font-bold font-mono text-text-strong">
                       ${(data.notional / 1000000).toFixed(2)}M
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs pt-2 border-t border-white/[0.06]">
-                    <span className="text-slate-400">Unrealized P&amp;L:</span>
-                    <span className={`font-mono font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <div className="flex items-center justify-between text-xs pt-2 border-t border-border-subtle">
+                    <span className="text-text-muted">Unrealized P&amp;L:</span>
+                    <span className={`font-mono font-bold ${isPositive ? 'text-positive' : 'text-destructive'}`}>
                       {isPositive ? '+' : ''}${(data.pnl / 1000).toFixed(1)}k
                     </span>
                   </div>
 
-                  <div className="text-[10px] text-slate-400">
-                    Constituents: <span className="text-slate-200">{data.positions.map(p => p.symbol).join(', ')}</span>
+                  <div className="text-[10px] text-text-muted">
+                    Constituents: <span className="text-text-strong">{data.positions.map(p => p.symbol).join(', ')}</span>
                   </div>
                 </div>
               );
@@ -432,28 +432,28 @@ export const PortfolioConcentrationHeatmap: React.FC<PortfolioConcentrationHeatm
       )}
 
       {/* Bottom Summary Bar */}
-      <div className="pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-3 text-[10px] text-slate-400">
+      <div className="pt-3 border-t border-border-subtle flex flex-wrap items-center justify-between gap-3 text-[10px] text-text-muted">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-pink-400"></span>
+            <span className="w-2 h-2 rounded-full bg-accent-magenta"></span>
             <span>Polymarket Prediction CLOB</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+            <span className="w-2 h-2 rounded-full bg-accent"></span>
             <span>Global Equities (Japan/EU/Asia/LatAm)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span className="w-2 h-2 rounded-full bg-warning"></span>
             <span>Commodities (Gold/Brent/Copper)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span className="w-2 h-2 rounded-full bg-positive"></span>
             <span>Forex &amp; EM Carry</span>
           </div>
         </div>
 
-        <div className="font-mono text-slate-300">
-          Constitutional Concentration Cap: <span className="text-cyan-300 font-bold">25.0% Single / 35.0% Class</span> (100% Compliant)
+        <div className="font-mono text-text">
+          Constitutional Concentration Cap: <span className="text-accent font-bold">25.0% Single / 35.0% Class</span> (100% Compliant)
         </div>
       </div>
     </div>

@@ -14,12 +14,12 @@ interface UnavailableProps {
  */
 export const Unavailable: React.FC<UnavailableProps> = ({ reason, title = 'Unavailable' }) => {
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-[#0d0f17] p-8 text-center">
-      <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-amber-700/50 bg-amber-950/40">
-        <Unplug className="h-5 w-5 text-amber-300" />
+    <div className="rounded-lg border border-border-subtle bg-[var(--color-surface-1)] p-8 text-center">
+      <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-warning bg-warning-bg">
+        <Unplug className="h-5 w-5 text-warning" />
       </div>
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-200">{title}</h2>
-      <p className="mx-auto mt-2 max-w-xl text-xs leading-relaxed text-slate-400">{reason}</p>
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-text-strong">{title}</h2>
+      <p className="mx-auto mt-2 max-w-xl text-xs leading-relaxed text-text-muted">{reason}</p>
     </div>
   );
 };

@@ -27,7 +27,7 @@ export const AuditIntegrityWorkspace: React.FC = () => {
   const [copiedHash, setCopiedHash] = useState<boolean>(false);
 
   if (auditQ.loading) {
-    return <div className="text-xs text-slate-400 font-mono p-8">Loading audit log from /api/v1/audit…</div>;
+    return <div className="text-xs text-text-muted font-mono p-8">Loading audit log from /api/v1/audit…</div>;
   }
   if (auditQ.error || !auditQ.data) {
     return <Unavailable title="Audit unavailable" reason={auditQ.error ?? "no audit payload"} />;
@@ -50,18 +50,18 @@ export const AuditIntegrityWorkspace: React.FC = () => {
   return (
     <div className="space-y-4 pb-12 font-mono">
       {/* Header */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <FileCheck2 className="w-4 h-4 text-cyan-400" />
-            <h2 className="text-sm font-bold tracking-wider text-slate-100 uppercase">
+            <FileCheck2 className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold tracking-wider text-text-strong uppercase">
               CRYPTOGRAPHIC AUDIT TRAIL & CONSTITUTIONAL INTEGRITY
             </h2>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-info-bg text-accent border border-accent">
               FRAME 12
             </span>
           </div>
-          <div className="text-xs text-slate-400 mt-0.5">
+          <div className="text-xs text-text-muted mt-0.5">
             {records.length} records (latest 50) • Source: /api/v1/audit • Verify: /api/v1/audit/verify
           </div>
         </div>
@@ -69,7 +69,7 @@ export const AuditIntegrityWorkspace: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setVerifyTick((t) => t + 1)}
-            className="px-4 py-2 rounded bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-700/60 text-cyan-300 text-xs font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.2)] flex items-center gap-2"
+            className="px-4 py-2 rounded bg-info-bg hover:bg-info-bg border border-accent text-accent text-xs font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.2)] flex items-center gap-2"
           >
             <ShieldCheck className={`w-4 h-4 ${verifyQ.loading ? 'animate-spin' : ''}`} />
             <span>{verifyQ.loading ? 'VERIFYING HASH CHAIN…' : 'RE-VERIFY ENTIRE HASH CHAIN'}</span>
@@ -81,7 +81,7 @@ export const AuditIntegrityWorkspace: React.FC = () => {
         <Unavailable title="Chain verification failed" reason={verifyQ.error} />
       )}
       {verify && (
-        <div className={`p-3 rounded border text-xs flex items-center justify-between animate-fade-in ${verify.valid ? 'bg-emerald-950/50 border-emerald-700 text-emerald-300' : 'bg-rose-950/50 border-rose-700 text-rose-300'}`}>
+        <div className={`p-3 rounded border text-xs flex items-center justify-between animate-fade-in ${verify.valid ? 'bg-positive-bg border-positive text-positive' : 'bg-destructive-bg border-destructive text-destructive'}`}>
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4" />
             <span>
@@ -95,38 +95,38 @@ export const AuditIntegrityWorkspace: React.FC = () => {
       )}
 
       {/* Chain Status Card */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl">
-        <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl">
+        <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
           <div className="flex items-center gap-2">
-            <Hash className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-xs font-bold uppercase text-white tracking-wider">
+            <Hash className="w-4 h-4 text-accent" />
+            <h3 className="text-xs font-bold uppercase text-text-strong tracking-wider">
               HASH CHAIN STATUS (SERVER-VERIFIED)
             </h3>
           </div>
-          <span className={`text-[10px] flex items-center gap-1 ${verify?.valid ? 'text-emerald-400' : 'text-slate-400'}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${verify?.valid ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
+          <span className={`text-[10px] flex items-center gap-1 ${verify?.valid ? 'text-positive' : 'text-text-muted'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${verify?.valid ? 'bg-positive animate-pulse' : 'bg-surface-raised'}`}></span>
             {verify ? (verify.valid ? "CHAIN UNBROKEN" : "CHAIN BROKEN") : "NOT YET VERIFIED — PRESS RE-VERIFY"}
           </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 my-3 text-xs">
-          <div className="p-2.5 rounded bg-black/40 border border-white/[0.05]">
-            <div className="text-[9px] text-slate-500 uppercase">BLOCKS CHECKED</div>
-            <div className="text-sm font-bold text-white mt-0.5">{verify ? verify.blocks_checked.toLocaleString() : "—"}</div>
+          <div className="p-2.5 rounded bg-surface-sunken border border-border-subtle">
+            <div className="text-[9px] text-text-subtle uppercase">BLOCKS CHECKED</div>
+            <div className="text-sm font-bold text-text-strong mt-0.5">{verify ? verify.blocks_checked.toLocaleString() : "—"}</div>
           </div>
-          <div className="p-2.5 rounded bg-black/40 border border-white/[0.05]">
-            <div className="text-[9px] text-slate-500 uppercase">RECORDS SHOWN</div>
-            <div className="text-sm font-bold text-cyan-300 mt-0.5">{records.length} TOTAL</div>
+          <div className="p-2.5 rounded bg-surface-sunken border border-border-subtle">
+            <div className="text-[9px] text-text-subtle uppercase">RECORDS SHOWN</div>
+            <div className="text-sm font-bold text-accent mt-0.5">{records.length} TOTAL</div>
           </div>
-          <div className="p-2.5 rounded bg-black/40 border border-white/[0.05]">
-            <div className="text-[9px] text-slate-500 uppercase">CHAIN BREAKS</div>
-            <div className={`text-sm font-bold mt-0.5 ${verify && !verify.valid ? 'text-rose-400' : 'text-emerald-400'}`}>
+          <div className="p-2.5 rounded bg-surface-sunken border border-border-subtle">
+            <div className="text-[9px] text-text-subtle uppercase">CHAIN BREAKS</div>
+            <div className={`text-sm font-bold mt-0.5 ${verify && !verify.valid ? 'text-destructive' : 'text-positive'}`}>
               {verify ? `${verify.breaks.length} DETECTED` : "—"}
             </div>
           </div>
-          <div className="p-2.5 rounded bg-black/40 border border-white/[0.05]">
-            <div className="text-[9px] text-slate-500 uppercase">HASH ALGORITHM</div>
-            <div className="text-sm font-bold text-slate-200 mt-0.5">SHA-256</div>
+          <div className="p-2.5 rounded bg-surface-sunken border border-border-subtle">
+            <div className="text-[9px] text-text-subtle uppercase">HASH ALGORITHM</div>
+            <div className="text-sm font-bold text-text-strong mt-0.5">SHA-256</div>
           </div>
         </div>
       </div>
@@ -134,20 +134,20 @@ export const AuditIntegrityWorkspace: React.FC = () => {
       {/* Grid: Audit Log Table + Raw Inspector */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
         {/* Audit Log Table */}
-        <div className="xl:col-span-7 bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl">
-          <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+        <div className="xl:col-span-7 bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl">
+          <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
             <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-cyan-400" />
-              <h3 className="text-xs font-bold uppercase text-white tracking-wider">
+              <Activity className="w-4 h-4 text-accent" />
+              <h3 className="text-xs font-bold uppercase text-text-strong tracking-wider">
                 CRYPTOGRAPHIC EVENT STREAM
               </h3>
             </div>
-            <span className="text-[10px] text-slate-400">SELECT TO INSPECT RAW HASH</span>
+            <span className="text-[10px] text-text-muted">SELECT TO INSPECT RAW HASH</span>
           </div>
 
           <div className="space-y-2 my-3">
             {records.length === 0 && (
-              <div className="p-6 text-center text-slate-500 text-xs">
+              <div className="p-6 text-center text-text-subtle text-xs">
                 Event log is empty. Nothing has been recorded yet.
               </div>
             )}
@@ -159,24 +159,24 @@ export const AuditIntegrityWorkspace: React.FC = () => {
                   onClick={() => setSelectedId(rec.id ?? null)}
                   className={`p-3 rounded border transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-cyan-950/30 border-cyan-500/50 shadow-[0_0_12px_rgba(0,240,255,0.1)]'
-                      : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'
+                      ? 'bg-info-bg border-accent shadow-[0_0_12px_rgba(0,240,255,0.1)]'
+                      : 'bg-surface-veil border-border-subtle hover:bg-surface-veil'
                   }`}
                 >
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-[10px] font-bold text-cyan-400 uppercase">
+                    <span className="text-[10px] font-bold text-accent uppercase">
                       SEQ #{rec.seq} • {rec.eventType}
                     </span>
-                    <span className="text-[10px] text-slate-500">{rec.timestamp}</span>
+                    <span className="text-[10px] text-text-subtle">{rec.timestamp}</span>
                   </div>
 
-                  <div className="text-xs text-slate-200 font-medium mt-1">
+                  <div className="text-xs text-text-strong font-medium mt-1">
                     {rec.actionSummary}
                   </div>
 
-                  <div className="mt-2 text-[10px] text-slate-500 flex items-center justify-between pt-1 border-t border-white/[0.04]">
-                    <span>ACTOR: <strong className="text-slate-300">{rec.actor}</strong></span>
-                    <span className="text-slate-500">
+                  <div className="mt-2 text-[10px] text-text-subtle flex items-center justify-between pt-1 border-t border-border-subtle">
+                    <span>ACTOR: <strong className="text-text">{rec.actor}</strong></span>
+                    <span className="text-text-subtle">
                       PER-ROW PROOF: NOT PUBLISHED
                     </span>
                   </div>
@@ -188,16 +188,16 @@ export const AuditIntegrityWorkspace: React.FC = () => {
 
         {/* Selected Record Raw Inspector */}
         <div className="xl:col-span-5 space-y-4">
-          <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
-              <div className="text-[10px] text-cyan-400 uppercase font-bold tracking-widest">
+          <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-border-subtle">
+              <div className="text-[10px] text-accent uppercase font-bold tracking-widest">
                 RAW RECORD INSPECTOR
               </div>
               <button
                 onClick={() => selectedRecord && handleCopy(JSON.stringify(selectedRecord.payload, null, 2))}
-                className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 px-2 py-0.5 rounded bg-white/[0.04]"
+                className="text-[10px] text-text-muted hover:text-text-strong flex items-center gap-1 px-2 py-0.5 rounded bg-surface-veil"
               >
-                {copiedHash ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                {copiedHash ? <Check className="w-3 h-3 text-positive" /> : <Copy className="w-3 h-3" />}
                 <span>{copiedHash ? 'COPIED' : 'COPY JSON'}</span>
               </button>
             </div>
@@ -205,19 +205,19 @@ export const AuditIntegrityWorkspace: React.FC = () => {
             {selectedRecord ? (
               <>
                 <div className="text-xs space-y-1.5">
-                  <div>SEQ: <span className="text-cyan-300 text-[11px]">{selectedRecord.seq}</span></div>
-                  <div>REF: <span className="text-slate-400 text-[11px]">{selectedRecord.refId ?? "—"}</span></div>
+                  <div>SEQ: <span className="text-accent text-[11px]">{selectedRecord.seq}</span></div>
+                  <div>REF: <span className="text-text-muted text-[11px]">{selectedRecord.refId ?? "—"}</span></div>
                 </div>
 
-                <div className="pt-2 border-t border-white/[0.06]">
-                  <div className="text-[10px] text-slate-500 mb-1 uppercase">RAW JSON PAYLOAD:</div>
-                  <pre className="p-2.5 rounded bg-black/60 border border-white/[0.05] text-[10px] text-slate-300 overflow-x-auto max-h-48 font-mono">
+                <div className="pt-2 border-t border-border-subtle">
+                  <div className="text-[10px] text-text-subtle mb-1 uppercase">RAW JSON PAYLOAD:</div>
+                  <pre className="p-2.5 rounded bg-surface-deep border border-border-subtle text-[10px] text-text overflow-x-auto max-h-48 font-mono">
                     {JSON.stringify(selectedRecord.payload, null, 2)}
                   </pre>
                 </div>
               </>
             ) : (
-              <div className="text-xs text-slate-500">No record selected.</div>
+              <div className="text-xs text-text-subtle">No record selected.</div>
             )}
           </div>
         </div>

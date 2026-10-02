@@ -174,33 +174,33 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
   return (
     <div className="space-y-4 pb-16 font-mono text-xs">
       {/* Workspace Header */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-cyan-400" />
-            <h2 className="text-sm font-bold tracking-wider text-slate-100 uppercase">
+            <Sliders className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold tracking-wider text-text-strong uppercase">
               INSTITUTIONAL SETTINGS & SYSTEM CONFIGURATION
             </h2>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-bold">
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-info-bg text-accent border border-accent font-bold">
               MASTER CONTROL
             </span>
           </div>
-          <div className="text-xs text-slate-400 mt-0.5">
+          <div className="text-xs text-text-muted mt-0.5">
             Operational Constitution • Risk Governance • Multi-Agent LLMs • Smart Order Routing • Cryptographic Enforcers
           </div>
         </div>
 
         {/* Global Save / Revert Bar (server is source of truth) */}
         <div className="flex items-center gap-2.5">
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-black/40 border border-white/[0.06] text-slate-400">
-            <Fingerprint className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="text-[10px]">SETTINGS: <span className="text-cyan-300 font-mono">{serverAvailable && serverVersion !== null ? `v${serverVersion} (server)` : 'server plane unwired'}</span></span>
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-sunken border border-border-subtle text-text-muted">
+            <Fingerprint className="w-3.5 h-3.5 text-accent" />
+            <span className="text-[10px]">SETTINGS: <span className="text-accent font-mono">{serverAvailable && serverVersion !== null ? `v${serverVersion} (server)` : 'server plane unwired'}</span></span>
           </div>
 
           {isDirty && (
             <button
               onClick={handleRevert}
-              className="px-3 py-1.5 rounded bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded bg-surface-veil hover:bg-surface-raised text-text hover:text-text-strong transition-colors flex items-center gap-1.5"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>REVERT</span>
@@ -213,8 +213,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
             title={!serverAvailable ? (serverReason ?? 'settings plane not wired') : undefined}
             className={`px-4 py-1.5 rounded font-bold transition-all flex items-center gap-1.5 ${
               isDirty && serverAvailable && !isSaving
-                ? 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-[0_0_16px_rgba(0,240,255,0.4)] animate-pulse'
-                : 'bg-white/[0.05] text-slate-500 border border-white/[0.08] cursor-not-allowed'
+                ? 'bg-accent hover:bg-accent text-text-strong shadow-[0_0_16px_rgba(0,240,255,0.4)] animate-pulse'
+                : 'bg-surface-raised text-text-subtle border border-border-strong cursor-not-allowed'
             }`}
           >
             <Save className="w-3.5 h-3.5" />
@@ -224,19 +224,19 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
       </div>
 
       {!serverAvailable && (
-        <div className="p-3 rounded bg-amber-950/30 border border-amber-800/50 text-amber-200 text-xs">
+        <div className="p-3 rounded bg-warning-bg border border-warning text-warning text-xs">
           Settings plane unwired: {serverReason ?? 'no reason published'}. The form below shows neutral
           defaults — edits are held locally and cannot persist until the plane is wired.
         </div>
       )}
       {authBlocked && (
-        <div className="p-3 rounded bg-rose-950/30 border border-rose-800/50 text-rose-200 text-xs">
+        <div className="p-3 rounded bg-destructive-bg border border-destructive text-destructive text-xs">
           Operator token required: PUT /api/v1/settings/v1 answered 401. Set your bearer token via the
           identity control (client.ts) and retry — edits are kept, nothing was saved.
         </div>
       )}
       {saveError && !authBlocked && (
-        <div className="p-3 rounded bg-rose-950/30 border border-rose-800/50 text-rose-200 text-xs">
+        <div className="p-3 rounded bg-destructive-bg border border-destructive text-destructive text-xs">
           Save failed: {saveError}
         </div>
       )}
@@ -244,10 +244,10 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
       {/* Main Split Layout: Left Settings Nav + Right Setting Pane */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         {/* Settings Navigation Column */}
-        <div className="lg:col-span-3 bg-[#0d0f17] border border-white/[0.08] rounded-md p-2 shadow-2xl space-y-1">
-          <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-white/[0.06] mb-1 flex items-center justify-between">
+        <div className="lg:col-span-3 bg-[var(--color-surface-1)] border border-border-strong rounded-md p-2 shadow-2xl space-y-1">
+          <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-text-muted border-b border-border-subtle mb-1 flex items-center justify-between">
             <span>Modules</span>
-            <span className="text-[9px] text-cyan-400">{navItems.length} Sections</span>
+            <span className="text-[9px] text-accent">{navItems.length} Sections</span>
           </div>
 
           {navItems.map((item) => {
@@ -259,16 +259,16 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                 onClick={() => setActiveSection(item.id)}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded transition-all text-left group ${
                   isActive
-                    ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-700/50 shadow-[0_0_12px_rgba(0,240,255,0.15)] font-semibold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.03] border border-transparent'
+                    ? 'bg-info-bg text-accent border border-accent shadow-[0_0_12px_rgba(0,240,255,0.15)] font-semibold'
+                    : 'text-text-muted hover:text-text-strong hover:bg-surface-veil border border-transparent'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-slate-300'}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-accent' : 'text-text-muted group-hover:text-text'}`} />
                   <span className="text-xs">{item.label}</span>
                 </div>
                 {item.badge && (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-black/40 text-slate-400 border border-white/[0.06]">
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-surface-sunken text-text-muted border border-border-subtle">
                     {item.badge}
                   </span>
                 )}
@@ -276,14 +276,14 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
             );
           })}
 
-          <div className="pt-3 mt-3 border-t border-white/[0.06] px-2 text-[10px] text-slate-400 space-y-1">
+          <div className="pt-3 mt-3 border-t border-border-subtle px-2 text-[10px] text-text-muted space-y-1">
             <div className="flex justify-between">
               <span>SERVER VERSION:</span>
-              <strong className="text-slate-300">{serverAvailable && serverVersion !== null ? `v${serverVersion}` : '—'}</strong>
+              <strong className="text-text">{serverAvailable && serverVersion !== null ? `v${serverVersion}` : '—'}</strong>
             </div>
             <div className="flex justify-between">
               <span>UNSaved EDITS:</span>
-              <strong className={isDirty ? 'text-amber-300' : 'text-slate-500'}>{isDirty ? 'YES' : 'NO'}</strong>
+              <strong className={isDirty ? 'text-warning' : 'text-text-subtle'}>{isDirty ? 'YES' : 'NO'}</strong>
             </div>
           </div>
         </div>
@@ -293,18 +293,18 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           
           {/* SECTION 1: Autonomy & Governance */}
           {activeSection === 'autonomy' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex items-center justify-between">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-accent" />
                     AUTONOMY LEVEL, EXECUTION MODE & SCHEDULE GOVERNANCE
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Define the execution authorization boundaries for multi-agent trading models.
                   </p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-info-bg text-accent border border-accent">
                   CURRENT: {formState.autonomyLevel}
                 </span>
               </div>
@@ -344,22 +344,22 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                       onClick={() => handleChange('autonomyLevel', item.level as AutonomyLevel)}
                       className={`p-3.5 rounded border cursor-pointer transition-all ${
                         isSelected
-                          ? 'bg-cyan-950/40 border-cyan-500 text-white shadow-[0_0_16px_rgba(0,240,255,0.15)]'
-                          : 'bg-white/[0.02] border-white/[0.07] text-slate-300 hover:bg-white/[0.04]'
+                          ? 'bg-info-bg border-accent text-text-strong shadow-[0_0_16px_rgba(0,240,255,0.15)]'
+                          : 'bg-surface-veil border-border-subtle text-text hover:bg-surface-veil'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-full border flex items-center justify-center ${isSelected ? 'border-cyan-400 bg-cyan-400/20' : 'border-slate-600'}`}>
-                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />}
+                          <div className={`w-3 h-3 rounded-full border flex items-center justify-center ${isSelected ? 'border-accent bg-accent' : 'border-border-subtle'}`}>
+                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-accent" />}
                           </div>
                           <span className="font-bold text-xs">{item.title}</span>
                         </div>
-                        <span className="text-[9px] font-mono px-1 rounded bg-black/40 border border-white/[0.08] text-slate-400">
+                        <span className="text-[9px] font-mono px-1 rounded bg-surface-sunken border border-border-strong text-text-muted">
                           {item.badge}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-400 pl-5 leading-relaxed">
+                      <p className="text-[11px] text-text-muted pl-5 leading-relaxed">
                         {item.desc}
                       </p>
                     </div>
@@ -369,18 +369,18 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
               {/* Execution Mode & Trading Windows */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
+                <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
                   <div>
-                    <div className="font-bold text-white text-xs">Default Execution Mode</div>
-                    <div className="text-slate-400 text-[11px]">Toggle between simulated paper sandbox and live exchange gateways.</div>
+                    <div className="font-bold text-text-strong text-xs">Default Execution Mode</div>
+                    <div className="text-text-muted text-[11px]">Toggle between simulated paper sandbox and live exchange gateways.</div>
                   </div>
-                  <div className="flex items-center gap-2 bg-black/50 p-1 rounded border border-white/[0.08]">
+                  <div className="flex items-center gap-2 bg-surface-deep p-1 rounded border border-border-strong">
                     <button
                       onClick={() => handleChange('defaultExecutionMode', 'PAPER')}
                       className={`flex-1 py-1 rounded transition-colors text-xs font-mono ${
                         formState.defaultExecutionMode === 'PAPER'
-                          ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60 font-bold'
-                          : 'text-slate-400 hover:text-white'
+                          ? 'bg-info-bg text-accent border border-accent font-bold'
+                          : 'text-text-muted hover:text-text-strong'
                       }`}
                     >
                       PAPER SIMULATION
@@ -389,8 +389,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                       onClick={() => handleChange('defaultExecutionMode', 'LIVE')}
                       className={`flex-1 py-1 rounded transition-colors text-xs font-mono ${
                         formState.defaultExecutionMode === 'LIVE'
-                          ? 'bg-amber-950 text-amber-300 border border-amber-600 font-bold'
-                          : 'text-slate-400 hover:text-white'
+                          ? 'bg-warning-bg text-warning border border-warning font-bold'
+                          : 'text-text-muted hover:text-text-strong'
                       }`}
                     >
                       LIVE GATEWAY
@@ -398,9 +398,9 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                   </div>
                 </div>
 
-                <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
-                  <div className="font-bold text-white text-xs">Trading Window Schedule</div>
-                  <div className="text-slate-400 text-[11px]">Restrict autonomous trading to specific regional market sessions.</div>
+                <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-2">
+                  <div className="font-bold text-text-strong text-xs">Trading Window Schedule</div>
+                  <div className="text-text-muted text-[11px]">Restrict autonomous trading to specific regional market sessions.</div>
                   <div className="grid grid-cols-3 gap-1 pt-1">
                     {[
                       { id: '24_7_GLOBAL', label: '24/7 Global' },
@@ -412,8 +412,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                         onClick={() => handleChange('tradingWindowMode', w.id as any)}
                         className={`py-1 px-1 rounded text-[11px] font-mono transition-colors truncate border ${
                           formState.tradingWindowMode === w.id
-                            ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-bold'
-                            : 'bg-black/40 text-slate-400 border-white/[0.08]'
+                            ? 'bg-info-bg text-accent border-accent font-bold'
+                            : 'bg-surface-sunken text-text-muted border-border-strong'
                         }`}
                       >
                         {w.label}
@@ -425,45 +425,45 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
               {/* Multi-Sig & Anomaly De-escalation & Cooldown */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
-                  <div className="font-bold text-white text-xs">Multi-Signature Threshold</div>
-                  <div className="text-slate-400 text-[11px]">Orders exceeding this require 2-of-3 keys.</div>
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
+                  <div className="font-bold text-text-strong text-xs">Multi-Signature Threshold</div>
+                  <div className="text-text-muted text-[11px]">Orders exceeding this require 2-of-3 keys.</div>
                   <div className="flex items-center gap-2 pt-1">
-                    <span className="text-slate-400">$</span>
+                    <span className="text-text-muted">$</span>
                     <input
                       type="number"
                       value={formState.multiSigThresholdUsd}
                       onChange={(e) => handleChange('multiSigThresholdUsd', Number(e.target.value))}
-                      className="bg-black/50 border border-white/[0.1] rounded px-3 py-1 text-xs text-white font-mono w-full focus:border-cyan-500 focus:outline-none"
+                      className="bg-surface-deep border border-border-strong rounded px-3 py-1 text-xs text-text-strong font-mono w-full focus:border-accent focus:outline-none"
                     />
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
-                  <div className="font-bold text-white text-xs">Rebalance Cooldown</div>
-                  <div className="text-slate-400 text-[11px]">Minimum buffer between automated rebalances.</div>
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
+                  <div className="font-bold text-text-strong text-xs">Rebalance Cooldown</div>
+                  <div className="text-text-muted text-[11px]">Minimum buffer between automated rebalances.</div>
                   <div className="flex items-center gap-2 pt-1">
                     <input
                       type="number"
                       value={formState.rebalanceCooldownMinutes}
                       onChange={(e) => handleChange('rebalanceCooldownMinutes', Number(e.target.value))}
-                      className="bg-black/50 border border-white/[0.1] rounded px-3 py-1 text-xs text-white font-mono w-full focus:border-cyan-500 focus:outline-none"
+                      className="bg-surface-deep border border-border-strong rounded px-3 py-1 text-xs text-text-strong font-mono w-full focus:border-accent focus:outline-none"
                     />
-                    <span className="text-slate-400">min</span>
+                    <span className="text-text-muted">min</span>
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex items-center justify-between">
-                    <div className="font-bold text-white text-xs">Anomaly De-escalation</div>
+                    <div className="font-bold text-text-strong text-xs">Anomaly De-escalation</div>
                     <input
                       type="checkbox"
                       checked={formState.autoDeescalateOnAnomaly}
                       onChange={(e) => handleChange('autoDeescalateOnAnomaly', e.target.checked)}
-                      className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                      className="w-4 h-4 rounded accent-accent cursor-pointer"
                     />
                   </div>
-                  <div className="text-slate-400 text-[11px]">Step down to MANUAL if covariance matrix detects &gt;3σ shock.</div>
+                  <div className="text-text-muted text-[11px]">Step down to MANUAL if covariance matrix detects &gt;3σ shock.</div>
                 </div>
               </div>
             </div>
@@ -471,36 +471,36 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           {/* SECTION 2: Risk Limits & Firewall */}
           {activeSection === 'risk' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex items-center justify-between">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-warning" />
                     RISK LIMITS & CONSTITUTIONAL FIREWALL RULES
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Immutable guardrails enforced at kernel level before any order can enter the SOR execution pipeline.
                   </p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800 font-bold">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-warning-bg text-warning border border-warning font-bold">
                   CONSTITUTION §2.1 ENFORCED
                 </span>
               </div>
 
               {/* Drawdown Tier Sliders */}
-              <div className="space-y-4 p-4 rounded bg-white/[0.02] border border-white/[0.06]">
-                <div className="font-bold text-white text-xs uppercase tracking-wider">
+              <div className="space-y-4 p-4 rounded bg-surface-veil border border-border-subtle">
+                <div className="font-bold text-text-strong text-xs uppercase tracking-wider">
                   Tiered Drawdown De-risking Escalation
                 </div>
 
                 {/* Tier 1: Warning */}
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-300 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+                    <span className="text-text flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-warning"></span>
                       Tier 1: Warning & Scrutiny Threshold
                     </span>
-                    <span className="font-bold text-yellow-300 font-mono">{formState.warningDrawdownPct.toFixed(2)}% DD</span>
+                    <span className="font-bold text-warning font-mono">{formState.warningDrawdownPct.toFixed(2)}% DD</span>
                   </div>
                   <input
                     type="range"
@@ -509,19 +509,19 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="0.05"
                     value={formState.warningDrawdownPct}
                     onChange={(e) => handleChange('warningDrawdownPct', parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-yellow-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-warning"
                   />
-                  <div className="text-[10px] text-slate-400">Agents pause high-beta expansion; alert dispatched to risk desk.</div>
+                  <div className="text-[10px] text-text-muted">Agents pause high-beta expansion; alert dispatched to risk desk.</div>
                 </div>
 
                 {/* Tier 2: De-risking */}
                 <div className="space-y-1 pt-2">
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-300 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span className="text-text flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-warning"></span>
                       Tier 2: Mandatory De-risking & Size Halving
                     </span>
-                    <span className="font-bold text-amber-400 font-mono">{formState.deriskDrawdownPct.toFixed(2)}% DD</span>
+                    <span className="font-bold text-warning font-mono">{formState.deriskDrawdownPct.toFixed(2)}% DD</span>
                   </div>
                   <input
                     type="range"
@@ -530,19 +530,19 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="0.05"
                     value={formState.deriskDrawdownPct}
                     onChange={(e) => handleChange('deriskDrawdownPct', parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-warning"
                   />
-                  <div className="text-[10px] text-slate-400">System cuts gross exposure by 50% and flattens top 2 high-beta positions.</div>
+                  <div className="text-[10px] text-text-muted">System cuts gross exposure by 50% and flattens top 2 high-beta positions.</div>
                 </div>
 
                 {/* Tier 3: Emergency Halt */}
                 <div className="space-y-1 pt-2">
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-300 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                    <span className="text-text flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-destructive"></span>
                       Tier 3: Emergency Kill Switch & Liquidation Halt
                     </span>
-                    <span className="font-bold text-rose-400 font-mono">{formState.emergencyHaltDrawdownPct.toFixed(2)}% DD</span>
+                    <span className="font-bold text-destructive font-mono">{formState.emergencyHaltDrawdownPct.toFixed(2)}% DD</span>
                   </div>
                   <input
                     type="range"
@@ -551,18 +551,18 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="0.05"
                     value={formState.emergencyHaltDrawdownPct}
                     onChange={(e) => handleChange('emergencyHaltDrawdownPct', parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-destructive"
                   />
-                  <div className="text-[10px] text-slate-400">HARD CEILING (Constitution Rule #1): Cancels open orders and flattens to cash.</div>
+                  <div className="text-[10px] text-text-muted">HARD CEILING (Constitution Rule #1): Cancels open orders and flattens to cash.</div>
                 </div>
               </div>
 
               {/* Concentration Caps & Tail Risk Limits */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Max Single Asset Cap</span>
-                    <span className="text-cyan-300 font-mono">{formState.maxPositionConcentrationPct}%</span>
+                    <span className="font-bold text-text-strong text-xs">Max Single Asset Cap</span>
+                    <span className="text-accent font-mono">{formState.maxPositionConcentrationPct}%</span>
                   </div>
                   <input
                     type="range"
@@ -571,15 +571,15 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="1"
                     value={formState.maxPositionConcentrationPct}
                     onChange={(e) => handleChange('maxPositionConcentrationPct', parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="text-[10px] text-slate-400">Max portfolio allocation in one symbol.</div>
+                  <div className="text-[10px] text-text-muted">Max portfolio allocation in one symbol.</div>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Max Asset Class Cap</span>
-                    <span className="text-cyan-300 font-mono">{formState.maxClassExposurePct}%</span>
+                    <span className="font-bold text-text-strong text-xs">Max Asset Class Cap</span>
+                    <span className="text-accent font-mono">{formState.maxClassExposurePct}%</span>
                   </div>
                   <input
                     type="range"
@@ -588,15 +588,15 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="1"
                     value={formState.maxClassExposurePct}
                     onChange={(e) => handleChange('maxClassExposurePct', parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="text-[10px] text-slate-400">Max exposure to Equities or Crypto.</div>
+                  <div className="text-[10px] text-text-muted">Max exposure to Equities or Crypto.</div>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Expected Shortfall (CVaR)</span>
-                    <span className="text-amber-400 font-mono">{formState.expectedShortfallCapPct}%</span>
+                    <span className="font-bold text-text-strong text-xs">Expected Shortfall (CVaR)</span>
+                    <span className="text-warning font-mono">{formState.expectedShortfallCapPct}%</span>
                   </div>
                   <input
                     type="range"
@@ -605,34 +605,34 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="0.25"
                     value={formState.expectedShortfallCapPct}
                     onChange={(e) => handleChange('expectedShortfallCapPct', parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-warning"
                   />
-                  <div className="text-[10px] text-slate-400">99.9% 1-day tail risk loss budget.</div>
+                  <div className="text-[10px] text-text-muted">99.9% 1-day tail risk loss budget.</div>
                 </div>
               </div>
 
               {/* Leverage & Overnight Protocols */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Cash-Only Discipline (1.0x Gross Leverage)</div>
-                    <div className="text-slate-400 text-[11px]">Strict cash-settled balance sheet. Never borrow margin or deploy debt.</div>
+                    <div className="font-bold text-text-strong text-xs">Cash-Only Discipline (1.0x Gross Leverage)</div>
+                    <div className="text-text-muted text-[11px]">Strict cash-settled balance sheet. Never borrow margin or deploy debt.</div>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-positive-bg text-positive border border-positive font-bold">
                     ENFORCED
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Overnight De-risking Protocol</div>
-                    <div className="text-slate-400 text-[11px]">Reduce perpetual exposure by 20% prior to Asian session rollover.</div>
+                    <div className="font-bold text-text-strong text-xs">Overnight De-risking Protocol</div>
+                    <div className="text-text-muted text-[11px]">Reduce perpetual exposure by 20% prior to Asian session rollover.</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={formState.overnightDerisking}
                     onChange={(e) => handleChange('overnightDerisking', e.target.checked)}
-                    className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                    className="w-4 h-4 rounded accent-accent cursor-pointer"
                   />
                 </div>
               </div>
@@ -641,28 +641,28 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           {/* SECTION 3: Multi-Agent Tuning & LLM Model Gatekeeper */}
           {activeSection === 'agents' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex items-center justify-between">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <BrainCircuit className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <BrainCircuit className="w-4 h-4 text-accent" />
                     MULTI-AGENT CONSENSUS, DEBATE GOVERNANCE & LLM ROUTING
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Configure LangGraph voting quorums, adversarial cross-examination, and per-agent foundation model backends.
                   </p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-bold">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-info-bg text-accent border border-accent font-bold">
                   LANGGRAPH ORCHESTRATOR
                 </span>
               </div>
 
               {/* Consensus Threshold & Debate Rounds */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Supermajority Consensus Quorum</span>
-                    <span className="text-cyan-300 font-mono font-bold">{formState.minConsensusThresholdPct}%</span>
+                    <span className="font-bold text-text-strong text-xs">Supermajority Consensus Quorum</span>
+                    <span className="text-accent font-mono font-bold">{formState.minConsensusThresholdPct}%</span>
                   </div>
                   <input
                     type="range"
@@ -671,13 +671,13 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="1"
                     value={formState.minConsensusThresholdPct}
                     onChange={(e) => handleChange('minConsensusThresholdPct', parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="text-[10px] text-slate-400">Proposals need ≥{formState.minConsensusThresholdPct}% agreement to pass the synthesis gate.</div>
+                  <div className="text-[10px] text-text-muted">Proposals need ≥{formState.minConsensusThresholdPct}% agreement to pass the synthesis gate.</div>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
-                  <div className="font-bold text-white text-xs">Maximum Adversarial Debate Rounds</div>
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
+                  <div className="font-bold text-text-strong text-xs">Maximum Adversarial Debate Rounds</div>
                   <div className="flex gap-2 pt-1">
                     {[1, 2, 3, 5].map((rounds) => (
                       <button
@@ -685,8 +685,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                         onClick={() => handleChange('maxDebateRounds', rounds)}
                         className={`flex-1 py-1 rounded text-xs font-mono transition-colors border ${
                           formState.maxDebateRounds === rounds
-                            ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-bold'
-                            : 'bg-black/40 text-slate-400 border-white/[0.08]'
+                            ? 'bg-info-bg text-accent border-accent font-bold'
+                            : 'bg-surface-sunken text-text-muted border-border-strong'
                         }`}
                       >
                         {rounds} {rounds === 1 ? 'Round' : 'Rounds'}
@@ -697,22 +697,22 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
               </div>
 
               {/* Dedicated Model Routing */}
-              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
-                <div className="font-bold text-white text-xs uppercase tracking-wider flex items-center justify-between">
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
+                <div className="font-bold text-text-strong text-xs uppercase tracking-wider flex items-center justify-between">
                   <span>Dedicated LLM Model Routing per Agent Specialist</span>
-                  <span className="text-[10px] text-cyan-400">Multi-Model Ensemble</span>
+                  <span className="text-[10px] text-accent">Multi-Model Ensemble</span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                  <div className="space-y-1 p-2.5 rounded bg-black/30 border border-white/[0.04]">
+                  <div className="space-y-1 p-2.5 rounded bg-surface-sunken border border-border-subtle">
                     <div className="flex justify-between text-xs">
-                      <span className="font-bold text-slate-200">Macro Regime Specialist</span>
-                      <span className="text-cyan-300 font-mono text-[10px]">High Context</span>
+                      <span className="font-bold text-text-strong">Macro Regime Specialist</span>
+                      <span className="text-accent font-mono text-[10px]">High Context</span>
                     </div>
                     <select
                       value={formState.macroAgentModel}
                       onChange={(e) => handleChange('macroAgentModel', e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.1] rounded px-2.5 py-1 text-xs text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-surface-deep border border-border-strong rounded px-2.5 py-1 text-xs text-text-strong font-mono focus:border-accent focus:outline-none"
                     >
                       <option value="Gemini 2.5 Pro (Thinking)">Gemini 2.5 Pro (Thinking &amp; Macro Ingestion)</option>
                       <option value="Claude 3.5 Sonnet">Claude 3.5 Sonnet (Synthesizer)</option>
@@ -720,15 +720,15 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     </select>
                   </div>
 
-                  <div className="space-y-1 p-2.5 rounded bg-black/30 border border-white/[0.04]">
+                  <div className="space-y-1 p-2.5 rounded bg-surface-sunken border border-border-subtle">
                     <div className="flex justify-between text-xs">
-                      <span className="font-bold text-slate-200">Quant Momentum Specialist</span>
-                      <span className="text-emerald-300 font-mono text-[10px]">Fast Inference</span>
+                      <span className="font-bold text-text-strong">Quant Momentum Specialist</span>
+                      <span className="text-positive font-mono text-[10px]">Fast Inference</span>
                     </div>
                     <select
                       value={formState.quantAgentModel}
                       onChange={(e) => handleChange('quantAgentModel', e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.1] rounded px-2.5 py-1 text-xs text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-surface-deep border border-border-strong rounded px-2.5 py-1 text-xs text-text-strong font-mono focus:border-accent focus:outline-none"
                     >
                       <option value="DeepSeek R1 / Flash Hybrid">DeepSeek R1 / Flash Hybrid (Chain of Thought)</option>
                       <option value="Gemini 2.5 Flash">Gemini 2.5 Flash (Sub-100ms)</option>
@@ -736,30 +736,30 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     </select>
                   </div>
 
-                  <div className="space-y-1 p-2.5 rounded bg-black/30 border border-white/[0.04]">
+                  <div className="space-y-1 p-2.5 rounded bg-surface-sunken border border-border-subtle">
                     <div className="flex justify-between text-xs">
-                      <span className="font-bold text-slate-200">Sentiment &amp; Flow Specialist</span>
-                      <span className="text-cyan-300 font-mono text-[10px]">News Stream</span>
+                      <span className="font-bold text-text-strong">Sentiment &amp; Flow Specialist</span>
+                      <span className="text-accent font-mono text-[10px]">News Stream</span>
                     </div>
                     <select
                       value={formState.sentimentAgentModel}
                       onChange={(e) => handleChange('sentimentAgentModel', e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.1] rounded px-2.5 py-1 text-xs text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-surface-deep border border-border-strong rounded px-2.5 py-1 text-xs text-text-strong font-mono focus:border-accent focus:outline-none"
                     >
                       <option value="Gemini 2.5 Flash">Gemini 2.5 Flash (Real-time Stream)</option>
                       <option value="Llama 3.3 70B Fast">Llama 3.3 70B Fast Tokenizer</option>
                     </select>
                   </div>
 
-                  <div className="space-y-1 p-2.5 rounded bg-black/30 border border-white/[0.04]">
+                  <div className="space-y-1 p-2.5 rounded bg-surface-sunken border border-border-subtle">
                     <div className="flex justify-between text-xs">
-                      <span className="font-bold text-rose-300">Risk Sentinel &amp; Adversary Gate</span>
-                      <span className="text-rose-400 font-mono text-[10px]">Hard Veto</span>
+                      <span className="font-bold text-destructive">Risk Sentinel &amp; Adversary Gate</span>
+                      <span className="text-destructive font-mono text-[10px]">Hard Veto</span>
                     </div>
                     <select
                       value={formState.riskSentinelModel}
                       onChange={(e) => handleChange('riskSentinelModel', e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.1] rounded px-2.5 py-1 text-xs text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-surface-deep border border-border-strong rounded px-2.5 py-1 text-xs text-text-strong font-mono focus:border-accent focus:outline-none"
                     >
                       <option value="Deterministic Rust + Gemini 2.5 Pro">Deterministic Rust + Gemini 2.5 Pro Veto</option>
                       <option value="Formal Verification SMT + Python">Formal Verification SMT Solver</option>
@@ -770,10 +770,10 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
               {/* Temperature & Prompt Injection Guard */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Inference Temperature</span>
-                    <span className="text-cyan-300 font-mono font-bold">{formState.inferenceTemperature.toFixed(2)} (Deterministic)</span>
+                    <span className="font-bold text-text-strong text-xs">Inference Temperature</span>
+                    <span className="text-accent font-mono font-bold">{formState.inferenceTemperature.toFixed(2)} (Deterministic)</span>
                   </div>
                   <input
                     type="range"
@@ -782,21 +782,21 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="0.05"
                     value={formState.inferenceTemperature}
                     onChange={(e) => handleChange('inferenceTemperature', parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="text-[10px] text-slate-400">Low temperature minimizes hallucination and ensures math consistency.</div>
+                  <div className="text-[10px] text-text-muted">Low temperature minimizes hallucination and ensures math consistency.</div>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Prompt Injection Sanitizer &amp; Guardrail</div>
-                    <div className="text-slate-400 text-[11px]">Strips adversarial inputs from web scrape and social sentiment feeds.</div>
+                    <div className="font-bold text-text-strong text-xs">Prompt Injection Sanitizer &amp; Guardrail</div>
+                    <div className="text-text-muted text-[11px]">Strips adversarial inputs from web scrape and social sentiment feeds.</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={formState.promptSanitizerActive}
                     onChange={(e) => handleChange('promptSanitizerActive', e.target.checked)}
-                    className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                    className="w-4 h-4 rounded accent-accent cursor-pointer"
                   />
                 </div>
               </div>
@@ -805,26 +805,26 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           {/* SECTION 4: Execution & Venues */}
           {activeSection === 'execution' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex items-center justify-between">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-accent" />
                     SMART ORDER ROUTING (SOR) & VENUE GATEWAYS
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Configure institutional FIX protocols, latency thresholds, slicing engines, and dark pool routing.
                   </p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-positive-bg text-positive border border-positive font-bold">
                   ALL 5 GATEWAYS ONLINE
                 </span>
               </div>
 
               {/* Execution Algorithm & Slippage */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
-                  <div className="font-bold text-white text-xs">Default Algorithmic Slicer</div>
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
+                  <div className="font-bold text-text-strong text-xs">Default Algorithmic Slicer</div>
                   <div className="grid grid-cols-3 gap-1.5 pt-1">
                     {(['TWAP', 'VWAP', 'POV', 'ICEBERG', 'IMPLEMENTATION_SHORTFALL'] as const).map((algo) => (
                       <button
@@ -832,8 +832,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                         onClick={() => handleChange('defaultAlgorithm', algo)}
                         className={`py-1 px-1 rounded text-[11px] font-mono transition-colors truncate border ${
                           formState.defaultAlgorithm === algo
-                            ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-bold'
-                            : 'bg-black/40 text-slate-400 border-white/[0.08]'
+                            ? 'bg-info-bg text-accent border-accent font-bold'
+                            : 'bg-surface-sunken text-text-muted border-border-strong'
                         }`}
                       >
                         {algo}
@@ -842,10 +842,10 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Max Allowed Slippage Tolerance</span>
-                    <span className="text-emerald-400 font-mono font-bold">{formState.maxSlippageBps} BPS</span>
+                    <span className="font-bold text-text-strong text-xs">Max Allowed Slippage Tolerance</span>
+                    <span className="text-positive font-mono font-bold">{formState.maxSlippageBps} BPS</span>
                   </div>
                   <input
                     type="range"
@@ -854,45 +854,45 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="0.5"
                     value={formState.maxSlippageBps}
                     onChange={(e) => handleChange('maxSlippageBps', parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-positive"
                   />
-                  <div className="text-[10px] text-slate-400">Orders abort if market impact exceeds {formState.maxSlippageBps} basis points.</div>
+                  <div className="text-[10px] text-text-muted">Orders abort if market impact exceeds {formState.maxSlippageBps} basis points.</div>
                 </div>
               </div>
 
               {/* Venue Table */}
               <div className="space-y-3">
-                <div className="font-bold text-white text-xs uppercase tracking-wider flex items-center justify-between">
+                <div className="font-bold text-text-strong text-xs uppercase tracking-wider flex items-center justify-between">
                   <span>Connected Institutional Venues &amp; Direct Gateway Feeds</span>
-                  <span className="text-[10px] text-slate-400">Direct FIX &amp; REST/WS</span>
+                  <span className="text-[10px] text-text-muted">Direct FIX &amp; REST/WS</span>
                 </div>
 
                 <div className="space-y-2">
                   {formState.venues.map((venue) => (
                     <div
                       key={venue.id}
-                      className="p-3 rounded bg-white/[0.02] border border-white/[0.06] flex flex-wrap items-center justify-between gap-3 text-xs"
+                      className="p-3 rounded bg-surface-veil border border-border-subtle flex flex-wrap items-center justify-between gap-3 text-xs"
                     >
                       <div className="flex items-center gap-3">
                         <input
                           type="checkbox"
                           checked={venue.enabled}
                           onChange={(e) => handleVenueToggle(venue.id, e.target.checked)}
-                          className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                          className="w-4 h-4 rounded accent-accent cursor-pointer"
                         />
                         <div>
-                          <div className="flex items-center gap-2 font-bold text-white">
+                          <div className="flex items-center gap-2 font-bold text-text-strong">
                             <span>{venue.name}</span>
-                            <span className="text-[9px] px-1 rounded bg-black/40 text-slate-400 border border-white/[0.08] font-mono">
+                            <span className="text-[9px] px-1 rounded bg-surface-sunken text-text-muted border border-border-strong font-mono">
                               {venue.gatewayType}
                             </span>
                             {venue.ipWhitelistVerified && (
-                              <span className="text-[9px] text-emerald-400 flex items-center gap-0.5">
+                              <span className="text-[9px] text-positive flex items-center gap-0.5">
                                 <Check className="w-2.5 h-2.5" /> IP Whitelisted
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                          <div className="text-[11px] text-text-muted font-mono mt-0.5">
                             {venue.endpoint} • Key: {venue.apiKeyMasked}
                           </div>
                         </div>
@@ -900,13 +900,13 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <div className="text-[10px] text-slate-400">LATENCY</div>
-                          <div className="text-emerald-400 font-mono font-bold">{venue.latencyMs} ms</div>
+                          <div className="text-[10px] text-text-muted">LATENCY</div>
+                          <div className="text-positive font-mono font-bold">{venue.latencyMs} ms</div>
                         </div>
 
                         <span
                           title="No venue probe endpoint exists — venue rows are persisted config, not live status"
-                          className="px-2.5 py-1 rounded bg-white/[0.02] border border-white/[0.06] text-slate-500 text-[11px]"
+                          className="px-2.5 py-1 rounded bg-surface-veil border border-border-subtle text-text-subtle text-[11px]"
                         >
                           NO PROBE
                         </span>
@@ -918,10 +918,10 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
               {/* On-Chain Gas & MEV Flashbots */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Max Gas Priority Cap</span>
-                    <span className="text-cyan-300 font-mono font-bold">{formState.gasMaxGweiCap} Gwei</span>
+                    <span className="font-bold text-text-strong text-xs">Max Gas Priority Cap</span>
+                    <span className="text-accent font-mono font-bold">{formState.gasMaxGweiCap} Gwei</span>
                   </div>
                   <input
                     type="range"
@@ -930,21 +930,21 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="5"
                     value={formState.gasMaxGweiCap}
                     onChange={(e) => handleChange('gasMaxGweiCap', parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="text-[10px] text-slate-400">Cap max gas price on on-chain DEX routes during congestion.</div>
+                  <div className="text-[10px] text-text-muted">Cap max gas price on on-chain DEX routes during congestion.</div>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Flashbots MEV Protection (Private RPC)</div>
-                    <div className="text-slate-400 text-[11px]">Bypasses public mempools to eliminate sandwich attacks &amp; frontrunning.</div>
+                    <div className="font-bold text-text-strong text-xs">Flashbots MEV Protection (Private RPC)</div>
+                    <div className="text-text-muted text-[11px]">Bypasses public mempools to eliminate sandwich attacks &amp; frontrunning.</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={formState.flashbotsMevProtection}
                     onChange={(e) => handleChange('flashbotsMevProtection', e.target.checked)}
-                    className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                    className="w-4 h-4 rounded accent-accent cursor-pointer"
                   />
                 </div>
               </div>
@@ -953,35 +953,35 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           {/* SECTION: TradingView API & Charting Library Integration */}
           {activeSection === 'tradingview' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <BarChart2 className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <BarChart2 className="w-4 h-4 text-accent" />
                     TRADINGVIEW ADVANCED CHARTING LIBRARY & DATAFEED API
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Configure official TradingView Pro API credentials, custom datafeeds, webhook signal triggers, and default technical studies.
                   </p>
                 </div>
                 <span
                   title="No datafeed probe harness exists — credentials persist server-side only"
-                  className="px-3 py-1.5 rounded bg-white/[0.02] border border-white/[0.08] text-slate-500 text-xs font-bold"
+                  className="px-3 py-1.5 rounded bg-surface-veil border border-border-strong text-text-subtle text-xs font-bold"
                 >
                   NO TEST HARNESS
                 </span>
               </div>
 
               {/* Master Activation Toggle */}
-              <div className="p-4 rounded-lg bg-indigo-950/20 border border-indigo-800/30 flex items-center justify-between">
+              <div className="p-4 rounded-lg bg-violet border border-violet flex items-center justify-between">
                 <div>
-                  <div className="font-bold text-white text-xs flex items-center gap-2">
+                  <div className="font-bold text-text-strong text-xs flex items-center gap-2">
                     <span>Enable TradingView Advanced Charting & API Gateway</span>
-                    <span className="px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300 text-[9px] font-bold border border-indigo-700/50">
+                    <span className="px-1.5 py-0.5 rounded bg-violet text-violet text-[9px] font-bold border border-violet">
                       INSTITUTIONAL LICENSE
                     </span>
                   </div>
-                  <div className="text-slate-400 text-[11px] mt-0.5">
+                  <div className="text-text-muted text-[11px] mt-0.5">
                     Enables the official TradingView charting engine alongside low-latency native canvas feeds in the Live Trading space.
                   </div>
                 </div>
@@ -989,15 +989,15 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                   type="checkbox"
                   checked={formState.tradingViewApiEnabled}
                   onChange={(e) => handleChange('tradingViewApiEnabled', e.target.checked)}
-                  className="w-5 h-5 rounded accent-cyan-500 cursor-pointer"
+                  className="w-5 h-5 rounded accent-accent cursor-pointer"
                 />
               </div>
 
               {/* API Credentials & Datafeed URL */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
-                  <div className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-2">
-                    <Key className="w-3.5 h-3.5 text-cyan-400" />
+                <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
+                  <div className="font-bold text-text-strong text-xs uppercase tracking-wider flex items-center gap-2">
+                    <Key className="w-3.5 h-3.5 text-accent" />
                     TradingView API Key (Bearer / Secret)
                   </div>
                   <input
@@ -1005,16 +1005,16 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     value={formState.tradingViewApiKey}
                     onChange={(e) => handleChange('tradingViewApiKey', e.target.value)}
                     placeholder="tv_live_pk_..."
-                    className="w-full bg-black/50 border border-white/10 rounded px-3 py-2 text-slate-100 font-mono text-xs outline-none focus:border-cyan-500"
+                    className="w-full bg-surface-deep border border-border-subtle rounded px-3 py-2 text-text-strong font-mono text-xs outline-none focus:border-accent"
                   />
-                  <div className="text-[10px] text-slate-400">
+                  <div className="text-[10px] text-text-muted">
                     Used to authenticate high-frequency UDF/JS-API requests against TradingView Hosted Datafeeds.
                   </div>
                 </div>
 
-                <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
-                  <div className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-2">
-                    <Radio className="w-3.5 h-3.5 text-indigo-400" />
+                <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
+                  <div className="font-bold text-text-strong text-xs uppercase tracking-wider flex items-center gap-2">
+                    <Radio className="w-3.5 h-3.5 text-violet" />
                     Datafeed Gateway Endpoint URL
                   </div>
                   <input
@@ -1022,27 +1022,27 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     value={formState.tradingViewDatafeedUrl}
                     onChange={(e) => handleChange('tradingViewDatafeedUrl', e.target.value)}
                     placeholder="https://datafeed.tradingview.com/v1"
-                    className="w-full bg-black/50 border border-white/10 rounded px-3 py-2 text-slate-100 font-mono text-xs outline-none focus:border-cyan-500"
+                    className="w-full bg-surface-deep border border-border-subtle rounded px-3 py-2 text-text-strong font-mono text-xs outline-none focus:border-accent"
                   />
-                  <div className="text-[10px] text-slate-400">
+                  <div className="text-[10px] text-text-muted">
                     WebSocket and REST endpoint streaming historical OHLCV & real-time tick bars.
                   </div>
                 </div>
               </div>
 
               {/* Chart Defaults & Preferences */}
-              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-4">
-                <div className="font-bold text-white text-xs uppercase tracking-wider">
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-4">
+                <div className="font-bold text-text-strong text-xs uppercase tracking-wider">
                   Default Charting Engine Configuration
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-slate-400 text-[10px] uppercase font-bold block mb-1">Default Timeframe Interval</label>
+                    <label className="text-text-muted text-[10px] uppercase font-bold block mb-1">Default Timeframe Interval</label>
                     <select
                       value={formState.tradingViewInterval}
                       onChange={(e) => handleChange('tradingViewInterval', e.target.value as any)}
-                      className="w-full bg-black/50 border border-white/10 rounded px-2.5 py-1.5 text-slate-200 text-xs outline-none focus:border-cyan-500"
+                      className="w-full bg-surface-deep border border-border-subtle rounded px-2.5 py-1.5 text-text-strong text-xs outline-none focus:border-accent"
                     >
                       <option value="1">1 Minute (Ultra High Frequency)</option>
                       <option value="5">5 Minutes</option>
@@ -1055,11 +1055,11 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-slate-400 text-[10px] uppercase font-bold block mb-1">Default Chart Style</label>
+                    <label className="text-text-muted text-[10px] uppercase font-bold block mb-1">Default Chart Style</label>
                     <select
                       value={formState.tradingViewChartType}
                       onChange={(e) => handleChange('tradingViewChartType', e.target.value as any)}
-                      className="w-full bg-black/50 border border-white/10 rounded px-2.5 py-1.5 text-slate-200 text-xs outline-none focus:border-cyan-500"
+                      className="w-full bg-surface-deep border border-border-subtle rounded px-2.5 py-1.5 text-text-strong text-xs outline-none focus:border-accent"
                     >
                       <option value="CANDLES">Japanese Candlesticks</option>
                       <option value="HEIKIN_ASHI">Heikin Ashi Smoothed</option>
@@ -1069,11 +1069,11 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-slate-400 text-[10px] uppercase font-bold block mb-1">Color Palette Theme</label>
+                    <label className="text-text-muted text-[10px] uppercase font-bold block mb-1">Color Palette Theme</label>
                     <select
                       value={formState.tradingViewDefaultTheme}
                       onChange={(e) => handleChange('tradingViewDefaultTheme', e.target.value as any)}
-                      className="w-full bg-black/50 border border-white/10 rounded px-2.5 py-1.5 text-slate-200 text-xs outline-none focus:border-cyan-500"
+                      className="w-full bg-surface-deep border border-border-subtle rounded px-2.5 py-1.5 text-text-strong text-xs outline-none focus:border-accent"
                     >
                       <option value="dark">Institutional Dark (Default)</option>
                       <option value="light">Daylight Light</option>
@@ -1082,22 +1082,22 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                  <label className="flex items-center gap-2 text-xs text-text cursor-pointer">
                     <input
                       type="checkbox"
                       checked={formState.tradingViewShowVolume}
                       onChange={(e) => handleChange('tradingViewShowVolume', e.target.checked)}
-                      className="w-4 h-4 rounded accent-cyan-500"
+                      className="w-4 h-4 rounded accent-accent"
                     />
                     <span>Render Real-time Volume Profile & Delta Histogram</span>
                   </label>
 
-                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                  <label className="flex items-center gap-2 text-xs text-text cursor-pointer">
                     <input
                       type="checkbox"
                       checked={formState.tradingViewShowIndicators}
                       onChange={(e) => handleChange('tradingViewShowIndicators', e.target.checked)}
-                      className="w-4 h-4 rounded accent-cyan-500"
+                      className="w-4 h-4 rounded accent-accent"
                     />
                     <span>Auto-load Technical Indicator Presets on Symbol Switch</span>
                   </label>
@@ -1105,40 +1105,40 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
               </div>
 
               {/* TradingView Webhooks & Alert Signal Bridge */}
-              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-2">
-                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <div className="font-bold text-text-strong text-xs uppercase tracking-wider flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-warning" />
                     TradingView Webhook Signal & Strategy Alert Bridge
                   </div>
                   <input
                     type="checkbox"
                     checked={formState.tradingViewWebhooksEnabled}
                     onChange={(e) => handleChange('tradingViewWebhooksEnabled', e.target.checked)}
-                    className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                    className="w-4 h-4 rounded accent-accent cursor-pointer"
                   />
                 </div>
 
-                <p className="text-slate-400 text-xs">
+                <p className="text-text-muted text-xs">
                   Execute Pine Script strategies directly into the aios0x Risk Firewall via signed JSON Webhooks.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                   <div>
-                    <label className="text-slate-400 text-[10px] uppercase font-bold block mb-1">Webhook Ingress URL</label>
+                    <label className="text-text-muted text-[10px] uppercase font-bold block mb-1">Webhook Ingress URL</label>
                     <div className="flex items-center gap-1.5">
                       <input
                         type="text"
                         readOnly
                         value="https://api.aios0x.institution.internal/v1/webhooks/tradingview-signals"
-                        className="flex-1 bg-black/60 border border-white/10 rounded px-2.5 py-1.5 text-slate-300 font-mono text-[10px]"
+                        className="flex-1 bg-surface-deep border border-border-subtle rounded px-2.5 py-1.5 text-text font-mono text-[10px]"
                       />
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText("https://api.aios0x.institution.internal/v1/webhooks/tradingview-signals");
                           onTriggerToast('Copied TradingView Webhook URL to clipboard.');
                         }}
-                        className="px-2 py-1.5 rounded bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] text-slate-300 text-xs"
+                        className="px-2 py-1.5 rounded bg-surface-veil border border-border-subtle hover:bg-surface-raised text-text text-xs"
                         title="Copy Webhook URL"
                       >
                         <Copy className="w-3.5 h-3.5" />
@@ -1147,29 +1147,29 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-slate-400 text-[10px] uppercase font-bold block mb-1">Webhook HMAC Secret Signature</label>
+                    <label className="text-text-muted text-[10px] uppercase font-bold block mb-1">Webhook HMAC Secret Signature</label>
                     <input
                       type="password"
                       value={formState.tradingViewWebhookSecret}
                       onChange={(e) => handleChange('tradingViewWebhookSecret', e.target.value)}
-                      className="w-full bg-black/60 border border-white/10 rounded px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none focus:border-cyan-500"
+                      className="w-full bg-surface-deep border border-border-subtle rounded px-2.5 py-1.5 text-text-strong font-mono text-xs outline-none focus:border-accent"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Active Indicator Presets */}
-              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
-                <div className="font-bold text-white text-xs uppercase tracking-wider">
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
+                <div className="font-bold text-text-strong text-xs uppercase tracking-wider">
                   Active Indicator Presets in Trading Workspace
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {formState.tradingViewActiveIndicators.map((ind, i) => (
                     <span
                       key={i}
-                      className="px-2.5 py-1 rounded bg-black/40 border border-cyan-500/40 text-cyan-300 text-xs flex items-center gap-1.5 font-mono"
+                      className="px-2.5 py-1 rounded bg-surface-sunken border border-accent text-accent text-xs flex items-center gap-1.5 font-mono"
                     >
-                      <Check className="w-3 h-3 text-cyan-400" />
+                      <Check className="w-3 h-3 text-accent" />
                       {ind}
                     </span>
                   ))}
@@ -1180,28 +1180,28 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           {/* SECTION 5: Data Feeds & Oracles */}
           {activeSection === 'oracles' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex items-center justify-between">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <Radio className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-accent" />
                     DECENTRALIZED ORACLES & HIGH-FREQUENCY MARKET DATA SLA
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Configure dual-oracle validation rules, price staleness limits, and cross-venue deviation circuit breakers.
                   </p>
                 </div>
                 <span
                   title="No oracle probe harness exists — thresholds persist server-side only"
-                  className="px-3 py-1 rounded bg-white/[0.02] border border-white/[0.08] text-slate-500 text-xs font-bold"
+                  className="px-3 py-1 rounded bg-surface-veil border border-border-strong text-text-subtle text-xs font-bold"
                 >
                   NO TEST HARNESS
                 </span>
               </div>
 
               {/* Oracle Providers */}
-              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
-                <div className="font-bold text-white text-xs uppercase tracking-wider">
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
+                <div className="font-bold text-text-strong text-xs uppercase tracking-wider">
                   Primary Oracle Architecture
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
@@ -1216,12 +1216,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                       onClick={() => handleChange('oracleProvider', oracle.id as any)}
                       className={`p-3 rounded border text-left transition-colors ${
                         formState.oracleProvider === oracle.id
-                          ? 'bg-cyan-950/60 border-cyan-500 text-white shadow-sm'
-                          : 'bg-black/30 border-white/[0.06] text-slate-400 hover:text-slate-200'
+                          ? 'bg-info-bg border-accent text-text-strong shadow-sm'
+                          : 'bg-surface-sunken border-border-subtle text-text-muted hover:text-text-strong'
                       }`}
                     >
                       <div className="font-bold text-xs">{oracle.name}</div>
-                      <div className="text-[10px] text-slate-400 mt-1">{oracle.desc}</div>
+                      <div className="text-[10px] text-text-muted mt-1">{oracle.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -1229,10 +1229,10 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
               {/* Staleness and Deviation */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Oracle Staleness Circuit Breaker</span>
-                    <span className="text-cyan-300 font-mono font-bold">{formState.oracleStalenessMaxSec} Seconds</span>
+                    <span className="font-bold text-text-strong text-xs">Oracle Staleness Circuit Breaker</span>
+                    <span className="text-accent font-mono font-bold">{formState.oracleStalenessMaxSec} Seconds</span>
                   </div>
                   <input
                     type="range"
@@ -1241,15 +1241,15 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="1"
                     value={formState.oracleStalenessMaxSec}
                     onChange={(e) => handleChange('oracleStalenessMaxSec', parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="text-[10px] text-slate-400">Halts trading if price feed has not updated within {formState.oracleStalenessMaxSec}s.</div>
+                  <div className="text-[10px] text-text-muted">Halts trading if price feed has not updated within {formState.oracleStalenessMaxSec}s.</div>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Max Cross-Feed Deviation</span>
-                    <span className="text-cyan-300 font-mono font-bold">{formState.maxOracleDeviationBps} BPS ({(formState.maxOracleDeviationBps / 100).toFixed(2)}%)</span>
+                    <span className="font-bold text-text-strong text-xs">Max Cross-Feed Deviation</span>
+                    <span className="text-accent font-mono font-bold">{formState.maxOracleDeviationBps} BPS ({(formState.maxOracleDeviationBps / 100).toFixed(2)}%)</span>
                   </div>
                   <input
                     type="range"
@@ -1258,9 +1258,9 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="5"
                     value={formState.maxOracleDeviationBps}
                     onChange={(e) => handleChange('maxOracleDeviationBps', parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="text-[10px] text-slate-400">Triggers arbitration check if Chainlink and Pyth diverge by &gt; {formState.maxOracleDeviationBps} bps.</div>
+                  <div className="text-[10px] text-text-muted">Triggers arbitration check if Chainlink and Pyth diverge by &gt; {formState.maxOracleDeviationBps} bps.</div>
                 </div>
               </div>
             </div>
@@ -1268,28 +1268,28 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           {/* SECTION 6: Stress Testing & Monte Carlo */}
           {activeSection === 'backtest' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex items-center justify-between">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <LineChart className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <LineChart className="w-4 h-4 text-accent" />
                     HISTORICAL STRESS TESTING &amp; MONTE CARLO SIMULATOR
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Subject current portfolio weights to extreme tail risk events and 100,000 synthetic market paths.
                   </p>
                 </div>
                 <span
                   title="No stress-test harness exists — scenario and budgets persist server-side only"
-                  className="px-4 py-1.5 rounded bg-white/[0.02] border border-white/[0.08] text-slate-500 text-xs font-bold"
+                  className="px-4 py-1.5 rounded bg-surface-veil border border-border-strong text-text-subtle text-xs font-bold"
                 >
                   NO TEST HARNESS
                 </span>
               </div>
 
               {/* Stress Preset Scenarios */}
-              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
-                <div className="font-bold text-white text-xs uppercase tracking-wider">
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
+                <div className="font-bold text-text-strong text-xs uppercase tracking-wider">
                   Select Stress Test Scenario
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
@@ -1304,12 +1304,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                       onClick={() => handleChange('stressTestScenario', scen.id as any)}
                       className={`p-3 rounded border text-left transition-colors ${
                         formState.stressTestScenario === scen.id
-                          ? 'bg-cyan-950/60 border-cyan-500 text-white shadow-sm'
-                          : 'bg-black/30 border-white/[0.06] text-slate-400 hover:text-slate-200'
+                          ? 'bg-info-bg border-accent text-text-strong shadow-sm'
+                          : 'bg-surface-sunken border-border-subtle text-text-muted hover:text-text-strong'
                       }`}
                     >
                       <div className="font-bold text-xs">{scen.name}</div>
-                      <div className="text-[10px] text-amber-400 font-mono mt-1">{scen.shock}</div>
+                      <div className="text-[10px] text-warning font-mono mt-1">{scen.shock}</div>
                     </button>
                   ))}
                 </div>
@@ -1317,10 +1317,10 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
               {/* Simulation Runs & Lookback */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Monte Carlo Path Iterations</span>
-                    <span className="text-cyan-300 font-mono font-bold">{formState.monteCarloSimulationsCount.toLocaleString()} Paths</span>
+                    <span className="font-bold text-text-strong text-xs">Monte Carlo Path Iterations</span>
+                    <span className="text-accent font-mono font-bold">{formState.monteCarloSimulationsCount.toLocaleString()} Paths</span>
                   </div>
                   <input
                     type="range"
@@ -1329,14 +1329,14 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="5000"
                     value={formState.monteCarloSimulationsCount}
                     onChange={(e) => handleChange('monteCarloSimulationsCount', parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-accent"
                   />
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Historical Lookback Window</span>
-                    <span className="text-cyan-300 font-mono font-bold">{formState.backtestLookbackYears} Years</span>
+                    <span className="font-bold text-text-strong text-xs">Historical Lookback Window</span>
+                    <span className="text-accent font-mono font-bold">{formState.backtestLookbackYears} Years</span>
                   </div>
                   <input
                     type="range"
@@ -1345,13 +1345,13 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="1"
                     value={formState.backtestLookbackYears}
                     onChange={(e) => handleChange('backtestLookbackYears', parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-accent"
                   />
                 </div>
               </div>
 
               {/* No stress engine exists server-side: scenario + budgets persist, nothing executes */}
-              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] text-xs text-slate-400 leading-relaxed">
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle text-xs text-text-muted leading-relaxed">
                 No stress-test harness is wired. The scenario, path budget, and lookback above are stored
                 with the server blob when you save — no simulation runs from this panel. Walk-forward
                 backtests live under the Strategies tab (POST /api/v1/research/backtest).
@@ -1361,25 +1361,25 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           {/* SECTION 7: Accounting, Tax & Financial Controller */}
           {activeSection === 'accounting' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex items-center justify-between">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <ReceiptText className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <ReceiptText className="w-4 h-4 text-accent" />
                     ACCOUNTING, TAX LOT OPTIMIZATION &amp; FUND CONTROLLER OVERSIGHT
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Tax harvesting rules, double-entry general ledger rules, and daily Compliance Controller sign-off policies.
                   </p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-bold">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-info-bg text-accent border border-accent font-bold">
                   HIFO ACTIVE
                 </span>
               </div>
 
               {/* Tax Lot Method */}
-              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
-                <div className="font-bold text-white text-xs uppercase tracking-wider">
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
+                <div className="font-bold text-text-strong text-xs uppercase tracking-wider">
                   Tax Lot Selection Algorithm
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1389,12 +1389,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                       onClick={() => handleChange('taxLotMethod', method)}
                       className={`p-2.5 rounded border text-left transition-colors ${
                         formState.taxLotMethod === method
-                          ? 'bg-cyan-950/60 border-cyan-500 text-white shadow-sm'
-                          : 'bg-black/30 border-white/[0.06] text-slate-400 hover:text-slate-200'
+                          ? 'bg-info-bg border-accent text-text-strong shadow-sm'
+                          : 'bg-surface-sunken border-border-subtle text-text-muted hover:text-text-strong'
                       }`}
                     >
                       <div className="font-bold text-xs">{method}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
+                      <div className="text-[10px] text-text-muted mt-0.5">
                         {method === 'HIFO' && 'Highest-In First-Out (Min Tax)'}
                         {method === 'FIFO' && 'First-In First-Out'}
                         {method === 'LIFO' && 'Last-In First-Out'}
@@ -1407,23 +1407,23 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
               {/* Automated Tax-Loss Harvesting */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Automated Tax-Loss Harvesting</div>
-                    <div className="text-slate-400 text-[11px]">Harvest realized tax losses and rotate into non-wash proxy assets.</div>
+                    <div className="font-bold text-text-strong text-xs">Automated Tax-Loss Harvesting</div>
+                    <div className="text-text-muted text-[11px]">Harvest realized tax losses and rotate into non-wash proxy assets.</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={formState.autoTaxLossHarvesting}
                     onChange={(e) => handleChange('autoTaxLossHarvesting', e.target.checked)}
-                    className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                    className="w-4 h-4 rounded accent-accent cursor-pointer"
                   />
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Tax-Loss Trigger Threshold</span>
-                    <span className="text-cyan-300 font-mono font-bold">${formState.taxLossHarvestMinLossUsd.toLocaleString()}</span>
+                    <span className="font-bold text-text-strong text-xs">Tax-Loss Trigger Threshold</span>
+                    <span className="text-accent font-mono font-bold">${formState.taxLossHarvestMinLossUsd.toLocaleString()}</span>
                   </div>
                   <input
                     type="range"
@@ -1432,18 +1432,18 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="5000"
                     value={formState.taxLossHarvestMinLossUsd}
                     onChange={(e) => handleChange('taxLossHarvestMinLossUsd', parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="text-[10px] text-slate-400">Trigger harvesting when position unrealized loss &gt; threshold.</div>
+                  <div className="text-[10px] text-text-muted">Trigger harvesting when position unrealized loss &gt; threshold.</div>
                 </div>
               </div>
 
               {/* Capital Gains Provision & Functional Currency */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Automated Capital Gains Tax Provision Rate</span>
-                    <span className="text-cyan-300 font-mono font-bold">{formState.capGainsProvisionRatePct}%</span>
+                    <span className="font-bold text-text-strong text-xs">Automated Capital Gains Tax Provision Rate</span>
+                    <span className="text-accent font-mono font-bold">{formState.capGainsProvisionRatePct}%</span>
                   </div>
                   <input
                     type="range"
@@ -1452,13 +1452,13 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="0.5"
                     value={formState.capGainsProvisionRatePct}
                     onChange={(e) => handleChange('capGainsProvisionRatePct', parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="text-[10px] text-slate-400">Escrows {formState.capGainsProvisionRatePct}% of realized profits into liquidity reserve.</div>
+                  <div className="text-[10px] text-text-muted">Escrows {formState.capGainsProvisionRatePct}% of realized profits into liquidity reserve.</div>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
-                  <div className="font-bold text-white text-xs">Base Functional Currency</div>
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
+                  <div className="font-bold text-text-strong text-xs">Base Functional Currency</div>
                   <div className="grid grid-cols-3 gap-1.5 pt-1">
                     {(['USD', 'EUR', 'GBP', 'CHF', 'SGD', 'JPY'] as const).map((curr) => (
                       <button
@@ -1466,8 +1466,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                         onClick={() => handleChange('baseReportingCurrency', curr)}
                         className={`py-1 rounded text-xs font-mono transition-colors border ${
                           formState.baseReportingCurrency === curr
-                            ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-bold'
-                            : 'bg-black/40 text-slate-400 border-white/[0.08]'
+                            ? 'bg-info-bg text-accent border-accent font-bold'
+                            : 'bg-surface-sunken text-text-muted border-border-strong'
                         }`}
                       >
                         {curr}
@@ -1479,29 +1479,29 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
               {/* Daily Controller Sign-Off & Wash Sale Guard */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Daily Controller &amp; Compliance Sign-Off</div>
-                    <div className="text-slate-400 text-[11px]">Require Fund Controller manual ratification before daily midnight ledger seal.</div>
+                    <div className="font-bold text-text-strong text-xs">Daily Controller &amp; Compliance Sign-Off</div>
+                    <div className="text-text-muted text-[11px]">Require Fund Controller manual ratification before daily midnight ledger seal.</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={formState.dailyControllerSignOffRequired}
                     onChange={(e) => handleChange('dailyControllerSignOffRequired', e.target.checked)}
-                    className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                    className="w-4 h-4 rounded accent-accent cursor-pointer"
                   />
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Wash Sale Guard (30-Day Rule)</div>
-                    <div className="text-slate-400 text-[11px]">Block automated re-entry into realized loss securities within 30 days.</div>
+                    <div className="font-bold text-text-strong text-xs">Wash Sale Guard (30-Day Rule)</div>
+                    <div className="text-text-muted text-[11px]">Block automated re-entry into realized loss securities within 30 days.</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={formState.washSaleGuard}
                     onChange={(e) => handleChange('washSaleGuard', e.target.checked)}
-                    className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                    className="w-4 h-4 rounded accent-accent cursor-pointer"
                   />
                 </div>
               </div>
@@ -1510,23 +1510,23 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           {/* SECTION 8: API Keys & Secrets Vault */}
           {activeSection === 'apikeys' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex items-center justify-between">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <Key className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <Key className="w-4 h-4 text-accent" />
                     API CREDENTIALS, SECRETS VAULT &amp; GATEWAYS
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Hardware-enclave encrypted exchange keys, AI inference tokens, and regulatory data feed credentials.
                   </p>
                 </div>
               </div>
 
               {/* No secrets backend exists: never demonstrated fake credentials here */}
-              <div className="p-6 rounded bg-white/[0.02] border border-white/[0.06] text-center">
-                <div className="text-xs font-bold text-slate-200">NO SECRETS VAULT WIRED</div>
-                <div className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+              <div className="p-6 rounded bg-surface-veil border border-border-subtle text-center">
+                <div className="text-xs font-bold text-text-strong">NO SECRETS VAULT WIRED</div>
+                <div className="text-[11px] text-text-muted mt-1 leading-relaxed">
                   No credential store exists server-side, so this panel holds no keys and accepts none.
                   Do not paste secrets into the settings blob — it is stored as plain JSON.
                 </div>
@@ -1536,25 +1536,25 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           {/* SECTION 9: Alerts & Webhooks */}
           {activeSection === 'alerts' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex items-center justify-between">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <Bell className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-accent" />
                     REAL-TIME NOTIFICATIONS, PAGERDUTY &amp; TELEGRAM BOT
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Configure institutional alert channels for drawdown warnings, consensus deadlocks, and fill anomalies.
                   </p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-bold">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-info-bg text-accent border border-accent font-bold">
                   ACTIVE WEBHOOK PIPELINE
                 </span>
               </div>
 
               {/* Alert Toggles */}
-              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
-                <div className="font-bold text-white text-xs uppercase tracking-wider">
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
+                <div className="font-bold text-text-strong text-xs uppercase tracking-wider">
                   Critical Event Subscriptions
                 </div>
 
@@ -1566,16 +1566,16 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     { key: 'alertOnDebateDeadlock', label: 'Agent Debate Deadlocks (<60% Consensus)', desc: 'Alert when agents fail to reach quorum in 3 rounds.' },
                     { key: 'alertOnMerkleBlock', label: 'Merkle Audit Tree Tamper Detection', desc: 'Zero-tolerance alert on any block hash mismatch.' },
                   ].map((item) => (
-                    <div key={item.key} className="flex items-center justify-between p-2.5 rounded bg-black/30 border border-white/[0.04]">
+                    <div key={item.key} className="flex items-center justify-between p-2.5 rounded bg-surface-sunken border border-border-subtle">
                       <div>
-                        <div className="font-semibold text-white text-xs">{item.label}</div>
-                        <div className="text-[10px] text-slate-400">{item.desc}</div>
+                        <div className="font-semibold text-text-strong text-xs">{item.label}</div>
+                        <div className="text-[10px] text-text-muted">{item.desc}</div>
                       </div>
                       <input
                         type="checkbox"
                         checked={formState[item.key as keyof SystemSettings] as boolean}
                         onChange={(e) => handleChange(item.key as keyof SystemSettings, e.target.checked as any)}
-                        className="w-4 h-4 rounded accent-cyan-500 cursor-pointer ml-3"
+                        className="w-4 h-4 rounded accent-accent cursor-pointer ml-3"
                       />
                     </div>
                   ))}
@@ -1583,8 +1583,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
               </div>
 
               {/* Webhook Endpoint */}
-              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
-                <div className="font-bold text-white text-xs uppercase tracking-wider">
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
+                <div className="font-bold text-text-strong text-xs uppercase tracking-wider">
                   Institutional Webhook URL (Slack / Teams / Custom Endpoint)
                 </div>
                 <div className="flex gap-2">
@@ -1592,11 +1592,11 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     type="text"
                     value={formState.webhookUrl}
                     onChange={(e) => handleChange('webhookUrl', e.target.value)}
-                    className="bg-black/50 border border-white/[0.1] rounded px-3 py-1.5 text-xs text-white font-mono flex-1 focus:border-cyan-500 focus:outline-none"
+                    className="bg-surface-deep border border-border-strong rounded px-3 py-1.5 text-xs text-text-strong font-mono flex-1 focus:border-accent focus:outline-none"
                   />
                   <span
                     title="No webhook dispatch harness exists — the URL persists server-side only"
-                    className="px-3.5 py-1.5 rounded bg-white/[0.02] border border-white/[0.08] text-slate-500 font-bold text-xs"
+                    className="px-3.5 py-1.5 rounded bg-surface-veil border border-border-strong text-text-subtle font-bold text-xs"
                   >
                     NO TEST HARNESS
                   </span>
@@ -1604,17 +1604,17 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
               </div>
 
               {/* Telegram Bot Alerts */}
-              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Telegram Instant Dispatch Channel</div>
-                    <div className="text-slate-400 text-[11px]">Direct priority messaging to executive incident management group.</div>
+                    <div className="font-bold text-text-strong text-xs">Telegram Instant Dispatch Channel</div>
+                    <div className="text-text-muted text-[11px]">Direct priority messaging to executive incident management group.</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={formState.telegramAlertsEnabled}
                     onChange={(e) => handleChange('telegramAlertsEnabled', e.target.checked)}
-                    className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                    className="w-4 h-4 rounded accent-accent cursor-pointer"
                   />
                 </div>
                 {formState.telegramAlertsEnabled && (
@@ -1624,11 +1624,11 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                       value={formState.telegramChatIdMasked}
                       onChange={(e) => handleChange('telegramChatIdMasked', e.target.value)}
                       placeholder="Telegram Group Chat ID (-100...)"
-                      className="bg-black/50 border border-white/[0.1] rounded px-3 py-1 text-xs text-white font-mono flex-1 focus:border-cyan-500 focus:outline-none"
+                      className="bg-surface-deep border border-border-strong rounded px-3 py-1 text-xs text-text-strong font-mono flex-1 focus:border-accent focus:outline-none"
                     />
                     <span
                       title="No Telegram dispatch harness exists — settings persist server-side only"
-                      className="px-3 py-1 rounded bg-white/[0.02] border border-white/[0.08] text-slate-500 text-xs font-bold"
+                      className="px-3 py-1 rounded bg-surface-veil border border-border-strong text-text-subtle text-xs font-bold"
                     >
                       NO TEST HARNESS
                     </span>
@@ -1637,10 +1637,10 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
               </div>
 
               {/* Acoustic Alerts */}
-              <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+              <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
                 <div>
-                  <div className="font-bold text-white text-xs">Institutional Acoustic Audio Alerts</div>
-                  <div className="text-slate-400 text-[11px]">Subtle low-frequency chimes for execution fills and risk events.</div>
+                  <div className="font-bold text-text-strong text-xs">Institutional Acoustic Audio Alerts</div>
+                  <div className="text-text-muted text-[11px]">Subtle low-frequency chimes for execution fills and risk events.</div>
                 </div>
                 <div className="flex items-center gap-2">
                   {(['SUBTLE', 'SONAR', 'MUTED'] as const).map((mode) => (
@@ -1649,8 +1649,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                       onClick={() => handleChange('acousticAlerts', mode)}
                       className={`px-3 py-1 rounded text-xs font-mono transition-colors border ${
                         formState.acousticAlerts === mode
-                          ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-bold'
-                          : 'bg-black/40 text-slate-400 border-white/[0.08]'
+                          ? 'bg-info-bg text-accent border-accent font-bold'
+                          : 'bg-surface-sunken text-text-muted border-border-strong'
                       }`}
                     >
                       {mode}
@@ -1663,48 +1663,48 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           {/* SECTION 10: Display & UI Preferences */}
           {activeSection === 'display' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex items-center justify-between">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <Monitor className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <Monitor className="w-4 h-4 text-accent" />
                     DISPLAY PREFERENCES, TYPOGRAPHY &amp; PRIVACY
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Customize institutional data refresh frequencies, numerical monospace typography, and accent themes.
                   </p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-bold">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-info-bg text-accent border border-accent font-bold">
                   OLED DARK DEFAULT
                 </span>
               </div>
 
               {/* Accent Theme Selector */}
-              <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
-                <div className="font-bold text-white text-xs uppercase tracking-wider">
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
+                <div className="font-bold text-text-strong text-xs uppercase tracking-wider">
                   Signature Intelligence Accent Palette
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
-                    { id: 'CYAN', name: 'Signature Cyan', hex: '#00f0ff', desc: 'AIOS-0X default' },
-                    { id: 'EMERALD', name: 'Terminal Emerald', hex: '#10b981', desc: 'High-contrast green' },
-                    { id: 'AMBER', name: 'Gold & Amber', hex: '#f59e0b', desc: 'Fixed income terminal' },
-                    { id: 'VIOLET', name: 'Deep Violet', hex: '#818cf8', desc: 'Macro sovereign' },
+                    { id: 'CYAN', name: 'Signature Cyan', hex: 'var(--color-accent)', desc: 'AIOS-0X default' },
+                    { id: 'EMERALD', name: 'Terminal Emerald', hex: 'var(--color-positive)', desc: 'High-contrast green' },
+                    { id: 'AMBER', name: 'Gold & Amber', hex: 'var(--color-warning)', desc: 'Fixed income terminal' },
+                    { id: 'VIOLET', name: 'Deep Violet', hex: 'var(--color-violet)', desc: 'Macro sovereign' },
                   ].map((theme) => (
                     <button
                       key={theme.id}
                       onClick={() => handleChange('accentTheme', theme.id as any)}
                       className={`p-3 rounded border text-left transition-all ${
                         formState.accentTheme === theme.id
-                          ? 'bg-white/[0.06] border-white/40 text-white shadow-md'
-                          : 'bg-black/30 border-white/[0.06] text-slate-400 hover:text-slate-200'
+                          ? 'bg-surface-raised border-border-subtle text-text-strong shadow-md'
+                          : 'bg-surface-sunken border-border-subtle text-text-muted hover:text-text-strong'
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: theme.hex }}></div>
                         <span className="font-bold text-xs">{theme.name}</span>
                       </div>
-                      <div className="text-[10px] text-slate-400">{theme.desc}</div>
+                      <div className="text-[10px] text-text-muted">{theme.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -1712,8 +1712,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
               {/* Refresh Rate & Number Font */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
-                  <div className="font-bold text-white text-xs">Telemetry &amp; Trajectory Refresh Interval</div>
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
+                  <div className="font-bold text-text-strong text-xs">Telemetry &amp; Trajectory Refresh Interval</div>
                   <div className="grid grid-cols-4 gap-1.5 pt-1">
                     {[500, 1000, 2000, 5000].map((ms) => (
                       <button
@@ -1721,19 +1721,19 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                         onClick={() => handleChange('refreshRateMs', ms)}
                         className={`py-1 rounded text-xs font-mono transition-colors border ${
                           formState.refreshRateMs === ms
-                            ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-bold'
-                            : 'bg-black/40 text-slate-400 border-white/[0.08]'
+                            ? 'bg-info-bg text-accent border-accent font-bold'
+                            : 'bg-surface-sunken text-text-muted border-border-strong'
                         }`}
                       >
                         {ms}ms
                       </button>
                     ))}
                   </div>
-                  <div className="text-[10px] text-slate-400">Controls polling rate of live orderbook feeds and trajectory charts.</div>
+                  <div className="text-[10px] text-text-muted">Controls polling rate of live orderbook feeds and trajectory charts.</div>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
-                  <div className="font-bold text-white text-xs">Market Clock Timezone</div>
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
+                  <div className="font-bold text-text-strong text-xs">Market Clock Timezone</div>
                   <div className="grid grid-cols-4 gap-1.5 pt-1">
                     {(['UTC', 'EST', 'GMT', 'JST'] as const).map((tz) => (
                       <button
@@ -1741,43 +1741,43 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                         onClick={() => handleChange('marketClockTimezone', tz)}
                         className={`py-1 rounded text-xs font-mono transition-colors border ${
                           formState.marketClockTimezone === tz
-                            ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-bold'
-                            : 'bg-black/40 text-slate-400 border-white/[0.08]'
+                            ? 'bg-info-bg text-accent border-accent font-bold'
+                            : 'bg-surface-sunken text-text-muted border-border-strong'
                         }`}
                       >
                         {tz}
                       </button>
                     ))}
                   </div>
-                  <div className="text-[10px] text-slate-400">Display header clock in institutional UTC or regional market session.</div>
+                  <div className="text-[10px] text-text-muted">Display header clock in institutional UTC or regional market session.</div>
                 </div>
               </div>
 
               {/* High Density Mode & Balance Privacy Mask */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Ultra-High-Density Grid Layout</div>
-                    <div className="text-slate-400 text-[11px]">Tighter padding and tabular numbers for multi-monitor Bloomberg-style display desks.</div>
+                    <div className="font-bold text-text-strong text-xs">Ultra-High-Density Grid Layout</div>
+                    <div className="text-text-muted text-[11px]">Tighter padding and tabular numbers for multi-monitor Bloomberg-style display desks.</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={formState.highDensityMode}
                     onChange={(e) => handleChange('highDensityMode', e.target.checked)}
-                    className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                    className="w-4 h-4 rounded accent-accent cursor-pointer"
                   />
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Privacy Balance Masking Mode</div>
-                    <div className="text-slate-400 text-[11px]">Masks portfolio NAV and order sizes ($***,***,***) for presentation security.</div>
+                    <div className="font-bold text-text-strong text-xs">Privacy Balance Masking Mode</div>
+                    <div className="text-text-muted text-[11px]">Masks portfolio NAV and order sizes ($***,***,***) for presentation security.</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={formState.privacyBalanceMask}
                     onChange={(e) => handleChange('privacyBalanceMask', e.target.checked)}
-                    className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                    className="w-4 h-4 rounded accent-accent cursor-pointer"
                   />
                 </div>
               </div>
@@ -1786,51 +1786,51 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           {/* SECTION 11: Security & Multi-Sig */}
           {activeSection === 'security' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex items-center justify-between">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <Lock className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-accent" />
                     SECURITY, 2FA HARDWARE KEYS &amp; MULTI-SIG CUSTODY
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Hardware security module (HSM) keys, session timeouts, and role-based cryptographic permissions.
                   </p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-positive-bg text-positive border border-positive font-bold">
                   HSM SECURE ENCLAVE
                 </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3">
+                <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="font-bold text-white text-xs">2FA / FIDO2 Hardware Token Enforced</div>
+                    <div className="font-bold text-text-strong text-xs">2FA / FIDO2 Hardware Token Enforced</div>
                     <input
                       type="checkbox"
                       checked={formState.require2FAForRebalance}
                       onChange={(e) => handleChange('require2FAForRebalance', e.target.checked)}
-                      className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                      className="w-4 h-4 rounded accent-accent cursor-pointer"
                     />
                   </div>
-                  <div className="text-slate-400 text-[11px]">Require YubiKey or WebAuthn physical tap when executing rebalances over $500k.</div>
+                  <div className="text-text-muted text-[11px]">Require YubiKey or WebAuthn physical tap when executing rebalances over $500k.</div>
                 </div>
 
-                <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
-                  <div className="font-bold text-white text-xs">Master Operator Key Fingerprint</div>
-                  <div className="p-2 rounded bg-black/50 border border-white/[0.08] font-mono text-[11px] text-slate-500">
+                <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-2">
+                  <div className="font-bold text-text-strong text-xs">Master Operator Key Fingerprint</div>
+                  <div className="p-2 rounded bg-surface-deep border border-border-strong font-mono text-[11px] text-text-subtle">
                     — (no HSM attestation published)
                   </div>
-                  <div className="text-[10px] text-slate-400">Enclave Status: unknown — no attestation endpoint exists.</div>
+                  <div className="text-[10px] text-text-muted">Enclave Status: unknown — no attestation endpoint exists.</div>
                 </div>
               </div>
 
               {/* Session Timeout and Kill Switch PIN */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] space-y-2">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="flex justify-between">
-                    <span className="font-bold text-white text-xs">Session Inactivity Lockout</span>
-                    <span className="text-cyan-300 font-mono font-bold">{formState.sessionIdleTimeoutMinutes} Minutes</span>
+                    <span className="font-bold text-text-strong text-xs">Session Inactivity Lockout</span>
+                    <span className="text-accent font-mono font-bold">{formState.sessionIdleTimeoutMinutes} Minutes</span>
                   </div>
                   <input
                     type="range"
@@ -1839,21 +1839,21 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     step="5"
                     value={formState.sessionIdleTimeoutMinutes}
                     onChange={(e) => handleChange('sessionIdleTimeoutMinutes', parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-black/60 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    className="w-full h-1.5 bg-surface-deep rounded-lg appearance-none cursor-pointer accent-accent"
                   />
-                  <div className="text-[10px] text-slate-400">Auto-lock terminal workstation after idle time.</div>
+                  <div className="text-[10px] text-text-muted">Auto-lock terminal workstation after idle time.</div>
                 </div>
 
-                <div className="p-3.5 rounded bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
+                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Emergency Kill Switch Safety PIN</div>
-                    <div className="text-slate-400 text-[11px]">Require 6-digit confirmation code before triggering full portfolio flatten.</div>
+                    <div className="font-bold text-text-strong text-xs">Emergency Kill Switch Safety PIN</div>
+                    <div className="text-text-muted text-[11px]">Require 6-digit confirmation code before triggering full portfolio flatten.</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={formState.killSwitchRequirePin}
                     onChange={(e) => handleChange('killSwitchRequirePin', e.target.checked)}
-                    className="w-4 h-4 rounded accent-cyan-500 cursor-pointer"
+                    className="w-4 h-4 rounded accent-accent cursor-pointer"
                   />
                 </div>
               </div>
@@ -1862,14 +1862,14 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
           {/* SECTION 12: Backup & Export */}
           {activeSection === 'backup' && (
-            <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-5 shadow-2xl space-y-6">
-              <div className="border-b border-white/[0.06] pb-3 flex items-center justify-between">
+            <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-5 shadow-2xl space-y-6">
+              <div className="border-b border-border-subtle pb-3 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <Download className="w-4 h-4 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-text-strong uppercase tracking-wider flex items-center gap-2">
+                    <Download className="w-4 h-4 text-accent" />
                     SYSTEM BACKUP, MERKLE LEDGER EXPORT &amp; HARD RESET
                   </h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-text-muted text-xs mt-0.5">
                     Export entire system configuration, upload JSON configurations, or restore default Constitution v1.0.
                   </p>
                 </div>
@@ -1877,16 +1877,16 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Export Config */}
-                <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
+                <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3 flex flex-col justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Export Active Config (JSON)</div>
-                    <div className="text-slate-400 text-[11px] mt-1">
+                    <div className="font-bold text-text-strong text-xs">Export Active Config (JSON)</div>
+                    <div className="text-text-muted text-[11px] mt-1">
                       Download all current risk thresholds, agent model routes, venue credentials, and tax rules.
                     </div>
                   </div>
                   <button
                     onClick={handleExportConfig}
-                    className="w-full py-2 rounded bg-cyan-950 hover:bg-cyan-900 border border-cyan-700/60 text-cyan-300 font-bold text-xs flex items-center justify-center gap-2 transition-colors mt-2"
+                    className="w-full py-2 rounded bg-info-bg hover:bg-info-bg border border-accent text-accent font-bold text-xs flex items-center justify-center gap-2 transition-colors mt-2"
                   >
                     <Download className="w-4 h-4" />
                     <span>EXPORT SYSTEM JSON</span>
@@ -1894,14 +1894,14 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                 </div>
 
                 {/* Import Config */}
-                <div className="p-4 rounded bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
+                <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3 flex flex-col justify-between">
                   <div>
-                    <div className="font-bold text-white text-xs">Import Configuration (JSON)</div>
-                    <div className="text-slate-400 text-[11px] mt-1">
+                    <div className="font-bold text-text-strong text-xs">Import Configuration (JSON)</div>
+                    <div className="text-text-muted text-[11px] mt-1">
                       Restore parameters from a previous configuration snapshot file.
                     </div>
                   </div>
-                  <label className="w-full py-2 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition-colors mt-2 cursor-pointer">
+                  <label className="w-full py-2 rounded bg-surface-veil hover:bg-surface-raised border border-border-strong text-text-strong font-bold text-xs flex items-center justify-center gap-2 transition-colors mt-2 cursor-pointer">
                     <Upload className="w-4 h-4" />
                     <span>UPLOAD JSON FILE</span>
                     <input
@@ -1914,16 +1914,16 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                 </div>
 
                 {/* Reset Defaults */}
-                <div className="p-4 rounded bg-white/[0.02] border border-rose-900/40 space-y-3 flex flex-col justify-between">
+                <div className="p-4 rounded bg-surface-veil border border-destructive space-y-3 flex flex-col justify-between">
                   <div>
-                    <div className="font-bold text-rose-300 text-xs">Reset to Institutional Defaults</div>
-                    <div className="text-slate-400 text-[11px] mt-1">
+                    <div className="font-bold text-destructive text-xs">Reset to Institutional Defaults</div>
+                    <div className="text-text-muted text-[11px] mt-1">
                       Reverts all risk thresholds, agent quorum weights, and algorithms to the baseline Ratified Constitution v1.0.
                     </div>
                   </div>
                   <button
                     onClick={() => setShowResetConfirm(true)}
-                    className="w-full py-2 rounded bg-rose-950/80 hover:bg-rose-900 border border-rose-700/60 text-rose-300 font-bold text-xs flex items-center justify-center gap-2 transition-colors mt-2"
+                    className="w-full py-2 rounded bg-destructive-bg hover:bg-destructive-bg border border-destructive text-destructive font-bold text-xs flex items-center justify-center gap-2 transition-colors mt-2"
                   >
                     <RotateCcw className="w-4 h-4" />
                     <span>RESET TO DEFAULT CONFIG</span>
@@ -1937,19 +1937,19 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
       </div>
       {/* Reset Confirmation Modal */}
       {showResetConfirm && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[#0d0f17] border border-rose-600 rounded-lg p-5 shadow-2xl space-y-4 font-mono">
-            <div className="flex items-center gap-2 text-rose-400 font-bold text-sm">
+        <div className="fixed inset-0 z-50 bg-surface-sunken backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[var(--color-surface-1)] border border-destructive rounded-lg p-5 shadow-2xl space-y-4 font-mono">
+            <div className="flex items-center gap-2 text-destructive font-bold text-sm">
               <AlertTriangle className="w-5 h-5" />
               <span>CONFIRM SYSTEM CONFIG RESET</span>
             </div>
-            <p className="text-slate-300 text-xs leading-relaxed">
+            <p className="text-text text-xs leading-relaxed">
               Are you sure you want to reset all operational limits, multi-agent weights, and venue configurations to institutional defaults? This action will overwrite any pending unsaved changes.
             </p>
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 onClick={() => setShowResetConfirm(false)}
-                className="px-3 py-1.5 rounded bg-white/[0.05] hover:bg-white/[0.1] text-xs text-slate-300"
+                className="px-3 py-1.5 rounded bg-surface-raised hover:bg-surface-overlay text-xs text-text"
               >
                 CANCEL
               </button>
@@ -1958,7 +1958,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                   onResetDefaults();
                   setShowResetConfirm(false);
                 }}
-                className="px-4 py-1.5 rounded bg-rose-600 hover:bg-rose-500 text-black font-bold text-xs"
+                className="px-4 py-1.5 rounded bg-destructive hover:bg-destructive text-text-strong font-bold text-xs"
               >
                 CONFIRM RESET
               </button>

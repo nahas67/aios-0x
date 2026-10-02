@@ -1,5 +1,5 @@
-/**
- * portfolioAdapter: /api/v1/portfolio → zip AllocationSegment rows.
+﻿/**
+ * portfolioAdapter: /api/v1/portfolio â†’ zip AllocationSegment rows.
  * Only allocation_pct + nav are backend-sourced; risk/correlation/drawdown
  * contributions are not computed server-side and stay 0.
  */
@@ -7,7 +7,7 @@ import type { Portfolio } from "../api/types";
 import type { AllocationSegment } from "../types";
 import { type Unavailable } from "./absent";
 
-const PALETTE = ["#00f0ff", "#38bdf8", "#818cf8", "#10b981", "#eab308", "#ec4899", "#22c55e"];
+const PALETTE = ["var(--color-accent)", "var(--color-accent-info)", "var(--color-violet)", "var(--color-positive)", "var(--color-warning)", "var(--color-magenta)", "var(--color-positive)"];
 
 export function adaptPortfolio(
   payload: Portfolio | { available: false; reason?: string },

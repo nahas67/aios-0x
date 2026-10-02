@@ -1,54 +1,239 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
+
+/*
+ * DESIGN TOKENS â€” ADR-008.
+ *
+ * This file is the ONLY place in `frontend/src` permitted to contain a colour literal.
+ * The gate is mechanical: `rg '#[0-9a-fA-F]{6}' frontend/src --glob '!index.css'` must
+ * return zero hits.
+ *
+ * WHY A TOKEN LAYER AT ALL, given there was none. Measured before this file was written:
+ * 0 uses of `var(--â€¦)` and 206 hex literals across 43 files, 37 distinct values. The
+ * previous `:root` block declared `--bg-dark`, `--panel-dark`, `--accent-cyan` and so on,
+ * and nothing consumed them â€” not even the `body` rule three lines below, which hardcoded
+ * the same value it had just declared. Recolouring the console was therefore not a
+ * feature to add; it was a 206-site manual edit that would diverge between two screens.
+ *
+ * WHY TAILWIND v4's `@theme` RATHER THAN A JS TOKEN LIBRARY. `@theme` emits plain CSS
+ * custom properties, which means (a) no dependency, which matters because the project
+ * admits nothing without an ADR and has exactly three required packages, and (b) a theme
+ * switch is a `:root` override, so it needs no rebuild.
+ *
+ * WHY THE PALETTE IS THE SHIPPED ONE, NOT ADR-004's. ADR-004 specified `#020617` and
+ * `#22c55e`. Adopting those would repaint every screen on day one. The shipped surfaces
+ * are used instead so this change is a pure refactor with zero visual delta, while
+ * ADR-004's *semantic* intent â€” positive green, destructive red, a dense scale â€” is kept.
+ *
+ * THEME CONTRACT. `[data-theme]` on <html> selects a block. `theme.ts` applies it and
+ * persists the choice; this file never reads storage and never reaches for the DOM.
+ */
+
+@theme {
+  /* --- surfaces, darkest to lightest. surface-1 is the panel: 93 of 206 sites. --- */
+  --color-surface-deep: #050608;
+  --color-surface-0: #08090d;
+  --color-surface-rail: #090a0f;
+  --color-surface-1: #0d0f17;
+  --color-surface-2: #0b0d13;
+  --color-surface-3: #121520;
+  /* Alpha-composited ramp. The tree reached these by writing `white/[0.02]`â€¦`white/[0.10]`
+     and `black/30`â€¦`black/60` inline, so they are named rather than left as opacity
+     modifiers: an alpha over an unknown backdrop cannot be themed, because the result
+     depends on whatever is behind it. As tokens they resolve per theme. */
+  --color-surface-sunken: rgb(0 0 0 / 35%);
+  --color-surface-veil: rgb(255 255 255 / 2%);
+  --color-surface-raised: rgb(255 255 255 / 6%);
+  --color-surface-overlay: rgb(255 255 255 / 12%);
+
+  /* --- text --- */
+  --color-text-strong: #ffffff;
+  --color-text: #e2e8f0;
+  --color-text-muted: #94a3b8;
+  --color-text-subtle: #64748b;
+  --color-text-dim: #334155;
+  --color-text-on-accent: #040810;
+
+  /* --- accent: cyan family --- */
+  --color-accent: #00f0ff;
+  --color-accent-soft: #06b6d4;
+  --color-accent-glow: #67e8f9;
+  --color-accent-info: #38bdf8;
+  --color-violet: #818cf8;
+  --color-magenta: #ec4899;
+
+  /* --- status --- */
+  --color-positive: #10b981;
+  --color-positive-soft: #6ee7b7;
+  --color-positive-bg: #064e3b;
+  --color-warning: #f59e0b;
+  --color-warning-bg: #451a03;
+  --color-destructive: #f43f5e;
+  --color-destructive-soft: #fca5a5;
+  --color-destructive-bg: #450a0a;
+  --color-info-bg: #083344;
+
+  /* --- chrome --- */
+  --color-scrollbar-thumb: #1e2438;
+  --color-scrollbar-hover: #2a334f;
+  --color-border-faint: rgb(255 255 255 / 4%);
+  --color-border-subtle: rgb(255 255 255 / 7%);
+  --color-border-strong: rgb(255 255 255 / 14%);
+
+  --radius-panel: 0.5rem;
+  --radius-chip: 0.375rem;
+}
+
+/*
+ * The active theme. Values here are the defaults `@theme` declares; restating them is
+ * deliberate, because this is the block a theme override replaces wholesale. A theme is a
+ * complete palette, not a partial patch â€” a theme that set only `surface-0` would leave
+ * every panel on the previous theme's background.
+ */
+:root {
+  --color-surface-deep: #050608;
+  --color-surface-0: #08090d;
+  --color-surface-rail: #090a0f;
+  --color-surface-1: #0d0f17;
+  --color-surface-2: #0b0d13;
+  --color-surface-3: #121520;
+  --color-surface-sunken: rgb(0 0 0 / 35%);
+  --color-surface-veil: rgb(255 255 255 / 2%);
+  --color-surface-raised: rgb(255 255 255 / 6%);
+  --color-surface-overlay: rgb(255 255 255 / 12%);
+
+  --color-text-strong: #ffffff;
+  --color-text: #e2e8f0;
+  --color-text-muted: #94a3b8;
+  --color-text-subtle: #64748b;
+  --color-text-dim: #334155;
+  --color-text-on-accent: #040810;
+
+  --color-accent: #00f0ff;
+  --color-accent-soft: #06b6d4;
+  --color-accent-glow: #67e8f9;
+  --color-accent-info: #38bdf8;
+  --color-violet: #818cf8;
+  --color-magenta: #ec4899;
+
+  --color-positive: #10b981;
+  --color-positive-soft: #6ee7b7;
+  --color-positive-bg: #064e3b;
+  --color-warning: #f59e0b;
+  --color-warning-bg: #451a03;
+  --color-destructive: #f43f5e;
+  --color-destructive-soft: #fca5a5;
+  --color-destructive-bg: #450a0a;
+  --color-info-bg: #083344;
+
+  --color-scrollbar-thumb: #1e2438;
+  --color-scrollbar-hover: #2a334f;
+  --color-border-faint: rgb(255 255 255 / 4%);
+  --color-border-subtle: rgb(255 255 255 / 7%);
+  --color-border-strong: rgb(255 255 255 / 14%);
+
+  color-scheme: dark;
+}
+
+/*
+ * SECOND THEME. Exists to prove the mechanism rather than to be pretty: a single theme
+ * cannot demonstrate runtime switching, so shipping one would leave the feature
+ * untestable in the only sense that matters.
+ *
+ * Deliberately a LIGHT palette rather than a second dark one, because repainting a light
+ * theme forces every token to be re-derived â€” a second dark theme would let several
+ * tokens go unexercised while still looking correct. `accent` stays cyan here, which is
+ * what makes `text-on-accent` a real test: dark text on a saturated chip is the one
+ * pairing that fails if the token is wired the wrong way round.
+ */
+[data-theme='paper'] {
+  --color-surface-deep: #e7e5e4;
+  --color-surface-0: #faf9f7;
+  --color-surface-rail: #f0eeeb;
+  --color-surface-1: #ffffff;
+  --color-surface-2: #f5f3f0;
+  --color-surface-3: #eceae6;
+  --color-surface-sunken: rgb(12 10 9 / 6%);
+  --color-surface-veil: rgb(12 10 9 / 3%);
+  --color-surface-raised: rgb(12 10 9 / 5%);
+  --color-surface-overlay: rgb(12 10 9 / 10%);
+
+  --color-text-strong: #0c0a09;
+  --color-text: #292524;
+  --color-text-muted: #57534e;
+  --color-text-subtle: #78716c;
+  --color-text-dim: #a8a29e;
+  --color-text-on-accent: #04222a;
+
+  --color-accent: #0891b2;
+  --color-accent-soft: #0e7490;
+  --color-accent-glow: #22d3ee;
+  --color-accent-info: #0284c7;
+  --color-violet: #4f46e5;
+  --color-magenta: #be185d;
+
+  --color-positive: #047857;
+  --color-positive-soft: #065f46;
+  --color-positive-bg: #d1fae5;
+  --color-warning: #b45309;
+  --color-warning-bg: #fef3c7;
+  --color-destructive: #be123c;
+  --color-destructive-soft: #9f1239;
+  --color-destructive-bg: #ffe4e6;
+  --color-info-bg: #e0f2fe;
+
+  --color-scrollbar-thumb: #d6d3d1;
+  --color-scrollbar-hover: #a8a29e;
+  --color-border-faint: rgb(12 10 9 / 6%);
+  --color-border-subtle: rgb(12 10 9 / 12%);
+  --color-border-strong: rgb(12 10 9 / 22%);
+
+  color-scheme: light;
+}
 
 @layer base {
-  :root {
-    --bg-dark: #08090d;
-    --panel-dark: #0d0f17;
-    --panel-subtle: #121520;
-    --border-subtle: rgba(255, 255, 255, 0.07);
-    --border-active: rgba(0, 240, 255, 0.3);
-    --accent-cyan: #00f0ff;
-    --accent-emerald: #10b981;
-    --accent-amber: #f59e0b;
-    --accent-rose: #f43f5e;
-    --accent-violet: #818cf8;
+  html {
+    /* Applied by theme.ts before first paint. Declared here so the attribute has a
+       defined meaning even if persistence is unavailable (private mode, storage denied),
+       in which case theme.ts leaves the default in place. */
+    background-color: var(--color-surface-0);
   }
 
   body {
-    background-color: #08090d;
-    color: #e2e8f0;
+    background-color: var(--color-surface-0);
+    color: var(--color-text);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
-  /* Monospace numbers for institutional precision */
+  /* Monospace numerals for institutional precision: without `tabular-nums` a column of
+     figures jitters as digits change, which reads as instability in a risk display. */
   .font-mono-num {
     font-family: 'JetBrains Mono', 'Geist Mono', monospace;
     font-variant-numeric: tabular-nums;
   }
 }
 
-/* Custom sleek institutional scrollbar */
+/* Scrollbars */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #08090d;
+  background: var(--color-surface-0);
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e2438;
+  background: var(--color-scrollbar-thumb);
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #2a334f;
+  background: var(--color-scrollbar-hover);
 }
 
-/* Precision grid line backgrounds */
+/* Precision grid backdrop */
 .bg-grid-subtle {
   background-size: 32px 32px;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-image:
+    linear-gradient(to right, var(--color-border-subtle) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-border-subtle) 1px, transparent 1px);
 }
 
 .radar-sweep {
@@ -67,4 +252,16 @@
 
 .animate-pulse-subtle {
   animation: pulseGlow 3s ease-in-out infinite;
+}
+
+/*
+ * ADR-004 promised reduced-motion support and it was never implemented. `radar-sweep` and
+ * `animate-pulse-subtle` are the two infinite animations, and both are decorative â€” the
+ * sweep on a radar widget and a glow. Disabling them costs no information.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .radar-sweep,
+  .animate-pulse-subtle {
+    animation: none;
+  }
 }

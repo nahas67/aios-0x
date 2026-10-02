@@ -44,7 +44,7 @@ export const CertificationWorkspace: React.FC = () => {
 
   if (gradQ.loading) {
     return (
-      <div className="text-xs text-slate-400 font-mono p-8">
+      <div className="text-xs text-text-muted font-mono p-8">
         Loading certification gate from /api/v1/graduation…
       </div>
     );
@@ -64,11 +64,11 @@ export const CertificationWorkspace: React.FC = () => {
   return (
     <div className="space-y-4 pb-12 font-mono">
       {/* Verdict */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4 shadow-2xl">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4 shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <ShieldAlert className="w-4 h-4 text-cyan-400" />
-            <h2 className="text-sm font-bold tracking-wider text-slate-100 uppercase">
+            <ShieldAlert className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold tracking-wider text-text-strong uppercase">
               LAYER 7 · STRATEGY CERTIFICATION FIREWALL
             </h2>
           </div>
@@ -104,26 +104,26 @@ export const CertificationWorkspace: React.FC = () => {
         </div>
 
         {grad.note && (
-          <p className="mt-3 text-[11px] leading-relaxed text-slate-400 border-t border-white/[0.06] pt-3">
+          <p className="mt-3 text-[11px] leading-relaxed text-text-muted border-t border-border-subtle pt-3">
             {grad.note}
           </p>
         )}
       </div>
 
       {/* Checks: threshold verdict and reportability, side by side and never merged */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
-          <h3 className="text-[11px] font-bold tracking-wider text-slate-300 uppercase">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md overflow-hidden">
+        <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
+          <h3 className="text-[11px] font-bold tracking-wider text-text uppercase">
             CRITERIA
           </h3>
-          <span className="text-[9px] text-slate-500">
+          <span className="text-[9px] text-text-subtle">
             threshold verdict and reportability are separate questions
           </span>
         </div>
 
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="text-[9px] text-slate-500 uppercase border-b border-white/[0.06]">
+            <tr className="text-[9px] text-text-subtle uppercase border-b border-border-subtle">
               <th className="px-4 py-2 font-normal">criterion</th>
               <th className="px-4 py-2 font-normal text-right">current</th>
               <th className="px-4 py-2 font-normal text-right">threshold</th>
@@ -135,22 +135,22 @@ export const CertificationWorkspace: React.FC = () => {
             {grad.criteria.map((criterion) => (
               <tr
                 key={criterion.name}
-                className="border-b border-white/[0.04] align-top text-[11px]"
+                className="border-b border-border-subtle align-top text-[11px]"
               >
-                <td className="px-4 py-3 text-slate-200">{criterion.name}</td>
-                <td className="px-4 py-3 text-right text-slate-100 font-mono">
+                <td className="px-4 py-3 text-text-strong">{criterion.name}</td>
+                <td className="px-4 py-3 text-right text-text-strong font-mono">
                   {criterion.current}
                 </td>
-                <td className="px-4 py-3 text-right text-slate-500 font-mono">
+                <td className="px-4 py-3 text-right text-text-subtle font-mono">
                   {criterion.op} {criterion.threshold}
                 </td>
                 <td className="px-4 py-3">
                   {criterion.pass ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-400">
+                    <span className="inline-flex items-center gap-1 text-positive">
                       <CheckCircle2 className="w-3.5 h-3.5" /> within threshold
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-red-400">
+                    <span className="inline-flex items-center gap-1 text-destructive">
                       <XCircle className="w-3.5 h-3.5" /> outside threshold
                     </span>
                   )}
@@ -158,9 +158,9 @@ export const CertificationWorkspace: React.FC = () => {
                 <td className="px-4 py-3">
                   <ClaimBadge state={criterion.claim.status} compact />
                   {criterion.claim.missing.length > 0 && (
-                    <div className="mt-1.5 text-slate-500 leading-relaxed">
+                    <div className="mt-1.5 text-text-subtle leading-relaxed">
                       missing:{' '}
-                      <span className="text-slate-400">
+                      <span className="text-text-muted">
                         {criterion.claim.missing.join(', ')}
                       </span>
                     </div>
@@ -173,14 +173,14 @@ export const CertificationWorkspace: React.FC = () => {
       </div>
 
       {/* The refusal reason, in full. §11's fourteen fields, and which are absent. */}
-      <div className="bg-[#0d0f17] border border-white/[0.08] rounded-md p-4">
+      <div className="bg-[var(--color-surface-1)] border border-border-strong rounded-md p-4">
         <div className="flex items-center gap-2 mb-3">
-          <Award className="w-4 h-4 text-cyan-400" />
-          <h3 className="text-[11px] font-bold tracking-wider text-slate-300 uppercase">
+          <Award className="w-4 h-4 text-accent" />
+          <h3 className="text-[11px] font-bold tracking-wider text-text uppercase">
             REQUIRED PROVENANCE (§11)
           </h3>
         </div>
-        <p className="text-[10px] text-slate-500 mb-3 leading-relaxed">
+        <p className="text-[10px] text-text-subtle mb-3 leading-relaxed">
           A figure is REPORTABLE only when every one of these is present. A number
           without them may be shown, never quoted as a result.
         </p>
@@ -188,7 +188,7 @@ export const CertificationWorkspace: React.FC = () => {
           {grad.required_fields.map((field) => (
             <span
               key={field}
-              className="px-2 py-1 rounded text-[10px] font-mono bg-white/[0.03] border border-white/[0.06] text-slate-400"
+              className="px-2 py-1 rounded text-[10px] font-mono bg-surface-veil border border-border-subtle text-text-muted"
             >
               {field}
             </span>
@@ -208,9 +208,9 @@ function ClaimBadge({
   compact?: boolean;
 }) {
   const map = {
-    REPORTABLE: { cls: 'bg-emerald-950/60 border-emerald-800/60 text-emerald-300', Icon: CheckCircle2 },
-    NOT_REPORTABLE: { cls: 'bg-amber-950/60 border-amber-800/60 text-amber-300', Icon: Ban },
-    NO_CLAIM: { cls: 'bg-slate-900/80 border-slate-700/60 text-slate-400', Icon: XCircle },
+    REPORTABLE: { cls: 'bg-positive-bg border-positive text-positive', Icon: CheckCircle2 },
+    NOT_REPORTABLE: { cls: 'bg-warning-bg border-warning text-warning', Icon: Ban },
+    NO_CLAIM: { cls: 'bg-surface-deep border-border-subtle text-text-muted', Icon: XCircle },
   } as const;
   const { cls, Icon } = map[state];
   return (
@@ -236,15 +236,15 @@ function Stat({
   note: string;
 }) {
   const toneCls = {
-    red: 'text-red-400',
-    green: 'text-emerald-400',
-    slate: 'text-slate-200',
+    red: 'text-destructive',
+    green: 'text-positive',
+    slate: 'text-text-strong',
   }[tone];
   return (
-    <div className="bg-black/30 border border-white/[0.06] rounded p-3">
-      <div className="text-[9px] uppercase text-slate-500">{label}</div>
+    <div className="bg-surface-sunken border border-border-subtle rounded p-3">
+      <div className="text-[9px] uppercase text-text-subtle">{label}</div>
       <div className={`text-lg font-bold mt-0.5 ${toneCls}`}>{value}</div>
-      <div className="text-[9px] text-slate-600 mt-0.5">{note}</div>
+      <div className="text-[9px] text-text-subtle mt-0.5">{note}</div>
     </div>
   );
 }
