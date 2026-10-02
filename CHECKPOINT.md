@@ -6,13 +6,106 @@
 - [x] **Phase 2.0 – Technology Acquisition & Validation** — COMPLETE (2026-08-23, closure table below)
 - [x] **Phase 3.0 – Prototype Integration** — COMPLETE (2026-08-23, vertical-slice build Phases 1–8)
 - [x] **Phase 4.0 – MVP Development** — COMPLETE (2026-08-23, all domains operational on paper/shadow)
-- [ ] **Phase 5.0 – Production Deployment** — GATED (5 human-held gates listed in §Phase 5.0 below)
+- [ ] **Phase 5.0 – Production Deployment** — 🚧 GATED (5 human-held gates listed in §Phase 5.0 below)
+
+### Further plan — status at a glance (2026-10-02)
+
+Every open item in the tree, marked. Read this table, not the prose above it: the
+narrative entries record what was *attempted*, this records what is actually *open*.
+
+| # | Item | Status | Blocker | Where |
+|---|---|---|---|---|
+| 1 | 🟡 `REDUCE_ONLY` overshoot check | 🟡 **PARTIAL** | `classify_plan` has no absolute quantity | `core/reduce_only.py` |
+| 2 | ⛔ `DISABLE_STRATEGY` / `_MODEL` / `_PROVIDER` / `_BROKER` | ⛔ **ABSENT** | halt-vs-degrade decision, then approval | [ADR-007](docs/adrs/ADR-007_component_containment_disable_commands.md) |
+| 3 | 🟡 `ModelStatus.DEPRECATED` never enforced | 🟡 **LATENT GAP** | ADR-007 approval (item 2 precedes it) | `kernel/registries.py:317` |
+| 4 | 🟠 Multi-process concurrency flake | 🟠 **OPEN** | needs a capture; instrumentation suppresses it | `tests/test_v1a2_concurrency.py` |
+| 5 | ⛔ `DISABLE_BROKER` file ownership | ⛔ **BLOCKED** | `communities/c5_execution/adapters.py` has uncommitted edits from another work stream | ADR-007 |
+| 6 | 🟡 14 of §2's 25 layers have no screen | 🟡 **GAP** | incl. L23 + L25, the terminus of §12 | `frontend/src/lib/architectureLayers.ts` |
+| 7 | 🟡 SSE payload carries only 2 keys | 🟡 **PARTIAL** | consumer-side coalescing landed; topic-delta is a contract change | `api/server.py:366` |
+| 8 | 🔵 UI layout beyond the §2 spine | 🔵 **YOURS** | visual arrangement deliberately unchosen | `LeftIntelligenceRail.tsx` |
+| 9 | 🔵 §8 semantics are undefined in the architecture | 🔵 **NEEDS INPUT** | ADR-007 asks for one decision covering 4 commands | ADR-007 |
+| 10 | 🟠 Phase 5.0 production gates | 🟠 **HUMAN-HELD** | credentials, licensed data, CA sign-off, live approval | §Phase 5.0 below |
+
+Legend — ✅ done · 🟡 partial or latent · 🟠 open, needs a capture or human action ·
+⛔ blocked · 🔵 decision explicitly reserved for the principal
 
 ---
 
-## Current Status: V1-A.2 LANDED — PostgreSQL tier, JetStream backbone, safety plane · mypy strict over the whole tree · 467 tests (427 pass / 40 service-gated)
+## Current Status: ARCHITECTURE RECONCILED — as-built recorded against the frozen target · two separated control surfaces · 1762 backend tests (1717 pass / 45 gated) + 139 frontend · mypy clean (109 files)
 
 **Master System Navigation Map**: [docs/00_system_map.md](docs/00_system_map.md)
+**As-built vs target**: [CURRENT_ARCHITECTURE.md](CURRENT_ARCHITECTURE.md) (NEW)
+**Gap detail & evidence**: [ARCHITECTURE_MAPPING.md](ARCHITECTURE_MAPPING.md)
+
+---
+
+### ARCHITECTURE RECONCILED AGAINST THE FROZEN TARGET — mapping, zones, surfaces, gaps (2026-10-02)
+
+`ARCHITECTURE.txt` (1,903 lines, frozen target, outside this repo and unversioned) had
+never been reconciled against the tree. Eight commits did so. What was found is the
+substance of the entry; what was built is the short list.
+
+**Two independent corrections to prior claims** — both recorded because the pattern
+repeated three times:
+
+- ⚠️ "mypy is broken repo-wide" was **wrong**. The documented gate is
+  `mypy --python-version 3.12 --follow-imports=silent core api communities schemas`
+  (`README.md:147`), clean on 109 files. I had run `mypy .` and included `tests` —
+  neither is the gate — and reported my invented invocation as its verdict. A config
+  "fix" was written for a non-problem and reverted.
+- ⚠️ "§4's Qdrant/MLflow conflicts with the three-dependency rule" was **wrong**.
+  Postgres/NATS/Qdrant are correctly optional extras; the three-dependency rule covers
+  *required* imports, which `pyproject.toml` states itself. MLflow is not a dependency at
+  all — it appears only in two candidate-technology docs as the baseline being compared
+  against ClearML. QuestDB and Iceberg are labelled "candidate" by §4 itself.
+
+Lesson, recorded: **asserting a conflict from memory instead of reading both sides against
+the tree.** Three instances, all settled in minutes once looked at.
+
+**Built:**
+
+- ✅ Trust zones enforced per module, not by directory proxy
+  (`ARCHITECTURE_ZONES.json` + `tests/test_trust_zones.py`, 7 tests, mutation-checked).
+- ✅ **§8's kill path given its own runtime.** Second Vite entry, own bundle, no CDN, no
+  font host. Measured isolation from sourcemaps, not from a comment
+  (`scripts/verify_operator_isolation.py`): 7 first-party modules, 10.5 KB against the
+  console's 413.9 KB, 25 forbidden modules checked. Both the check and its falsifiability
+  are verified — it was made to go red by a real leak, twice, for two different checks.
+- ✅ Console regrouped along **§2's 25 named layers** (the plan's eight invented stage
+  names appear nowhere in the architecture; §12 is a flow diagram, not a list). 29 tests,
+  13 mutations caught.
+- ✅ **Layer 7 certification view** — the endpoint, types and API client all existed and
+  nothing rendered them. Threshold verdict and reportability are separate columns, because
+  a Sharpe of 1.6 that clears its threshold is still `NOT_REPORTABLE` without a defined
+  universe, an out-of-sample window and a confidence interval.
+- ✅ **`REDUCE_ONLY`** — §8's missing middle setting. Previously an operator wanting
+  exposure down could only do nothing or flatten everything. RISK_ADMIN, audited,
+  enforced in `classify_plan`. 34 unit tests + 18 integration, **7 mutations caught**.
+- ✅ **Stream-driven refetch** for the five workspaces where a stale figure is a safety
+  problem, coalesced so sixteen workspaces do not storm the API. 10 tests, 7 mutations.
+- ✅ §13 → goal-registry mapping recorded (28 → 25 goals; refinement, not drift).
+
+**Two defects the tests caught in the new work itself**, both invisible to unit tests:
+
+- The first reduce-only wiring sat *after* the autonomy branches in `classify_plan`, and
+  each branch returns immediately — so it was unreachable whenever autonomy was
+  `EXECUTING`, the normal state. The command would have authenticated, audited, returned
+  `{"reduce_only": true}`, and changed nothing.
+- `net_exposure` was written against an iterable, but the control plane holds positions as
+  `dict[execution_id, position]`, so iteration yielded keys and every read raised
+  `AttributeError` at the only call site that matters.
+
+A third, found by mutation: my float-noise test asserted `0.3 - 0.1 → 0.2`, an ordinary
+reduction exercising neither the comparison operator nor the tolerance — it passed with
+the rule deliberately broken. Replaced with properties from a brute-force search over 6,069
+input combinations. A fourth survivor was *not* a hole: `>=` → `>` differs in 2 of 6,069,
+both needing contrived float coincidences. Reported as an equivalent mutant with the search
+recorded, rather than deleted or falsely called a test hole.
+
+**Gates:** 1762 backend tests run · 1717 passed · 45 skipped · **0 failed** · 139 frontend
+tests across 24 files · `mypy --python-version 3.12 --follow-imports=silent core api
+communities schemas` clean (109 files) · `tsc -b --noEmit` clean · `ruff check .` clean ·
+anti-pattern lint clean (6 rules) · operator isolation gate green.
 
 ---
 
@@ -472,9 +565,12 @@ Tests: 201 hermetic / **206 passed, 1 skipped with AIOS_TEST_PG_DSN**. Ruff clea
 
 Per `ARCHITECTURE_GAP_ANALYSIS.md` §3.10 / original architecture §18:
 
-- `core/platform_events.py` (NEW): `PlatformEventType` (15 canonical
+- `core/platform_events.py` (NEW): `PlatformEventType` (**19** canonical — the "15" first
+  recorded here was stale by four: order_accepted_by_venue, order_cancelled,
+  reconciliation_completed and reconciliation_finding_opened were added later;
   ``aios.platform.*`` events: dataset_version_created, experiment_started/completed,
-  hypothesis_created/rejected, evaluation_completed, order_requested/authorized/denied,
+  hypothesis_created/rejected, evaluation_completed, order_requested/accepted_by_venue/
+  authorized/denied/cancelled, reconciliation_completed, reconciliation_finding_opened,
   risk_decision_made, execution_completed, post_mortem_created, promotion_approved/denied,
   rollback_triggered) + validated `PlatformEvent` payload (actor, object ref, reason,
   receipt_ids, metadata) with per-type factory constructors.
