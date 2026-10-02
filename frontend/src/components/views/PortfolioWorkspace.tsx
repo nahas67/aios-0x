@@ -11,6 +11,7 @@ import { CapitalAllocationMap } from '../CapitalAllocationMap';
 import { PortfolioConcentrationHeatmap } from '../PortfolioConcentrationHeatmap';
 import { portfolioApi } from '../../api/backend';
 import { useApi } from '../../hooks/useApi';
+import { useStreamRefresh } from '../../hooks/useStreamRefresh';
 import { adaptPositions } from '../../adapters/positions';
 import { adaptPortfolio } from '../../adapters/portfolio';
 import { Unavailable } from '../Unavailable';
@@ -40,8 +41,12 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
   const [newPrice, setNewPrice] = useState<string>('148.20');
   const [newStrategy, setNewStrategy] = useState<string>('Crypto Momentum & Funding Arbitrage');
 
-  const positionsQuery = useApi(() => portfolioApi.positions());
-  const portfolioQuery = useApi(() => portfolioApi.portfolio());
+  // Stream-driven refetch: positions and portfolio valuation are current state, and a
+  // stale holdings table is how an operator ends up reasoning about a book that has
+  // already changed. Coalesced by useStreamRefresh, so this is not a poller.
+  const tick = useStreamRefresh();
+  const positionsQuery = useApi(() => portfolioApi.positions(), [tick]);
+  const portfolioQuery = useApi(() => portfolioApi.portfolio(), [tick]);
 
   if (positionsQuery.loading || portfolioQuery.loading) {
     return <div className="text-xs text-slate-400 font-mono p-8">Loading portfolio from /api/v1/positions + /portfolio…</div>;

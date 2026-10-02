@@ -2,6 +2,7 @@ import React from 'react';
 import { Award, Ban, CheckCircle2, ShieldAlert, XCircle } from 'lucide-react';
 import { portfolioApi } from '../../api/backend';
 import { useApi } from '../../hooks/useApi';
+import { useStreamRefresh } from '../../hooks/useStreamRefresh';
 import { Unavailable } from '../Unavailable';
 import type { ClaimGateState } from '../../api/types';
 
@@ -34,7 +35,12 @@ import type { ClaimGateState } from '../../api/types';
  * that rather than implying it is waiting on a metric.
  */
 export const CertificationWorkspace: React.FC = () => {
-  const gradQ = useApi(() => portfolioApi.graduation());
+  // The gate verdict is derived from live paper metrics, so a stale verdict is a stale
+  // claim about whether anything may trade. Stream-driven, coalesced. Kept on a shorter
+  // interval than the default because this is the screen an operator checks before
+  // acting, and it is a single cheap aggregate endpoint.
+  const tick = useStreamRefresh(5_000);
+  const gradQ = useApi(() => portfolioApi.graduation(), [tick]);
 
   if (gradQ.loading) {
     return (

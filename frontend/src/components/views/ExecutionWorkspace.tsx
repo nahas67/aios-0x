@@ -12,6 +12,7 @@ import { LiveExecutionTape } from '../LiveExecutionTape';
 import { CreateOrderModal } from '../CreateOrderModal';
 import { portfolioApi } from '../../api/backend';
 import { useApi } from '../../hooks/useApi';
+import { useStreamRefresh } from '../../hooks/useStreamRefresh';
 import { adaptOrders } from '../../adapters/orders';
 import { Unavailable } from '../Unavailable';
 
@@ -41,7 +42,10 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
   const [selectedAssetDepth, setSelectedAssetDepth] = useState<string>('BTC/USD');
   const [activeTab, setActiveTab] = useState<'tape' | 'depth' | 'analytics'>('tape');
 
-  const ordersQ = useApi(() => portfolioApi.orders());
+  // Orders are the live edge of the book: a working order that has since filled or been
+  // cancelled must not keep rendering as working. Stream-driven, coalesced.
+  const tick = useStreamRefresh();
+  const ordersQ = useApi(() => portfolioApi.orders(), [tick]);
 
   const handleStagedNotice = (msg: string) => {
     if (onNotice) onNotice(msg);

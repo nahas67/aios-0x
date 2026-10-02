@@ -258,15 +258,46 @@ changes a dep — so their figures are silently as-of-load with no indication on
 A richer event bus already exists internally (`core/event_bus.py`, topic-scoped
 `subscribe`) and is not exposed over SSE.
 
-### Why this is a decision and not a task
+### What was done about it
 
-Closing it means changing what the server publishes on a two-second hot loop — the SSE
-payload shape is a contract, and widening it is backend design work, not frontend
-adoption. It is recorded here rather than built, and it is the one item in the plan's
-sequencing that cannot proceed on the plan's own authority.
+The consumer side, because the fix belongs there. A frame arriving is already a
+sufficient signal that something moved, so the SSE **payload was not changed** — that
+would put more work on a two-second hot loop for every client, including ones that want
+one resource, and it is a contract change.
 
-The narrower alternative — labelling each non-streamed workspace's data as-of-fetched —
-is a UI change nobody has asked for, so it is not done either.
+`useStreamRefresh` (opt-in) plus a pure, unit-tested decider in
+`frontend/src/lib/streamRefresh.ts` advance a counter when a frame has arrived since the
+last refetch **and** a floor has elapsed. Pass it into `useApi`'s deps:
+
+```tsx
+const tick = useStreamRefresh();
+const q = useApi(() => riskApi.risk(), [tick]);
+```
+
+Both conditions are required. Without the interval, sixteen workspaces on a two-second
+cadence is roughly eight requests a second against an API whose `/financial/*` routes hit
+SQLite with `synchronous = FULL` — trading a staleness bug for a self-inflicted load
+problem. Without the frame check, an *idle* stream drives an unbounded refetch loop.
+
+Adopted where the displayed figure is current state an operator acts on: risk, portfolio,
+execution, the certification verdict, and live trading. Deliberately not adopted for audit
+(an append-only log), research, settings, or design tokens.
+
+Opt-in rather than built into `useApi`: it serves everything including one-shot fetches
+that must not repeat, and making it self-refreshing would change every existing call site
+at once, invisibly.
+
+Ten tests, seven mutations all caught. The subtle one is the stamp: recording the *frame*
+time instead of `now` lets a stale timestamp suppress a later legitimate refetch, so a
+workspace silently stops updating with nothing thrown and no obvious red test.
+
+### Still open
+
+The stream still carries only `executive` and `platform_tail`, so this is a liveness
+signal rather than a data channel — workspaces refetch to discover what changed instead of
+being told. That is the right trade at sixteen workspaces, but a topic-delta design off
+`core/event_bus.py` would remove the refetch entirely. That is a contract change and a
+larger piece of work, not a small task.
 
 ---
 
@@ -344,6 +375,8 @@ How to re-check every claim above:
 | only 3 timers exist, none polling | `rg -n "setInterval\s*\(" frontend/src` → expect exactly 3 hits: `api/stream.ts:68`, `hooks/useLiveExecutive.ts:123`, `components/TopSystemBar.tsx:55`. **Not** `rg -n "setInterval"`, which returns 4 — the extra hit is `api/stream.ts:40`, a `ReturnType<typeof setInterval>` type annotation, not a timer |
 | `useApi` never polls | read `frontend/src/hooks/useApi.ts` — no timer; loads on mount and on `deps` |
 | stream payload is 2 keys | read `api/server.py:350` — `executive` and `platform_tail` only |
+| stream-driven refetch is coalesced | `frontend/src/lib/streamRefresh.ts`; 10 tests, 7 mutations caught |
+| which workspaces subscribe | `rg -n "useStreamRefresh" frontend/src/components/views` — risk, portfolio, execution, certification, live trading |
 | §2's 25 layers, and which have a screen | `frontend/src/lib/architectureLayers.ts`; gate is `architectureLayers.test.ts` (29 tests, 13 mutations caught) |
 | operator surface shares no runtime | `python scripts/verify_operator_isolation.py` — reads sourcemaps, not comments |
 

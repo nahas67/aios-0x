@@ -14,6 +14,7 @@ import { TradeTapeTimeSales } from '../trading/TradeTapeTimeSales';
 import { OrderExecutionTicket } from '../trading/OrderExecutionTicket';
 import { marketApi, portfolioApi, intelligenceApi } from '../../api/backend';
 import { useApi } from '../../hooks/useApi';
+import { useStreamRefresh } from '../../hooks/useStreamRefresh';
 import { adaptPositions } from '../../adapters/positions';
 import { adaptOrders } from '../../adapters/orders';
 import { Unavailable } from '../Unavailable';
@@ -44,9 +45,14 @@ export const LiveTradingWorkspace: React.FC<LiveTradingWorkspaceProps> = ({
   const [activeBottomTab, setActiveBottomTab] = useState<'POSITIONS' | 'WORKING_ORDERS' | 'EXECUTION_TAPE' | 'AGENT_SIGNALS'>('POSITIONS');
   const [mark, setMark] = useState<number>(0);
 
+  // Positions and orders are the live edge of the book — this is the workspace where a
+  // stale working order is most likely to be acted on. Stream-driven and coalesced.
+  // Instruments and opportunities are left alone: the former is a slow-moving reference
+  // list, and refetching the latter on every tick would be the most expensive call here.
+  const tick = useStreamRefresh();
   const instrumentsQ = useApi(() => marketApi.instruments());
-  const positionsQ = useApi(() => portfolioApi.positions());
-  const ordersQ = useApi(() => portfolioApi.orders());
+  const positionsQ = useApi(() => portfolioApi.positions(), [tick]);
+  const ordersQ = useApi(() => portfolioApi.orders(), [tick]);
   const oppsQ = useApi(() => intelligenceApi.opportunities());
 
   const instruments = useMemo(() => {

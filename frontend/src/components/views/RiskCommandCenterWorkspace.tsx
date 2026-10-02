@@ -7,6 +7,7 @@ import {
 import { RiskCommandSpectrum } from '../RiskCommandSpectrum';
 import { riskApi, settingsApi } from '../../api/backend';
 import { useApi } from '../../hooks/useApi';
+import { useStreamRefresh } from '../../hooks/useStreamRefresh';
 import { adaptRisk } from '../../adapters/risk';
 import { Unavailable } from '../Unavailable';
 
@@ -17,7 +18,14 @@ import { Unavailable } from '../Unavailable';
  * drawdown it showed was invented.
  */
 export const RiskCommandCenterWorkspace: React.FC = () => {
-  const riskQ = useApi(() => riskApi.risk());
+  // Refetched when the stream says state may have moved, coalesced to at most one
+  // request per interval. Risk state is the figure an operator acts on and the one most
+  // dangerous to read stale: a drawdown that has since crossed 3% would otherwise keep
+  // rendering as within tolerance, with nothing on screen to say when it was measured.
+  // Settings are deliberately NOT subscribed -- thresholds change on human action, and a
+  // stream refetch would suggest otherwise.
+  const tick = useStreamRefresh();
+  const riskQ = useApi(() => riskApi.risk(), [tick]);
   const settingsQ = useApi(() => settingsApi.settings());
 
   if (riskQ.loading || settingsQ.loading) {
