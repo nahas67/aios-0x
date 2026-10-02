@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AIOS-0X — Operator Surface</title>
+    <meta
+      name="description"
+      content="ARCHITECTURE.txt section 8 human control plane: deterministic, audited, AI-bypassing emergency commands on a runtime separate from the analyst console."
+    />
+    <!--
+      No web fonts, no analytics, no CDN anything.
+
+      That is the whole point of this page. The analyst console loads Google Fonts and a
+      full charting stack; if any of that is unreachable, or if the model runtime or the
+      event stream is what has failed, this page is unaffected because it never asked for
+      any of it. A kill switch that needs a font CDN to render is not a kill switch.
+    -->
+    <meta name="robots" content="noindex" />
+  </head>
+  <body class="bg-[#08090d] text-[#e2e8f0] antialiased font-mono">
+    <div id="root"></div>
+    <script type="module" src="/src/operator.tsx"></script>
+  </body>
+</html>

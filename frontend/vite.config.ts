@@ -33,5 +33,24 @@ export default defineConfig({
     sourcemap: false,
     target: "es2022",
     chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      // Two independent HTML entries, deliberately sharing no chunk.
+      //
+      // ARCHITECTURE.txt section 8 requires the emergency commands to survive
+      // model/runtime failure, and the analyst console opens an SSE stream and mounts
+      // sixteen workspaces. If the operator page were a tab inside it, anything that
+      // broke the console would take the kill switch with it. Two entries and no
+      // manualChunks means Vite emits two independent bundles; the isolation is
+      // asserted mechanically by scripts/verify_operator_isolation.py, which fails if
+      // an analyst-only module name appears in the operator bundle.
+      // Resolved relative to Vite's `root`, which is this directory. Not `__dirname`:
+      // this config is an ES module, where `__dirname` does not exist -- the build
+      // failed with an unhelpful "error during build" and no message, which is what a
+      // ReferenceError inside the config looks like from the outside.
+      input: {
+        main: "index.html",
+        operator: "operator.html",
+      },
+    },
   },
 });
