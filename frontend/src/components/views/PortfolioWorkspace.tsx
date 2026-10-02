@@ -15,6 +15,11 @@ import { useStreamRefresh } from '../../hooks/useStreamRefresh';
 import { adaptPositions } from '../../adapters/positions';
 import { adaptPortfolio } from '../../adapters/portfolio';
 import { Unavailable } from '../Unavailable';
+import { StateView } from '../StateView';
+import { classifyList } from '../../lib/stateView';
+
+/** Named so an empty state can say who looked. */
+const POSITIONS_SOURCE = '/api/v1/positions';
 
 interface PortfolioWorkspaceProps {
   onSelectPosition: (position: Position) => void;
@@ -105,6 +110,17 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
                          (p.originatingAgent && p.originatingAgent.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesClass && matchesQuery;
   });
+
+  // Three different facts, previously collapsed into one grey line:
+  //   - the source could not be read    -> unavailable (handled above by <Unavailable>)
+  //   - the source reported zero rows   -> empty
+  //   - the source HAS rows and my filter matched none of them -> not empty at all
+  // The old caption said "The paper engine holds no positions yet" for the third case: a
+  // claim about the ENGINE, derived from a search box. §3.2 does not permit that.
+  const filterIsActive = filterClass !== 'ALL' || searchQuery.trim() !== '';
+  const positionsState = filterIsActive
+    ? ({ kind: 'ready', count: filteredPositions.length } as const)
+    : classifyList(positions, POSITIONS_SOURCE);
 
   return (
     <div className="space-y-4 pb-12 font-mono">
@@ -270,9 +286,20 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
             </tbody>
           </table>
         </div>
-        {filteredPositions.length === 0 && (
-          <div className="p-6 text-center text-text-subtle text-xs">
-            No open positions. The paper engine holds no positions yet.
+        {!filterIsActive && positionsState.kind !== 'ready' && (
+          <StateView state={positionsState} noun="open positions" />
+        )}
+        {filterIsActive && filteredPositions.length === 0 && (
+          <div className="p-6 text-center">
+            <div className="text-xs font-bold uppercase tracking-wider text-text-muted">
+              No matches
+            </div>
+            {/* Names the filter, because "no results" is about the search, not the book. */}
+            <div className="text-[10px] text-text-subtle mt-1">
+              {positions.length} position{positions.length === 1 ? '' : 's'} exist; none match
+              {filterClass !== 'ALL' ? ` class ${filterClass}` : ''}
+              {searchQuery.trim() ? ` "${searchQuery.trim()}"` : ''}.
+            </div>
           </div>
         )}
       </div>

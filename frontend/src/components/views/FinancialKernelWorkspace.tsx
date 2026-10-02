@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 import { kernelApi } from '../../api/backend';
 import { useApi } from '../../hooks/useApi';
 import { Unavailable } from '../Unavailable';
+import { StateView } from '../StateView';
+import { classifyList } from '../../lib/stateView';
+
+const KERNEL_POSITIONS_SOURCE = '/api/v1/financial/positions';
+const KERNEL_ORDERS_SOURCE = '/api/v1/financial/orders';
+const KERNEL_FILLS_SOURCE = '/api/v1/financial/fills';
 import { fmtDateTime, fmtNum, fmtPrice, fmtUsd } from '../../lib/format';
 
 type Section =
@@ -90,7 +96,9 @@ export const FinancialKernelWorkspace: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-              {b.positions.length === 0 && <div className="p-4 text-center text-text-subtle text-xs">Book holds no positions.</div>}
+              {b.positions.length === 0 && (
+                <StateView state={classifyList(b.positions, KERNEL_POSITIONS_SOURCE)} noun="kernel positions" compact />
+              )}
             </div>
           </Panel>
         );
@@ -121,7 +129,9 @@ export const FinancialKernelWorkspace: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-              {q.data.positions.length === 0 && <div className="p-4 text-center text-text-subtle text-xs">No kernel positions.</div>}
+              {q.data.positions.length === 0 && (
+                <StateView state={classifyList(q.data.positions, KERNEL_POSITIONS_SOURCE)} noun="kernel positions" compact />
+              )}
             </div>
           </Panel>
         );
@@ -192,7 +202,9 @@ export const FinancialKernelWorkspace: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-              {q.data.orders.length === 0 && <div className="p-4 text-center text-text-subtle text-xs">No kernel orders.</div>}
+              {q.data.orders.length === 0 && (
+                <StateView state={classifyList(q.data.orders, KERNEL_ORDERS_SOURCE)} noun="kernel orders" compact />
+              )}
             </div>
           </Panel>
         );
@@ -223,7 +235,9 @@ export const FinancialKernelWorkspace: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-              {q.data.fills.length === 0 && <div className="p-4 text-center text-text-subtle text-xs">No fills recorded.</div>}
+              {q.data.fills.length === 0 && (
+                <StateView state={classifyList(q.data.fills, KERNEL_FILLS_SOURCE)} noun="fills" compact />
+              )}
             </div>
           </Panel>
         );

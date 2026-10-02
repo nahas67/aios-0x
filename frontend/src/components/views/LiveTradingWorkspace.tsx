@@ -18,6 +18,12 @@ import { useStreamRefresh } from '../../hooks/useStreamRefresh';
 import { adaptPositions } from '../../adapters/positions';
 import { adaptOrders } from '../../adapters/orders';
 import { Unavailable } from '../Unavailable';
+import { StateView } from '../StateView';
+import { classifyList } from '../../lib/stateView';
+
+/** Named so the empty state can say who looked. An unattributed empty is a guess. */
+const ORDERS_SOURCE = '/api/v1/orders';
+const POSITIONS_SOURCE = '/api/v1/positions';
 import type { Opportunity } from '../../api/types';
 
 interface LiveTradingWorkspaceProps {
@@ -97,9 +103,23 @@ export const LiveTradingWorkspace: React.FC<LiveTradingWorkspaceProps> = ({
     return data.opportunities ?? [];
   }, [oppsQ.data]);
 
+  // The rows AND the classification are both kept. Collapsing an unavailable source to `[]`
+  // — which this did — made the panel's caption assert that /api/v1/orders "reported" zero
+  // when nothing had been asked. §3.2: absence of a reading is not a reading of absence.
+  const positionsState = useMemo(() => classifyList(positions, POSITIONS_SOURCE), [positions]);
+
   const workingOrders = useMemo(() => {
-    if (!orders || "unavailable" in orders) return [];
-    return orders.filter(o => o.orderState === 'ROUTING' || o.orderState === 'PARTIAL' || o.orderState === 'VERIFYING');
+    if (!orders || "unavailable" in orders) {
+      return {
+        state: classifyList(
+          { available: false, reason: orders && "unavailable" in orders ? orders.unavailable : 'no orders payload' },
+          ORDERS_SOURCE,
+        ),
+        rows: [] as readonly Exclude<NonNullable<typeof orders>, { unavailable: string }>[number][],
+      };
+    }
+    const rows = orders.filter(o => o.orderState === 'ROUTING' || o.orderState === 'PARTIAL' || o.orderState === 'VERIFYING');
+    return { state: classifyList(rows, ORDERS_SOURCE), rows };
   }, [orders]);
 
   if (instrumentsQ.loading) {
@@ -251,7 +271,7 @@ export const LiveTradingWorkspace: React.FC<LiveTradingWorkspaceProps> = ({
           <div className="flex items-center gap-2">
             {[
               { id: 'POSITIONS', label: `Open Positions (${positions && !("unavailable" in positions) ? positions.length : 0})`, icon: Layers },
-              { id: 'WORKING_ORDERS', label: `Working Orders (${workingOrders.length})`, icon: Clock },
+              { id: 'WORKING_ORDERS', label: `Working Orders (${workingOrders.state.kind === 'ready' ? workingOrders.state.count : '\u2014'})`, icon: Clock },
               { id: 'EXECUTION_TAPE', label: `Recent Executions (${orders && !("unavailable" in orders) ? orders.length : 0})`, icon: Zap },
               { id: 'AGENT_SIGNALS', label: `Opportunities`, icon: Layers }
             ].map(tab => {
@@ -287,10 +307,8 @@ export const LiveTradingWorkspace: React.FC<LiveTradingWorkspaceProps> = ({
               <div className="p-4"><Unavailable title="Positions unavailable" reason={positionsQ.error ?? "no positions payload"} /></div>
             ) : "unavailable" in positions ? (
               <div className="p-4"><Unavailable title="Positions unavailable" reason={positions.unavailable} /></div>
-            ) : positions.length === 0 ? (
-              <div className="py-8 text-center text-text-muted">
-                No open positions reported by /api/v1/positions.
-              </div>
+            ) : positionsState.kind !== 'ready' ? (
+              <StateView state={positionsState} noun="open positions" />
             ) : (
               <table className="w-full text-left text-[11px]">
                 <thead className="bg-surface-sunken text-[9px] uppercase font-bold text-text-muted">
@@ -366,13 +384,11 @@ export const LiveTradingWorkspace: React.FC<LiveTradingWorkspaceProps> = ({
               <Unavailable title="Orders unavailable" reason={ordersQ.error ?? "no orders payload"} />
             ) : "unavailable" in orders ? (
               <Unavailable title="Orders unavailable" reason={orders.unavailable} />
-            ) : workingOrders.length === 0 ? (
-              <div className="py-6 text-center text-text-muted">
-                No working orders reported by /api/v1/orders.
-              </div>
+            ) : workingOrders.state.kind !== 'ready' ? (
+              <StateView state={workingOrders.state} noun="working orders" />
             ) : (
               <div className="space-y-2">
-                {workingOrders.map(ord => (
+                {workingOrders.rows.map(ord => (
                   <div key={ord.id} className="bg-surface-sunken border border-border-subtle rounded-lg p-2.5 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="font-bold text-accent">{ord.id}</span>

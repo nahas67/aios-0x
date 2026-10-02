@@ -4,6 +4,11 @@ import { researchApi } from '../../api/backend';
 import { useApi } from '../../hooks/useApi';
 import { adaptResearch } from '../../adapters/research';
 import { Unavailable } from '../Unavailable';
+import { StateView } from '../StateView';
+import { classifyList } from '../../lib/stateView';
+
+/** Named so the empty state can say who looked. */
+const KNOWLEDGE_SOURCE = '/api/v1/knowledge';
 
 /**
  * Research workspace: hypotheses + evidence from GET /api/v1/knowledge,
@@ -122,9 +127,7 @@ export const ResearchWorkspace: React.FC = () => {
             />
           </div>
         ) : adapted.hypotheses.length === 0 ? (
-          <div className="p-6 text-center text-text-subtle text-xs">
-            The knowledge ledger is empty. No hypotheses have been recorded yet.
-          </div>
+          <StateView state={classifyList(adapted.hypotheses, KNOWLEDGE_SOURCE)} noun="hypotheses" />
         ) : (
           <div className="space-y-2 mt-3">
             {adapted.hypotheses.map((h) => (

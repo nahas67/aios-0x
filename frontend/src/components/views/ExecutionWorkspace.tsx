@@ -15,6 +15,11 @@ import { useApi } from '../../hooks/useApi';
 import { useStreamRefresh } from '../../hooks/useStreamRefresh';
 import { adaptOrders } from '../../adapters/orders';
 import { Unavailable } from '../Unavailable';
+import { StateView } from '../StateView';
+import { classifyList } from '../../lib/stateView';
+
+/** Named so the empty state can say who looked. */
+const EXECUTION_ORDERS_SOURCE = '/api/v1/orders';
 
 interface ExecutionWorkspaceProps {
   onSelectOrder?: (order: ExecutionOrder) => void;
@@ -118,9 +123,7 @@ export const ExecutionWorkspace: React.FC<ExecutionWorkspaceProps> = ({
           </span>
         </div>
         {orders.length === 0 ? (
-          <div className="p-6 text-center text-text-subtle text-xs">
-            No orders in the order manager yet. Dispatched orders will appear here.
-          </div>
+          <StateView state={classifyList(orders, EXECUTION_ORDERS_SOURCE)} noun="orders" />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-3 text-xs">
             {(['FILLED', 'ROUTING', 'PARTIAL', 'CANCELLED'] as const).map((s) => (

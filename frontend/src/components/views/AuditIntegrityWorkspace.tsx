@@ -12,6 +12,8 @@ import { auditApi } from '../../api/backend';
 import { useApi } from '../../hooks/useApi';
 import { adaptAudit } from '../../adapters/audit';
 import { Unavailable } from '../Unavailable';
+import { StateView } from '../StateView';
+import { classifyList } from '../../lib/stateView';
 import { AuditRecord } from '../../types';
 
 /**
@@ -217,7 +219,7 @@ export const AuditIntegrityWorkspace: React.FC = () => {
                 </div>
               </>
             ) : (
-              <div className="text-xs text-text-subtle">No record selected.</div>
+              <StateView state={classifyList([], "the audit log")} noun="record selected" compact />
             )}
           </div>
         </div>
