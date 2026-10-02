@@ -299,8 +299,8 @@ is removed.
 
 ## 3. Defects found and fixed in this cycle
 
-Sixty-eight. Twenty-seven were found by a test written to assert the property, not by
-inspection — the point of writing the test first. The other thirty-seven (#28–#68)
+Seventy. Twenty-seven were found by a test written to assert the property, not by
+inspection — the point of writing the test first. The other forty-three (#28–#70)
 were found by *running the artifact* rather than reading it: building the image,
 starting the container, calling the release packager, standing up PostgreSQL and
 NATS, model-checking the TLA+ specs, and diffing the frozen architecture against
@@ -392,6 +392,8 @@ and a suite that only tests the former will never notice the latter.
 | 66 | The document's last line said the work was uncommitted | "**Nothing is committed.** 49 files are modified or new on `feat/command-center-ui` with a clean tree otherwise. Commit and review before proceeding further." Reality: 139 commits on `main`, 497 tracked files, clean tree, and that branch 0 ahead and 38 behind. It was the **last line of the document**, which is where a skimming reader lands, and it was the single most misleading sentence in the file -- a reader would have believed the cycle's work was unsaved and started by committing it. Found by an independent audit of the document against the tree rather than by reading it, which is the point: I had read this file dozens of times this cycle and never noticed a sentence that was wrong in the most consequential direction available |
 | 67 | A figure was corrected in the headline and left wrong in the body | KillSwitch's TLA+ search depth was given as 4 in section 4 and 11 in the verified block. I corrected the block at `899f442` and left section 4 alone -- **the same incomplete correction as #63, one commit later**, and the second time in a row, which is what makes it a shape rather than an accident. A figure corrected in one place and not another is worse than a figure wrong everywhere: a reader who finds the corrected one concludes the document is reliable and stops checking, and the stale copy is the one that survives grep. Found by the same audit, along with `Reconciliation` being missing from section 4's spec list while named in the block above |
 | 68 | Ten test counts in this document were never true, and nothing pins any of them | Registry validator 17→19, authority-chain 61→54 (61 was 54 plus 7 from a file it did not name), security master 46→47, corporate actions 18→19, PIT fabric 20→19, claim ledger 22→23, experiment sink 30→34, playbook derivation 33→35, frontend decisions 18→20, and "Of 1750 tests in the tree" where the tree collects 1700 without a live backend and 1751 with one. Recounted with `pytest --collect-only`, which sees parametrised tests a `def test_` grep cannot, so a grep would have been wrong in the other direction too. Two of the ten were found by ME, not the audit: the frontend count I had myself made stale, and a count my own script asserted from memory that the document never claimed. **The general form: an inventory of figures in prose is unpinned data.** Nothing fails when one drifts, so every one of them is a small lie that survives indefinitely, and the whole class collapses at once when someone finally runs the inventory against the tree |
+| 69 | The adapter's `hasattr` sandbox guard can never be false | `CcxtExecutionAdapter.__init__` reads `if self.testnet and hasattr(self._client, "set_sandbox_mode")`. `set_sandbox_mode` is defined on ccxt's **base** `Exchange` class, so `hasattr` is True for all 104 exchange classes and the guard can never skip anything. **Misleading rather than dangerous**, and the row says so: because the guard is always True, sandbox mode is always attempted, so it cannot cause a silent fall-through to live -- the behaviour is fail-closed. What the code claims to do and what it does are different things. Found by researching which venue the adapter could use, not by reading it. The real fix is larger than the guard: sandbox activation must become a per-venue configuration value, because `binance` and `bybit` both require `enable_demo_trading(True)` and `set_sandbox_mode(True)` routes them to legacy hosts |
+| 70 | A `testnet` configuration can route to a live venue | For `weex`, ccxt's `urls['test']` **is** its production host (`api-spot.weex.com`, `api-contract.weex.com`). `set_sandbox_mode(True)` therefore succeeds and sets the active url to production. The adapter's constitutional guard -- which refuses when `testnet` is false -- is satisfied here precisely *because* testnet is true, and nothing else in the adapter inspects the host it is about to talk to. Reachable by configuration alone, with no bug required: construct the adapter with `exchange_id="weex"` and the constitutional rails all satisfied, and it will trade on the live venue. **The verification detail is the part worth keeping.** This is invisible to `describe()`, which returns a freshly-built pristine description on every call and so always shows production urls; it appears only by reading the mutated INSTANCE state after the call. An intermediate probe reported `set_sandbox_mode` succeeded and then printed `www.deribit.com` for deribit -- immediately after enabling its testnet -- because it was reading the wrong object. Verified against ccxt 4.5.78; 43 exchanges have a genuinely distinct `test` host, and this is the one adverse case among them. Written down now while it is still unreachable, because it becomes reachable the moment someone provisions a venue |
 
 Three of these deserve emphasis. **#10** is the class of bug that makes a
 statistic meaningless while looking perfectly healthy: PBO returned 1.0 for
@@ -865,6 +867,15 @@ signing in CI, and OpenBao stay explicitly deferred — stated, not pretended.
 
 ### W12 — G240 Long Shadow · `BLOCKED` · G250 Canary Capital · `BLOCKED`
 
+G240's remaining blocker is a validated broker testnet connection. The research half of
+that -- which free sandbox could the code actually use -- is done and written up in
+`docs/12_g240_testnet_options.md`: 35 ccxt exchanges clear the adapter's capability
+checks, 10 are substantial venues, and the decision reduces to a short list rather than an
+open question. What remains is a human provisioning credentials and choosing a venue, plus
+the five Phase 5.0 gates. The note also records two defects in the adapter that research
+surfaced (#69, #70) and a tension worth putting to whoever decides: the easiest venue to
+connect is the one that documents itself as NOT a realistic market simulation, which is
+awkward for a goal whose purpose is validating behaviour against realistic conditions.
 Both correctly blocked, and engineering cannot unblock them. G240's former
 engineering dependencies (G080/G110/G140/G160) are all LANDED; what remains
 is a validated broker testnet connection (needs network and credentials —
