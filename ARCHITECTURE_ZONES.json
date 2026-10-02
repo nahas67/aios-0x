@@ -1,0 +1,167 @@
+{
+  "$comment": [
+    "Machine-readable trust-zone map. ARCHITECTURE_PLANES.md is the prose manifest;",
+    "this file is what tests/test_trust_zones.py enforces. The test asserts the two",
+    "agree, so neither can drift from the other silently.",
+    "",
+    "ARCHITECTURE.txt section 7 defines FOUR trust zones and one rule:",
+    "  'AI zones must not directly access capital credentials.'",
+    "That rule is about AUTHORITY, not about directories. The manifest's eight planes",
+    "are capability groupings, so several of them straddle zones -- recorded below",
+    "rather than hidden by forcing a one-to-one mapping that would be a lie.",
+    "",
+    "SHARED is not a fifth zone from the architecture. It marks modules that carry no",
+    "authority of their own -- pure type/contract modules and the transport -- which",
+    "cannot violate section 7's rule because they cannot reach capital at all. Naming",
+    "them explicitly is better than dropping them, because a module missing from the",
+    "map is indistinguishable from a module nobody has classified."
+  ],
+
+  "source": "ARCHITECTURE.txt section 7 (trust zones) and section 6 (logical services)",
+
+  "zones": {
+    "A": {
+      "name": "Financial Core",
+      "trust": "highest",
+      "contents": "ledger, portfolio projection, risk, authorization, execution, reconciliation"
+    },
+    "B": {
+      "name": "Market / Quant",
+      "trust": "high",
+      "contents": "market data, features, quant models, portfolio optimization"
+    },
+    "C": {
+      "name": "AI / Research",
+      "trust": "restricted",
+      "contents": "large model, fast model, browser, documents, agent tools"
+    },
+    "D": {
+      "name": "Control",
+      "trust": "control",
+      "contents": "audit, observability, governance, secrets, emergency control"
+    },
+    "SHARED": {
+      "name": "No authority",
+      "trust": "n/a",
+      "contents": "pure types and transport; outside section 7's rule by construction"
+    }
+  },
+
+  "assignments": [
+    {"module": "frontend/src/*", "zone": "D", "service": "audit_service", "plane": "Experience"},
+    {"module": "api/server.py", "zone": "D", "service": "audit_service", "plane": "Experience"},
+    {"module": "api/views.py", "zone": "D", "service": "audit_service", "plane": "Experience"},
+    {"module": "aios/cli.py", "zone": "D", "service": "control_plane", "plane": "Experience"},
+
+    {"module": "kernel/identity.py", "zone": "D", "service": "control_plane", "plane": "Control"},
+    {"module": "kernel/capability.py", "zone": "D", "service": "control_plane", "plane": "Control"},
+    {"module": "kernel/state_machine.py", "zone": "D", "service": "control_plane", "plane": "Control"},
+    {"module": "kernel/authority.py", "zone": "D", "service": "control_plane", "plane": "Control"},
+    {"module": "kernel/receipts.py", "zone": "D", "service": "audit_service", "plane": "Control"},
+    {"module": "kernel/promotion.py", "zone": "D", "service": "control_plane", "plane": "Control"},
+    {"module": "core/control_plane.py", "zone": "D", "service": "control_plane", "plane": "Control"},
+    {"module": "core/security.py", "zone": "D", "service": "control_plane", "plane": "Control"},
+    {"module": "core/agents.py", "zone": "D", "service": "control_plane", "plane": "Control"},
+    {"module": "core/challenger.py", "zone": "D", "service": "control_plane", "plane": "Control"},
+
+    {"module": "communities/c2_research/*", "zone": "C", "service": "research_service", "plane": "Intelligence"},
+    {"module": "communities/c3_verification/*", "zone": "C", "service": "evidence_service", "plane": "Intelligence"},
+    {"module": "communities/c4_strategy/*", "zone": "C", "service": "quant_research_service", "plane": "Intelligence"},
+    {"module": "communities/c8_evolution/*", "zone": "C", "service": "learning_service", "plane": "Intelligence"},
+    {"module": "communities/c10_world/*", "zone": "C", "service": "regime_service", "plane": "Intelligence"},
+    {"module": "communities/c9_portfolio/portfolio.py", "zone": "C", "service": "portfolio_service", "plane": "Intelligence"},
+    {"module": "communities/c9_portfolio/optimizer.py", "zone": "C", "service": "portfolio_service", "plane": "Intelligence"},
+    {"module": "communities/c6_observation/*", "zone": "C", "service": "learning_service", "plane": "Intelligence"},
+    {"module": "communities/c7_memory/*", "zone": "C", "service": "memory_service", "plane": "Intelligence"},
+    {"module": "research/model_lab.py", "zone": "C", "service": "quant_research_service", "plane": "Intelligence"},
+    {"module": "research/auto_research.py", "zone": "C", "service": "research_service", "plane": "Intelligence"},
+    {"module": "research/reporting.py", "zone": "C", "service": "audit_service", "plane": "Intelligence"},
+    {"module": "evaluation/harness.py", "zone": "C", "service": "audit_service", "plane": "Intelligence"},
+
+    {"module": "research/engine.py", "zone": "C", "service": "research_service", "plane": "Research"},
+    {"module": "core/research_store.py", "zone": "C", "service": "memory_service", "plane": "Research"},
+    {"module": "schemas/contracts.py", "zone": "SHARED", "service": "control_plane", "plane": "Research"},
+    {"module": "schemas/governance.py", "zone": "SHARED", "service": "control_plane", "plane": "Research"},
+
+    {"module": "communities/c5_execution/*", "zone": "A", "service": "execution_service", "plane": "Execution"},
+    {"module": "simulation/paper_engine.py", "zone": "B", "service": "execution_service", "plane": "Execution"},
+    {"module": "research/walkforward.py", "zone": "B", "service": "quant_research_service", "plane": "Execution"},
+    {"module": "research/integrity.py", "zone": "B", "service": "quant_research_service", "plane": "Execution"},
+    {"module": "research/disaster.py", "zone": "B", "service": "quant_research_service", "plane": "Execution"},
+    {"module": "simulation/generate_golden_data.py", "zone": "B", "service": "data_quality_service", "plane": "Execution"},
+
+    {"module": "core/risk_firewall.py", "zone": "A", "service": "risk_service", "plane": "Deterministic Authority"},
+    {"module": "core/risk_governor.py", "zone": "A", "service": "risk_service", "plane": "Deterministic Authority"},
+    {"module": "core/capital_firewall.py", "zone": "A", "service": "authorization_service", "plane": "Deterministic Authority"},
+    {"module": "core/authorization.py", "zone": "A", "service": "authorization_service", "plane": "Deterministic Authority"},
+    {"module": "kernel/strategy_registry.py", "zone": "A", "service": "certification_service", "plane": "Deterministic Authority"},
+    {"module": "kernel/playbook.py", "zone": "A", "service": "execution_service", "plane": "Deterministic Authority"},
+    {"module": "kernel/competence.py", "zone": "A", "service": "certification_service", "plane": "Deterministic Authority"},
+    {"module": "core/backtest.py", "zone": "B", "service": "quant_research_service", "plane": "Deterministic Authority"},
+    {"module": "core/contamination.py", "zone": "B", "service": "data_quality_service", "plane": "Deterministic Authority"},
+    {"module": "core/conformal.py", "zone": "B", "service": "uncertainty_service", "plane": "Deterministic Authority"},
+    {"module": "core/decision_gate.py", "zone": "B", "service": "uncertainty_service", "plane": "Deterministic Authority"},
+    {"module": "core/policy_bundles.py", "zone": "D", "service": "control_plane", "plane": "Deterministic Authority"},
+    {"module": "core/trace.py", "zone": "D", "service": "audit_service", "plane": "Deterministic Authority"},
+
+    {"module": "core/persistence.py", "zone": "A", "service": "ledger_service", "plane": "Data & State"},
+    {"module": "core/pg_store.py", "zone": "A", "service": "ledger_service", "plane": "Data & State"},
+    {"module": "core/store_factory.py", "zone": "A", "service": "ledger_service", "plane": "Data & State"},
+    {"module": "core/financial_kernel.py", "zone": "A", "service": "ledger_service", "plane": "Data & State"},
+    {"module": "core/ibor.py", "zone": "A", "service": "portfolio_service", "plane": "Data & State"},
+    {"module": "core/event_recovery.py", "zone": "A", "service": "reconciliation_service", "plane": "Data & State"},
+    {"module": "kernel/registries.py", "zone": "A", "service": "control_plane", "plane": "Data & State"},
+    {"module": "kernel/provenance.py", "zone": "A", "service": "evidence_service", "plane": "Data & State"},
+    {"module": "core/playbook_store.py", "zone": "A", "service": "execution_service", "plane": "Data & State"},
+    {"module": "core/seed_ingest.py", "zone": "A", "service": "reference_service", "plane": "Data & State"},
+    {"module": "data/seed/bootstrap_v1.json", "zone": "A", "service": "reference_service", "plane": "Data & State"},
+    {"module": "core/security_master.py", "zone": "A", "service": "reference_service", "plane": "Data & State"},
+    {"module": "core/security_master_store.py", "zone": "A", "service": "reference_service", "plane": "Data & State"},
+    {"module": "core/temporal.py", "zone": "A", "service": "data_quality_service", "plane": "Data & State"},
+    {"module": "communities/c11_finance/*", "zone": "A", "service": "ledger_service", "plane": "Data & State"},
+
+    {"module": "communities/c1_data/*", "zone": "B", "service": "market_data_service", "plane": "Data & State"},
+    {"module": "core/experiment_sink.py", "zone": "B", "service": "quant_research_service", "plane": "Data & State"},
+    {"module": "core/dataset_version_sink.py", "zone": "B", "service": "market_data_service", "plane": "Data & State"},
+    {"module": "core/feature_store.py", "zone": "B", "service": "feature_service", "plane": "Data & State"},
+    {"module": "core/data_quality.py", "zone": "B", "service": "data_quality_service", "plane": "Data & State"},
+
+    {"module": "core/claim_ledger.py", "zone": "C", "service": "evidence_service", "plane": "Data & State"},
+    {"module": "core/claim_writers.py", "zone": "C", "service": "evidence_service", "plane": "Data & State"},
+    {"module": "kernel/memory_tiers.py", "zone": "C", "service": "memory_service", "plane": "Data & State"},
+
+    {"module": "core/decision_sink.py", "zone": "D", "service": "audit_service", "plane": "Data & State"},
+
+    {"module": "core/event_bus.py", "zone": "SHARED", "service": "control_plane", "plane": "Infrastructure"},
+    {"module": "core/config.py", "zone": "D", "service": "control_plane", "plane": "Infrastructure"},
+    {"module": "core/notifications.py", "zone": "D", "service": "audit_service", "plane": "Infrastructure"},
+    {"module": "core/model_gateway.py", "zone": "C", "service": "intelligence_service", "plane": "Infrastructure"},
+    {"module": "core/model_router.py", "zone": "C", "service": "intelligence_service", "plane": "Infrastructure"},
+    {"module": "core/prompts.py", "zone": "C", "service": "intelligence_service", "plane": "Infrastructure"}
+  ],
+
+  "composition_roots": [
+    "kernel/bootstrap.py",
+    "simulation/replay_runner.py",
+    "simulation/kernel_bridge.py",
+    "tests/*"
+  ],
+
+  "planes_spanning_zones": {
+    "$comment": "Recorded because it is the finding, not a defect to be tidied away. The manifest's planes are capability groupings and the architecture's zones are trust groupings, so they are orthogonal by construction. Five of the eight straddle -- Data & State spans all four plus SHARED. Single-zone planes are deliberately absent: the list is for straddlers only, so adding one is a signal rather than a no-op.",
+    "Research": ["C", "SHARED"],
+    "Execution": ["A", "B"],
+    "Deterministic Authority": ["A", "B", "D"],
+    "Data & State": ["A", "B", "C", "D"],
+    "Infrastructure": ["C", "D", "SHARED"]
+  },
+
+  "zone_rule_exceptions": [
+    {
+      "importer": "communities/c4_strategy/strategy_agent.py",
+      "imports": "core.risk_firewall",
+      "kind": "type-only; instance injected by a composition root and never constructed here",
+      "justification": "ARCHITECTURE.txt section 7 forbids an AI zone from ACCESSING CAPITAL CREDENTIALS. strategy_agent.py imports RiskFirewall solely to annotate a constructor parameter and calls evaluate_strategy on the injected instance; it holds no credential, constructs nothing, and cannot escalate. The rule's intent holds and its letter does not. The proper closure is the shape this manifest already prescribes for ToolGuard -- extract the interface to schemas/ and depend on that instead of the Zone A concrete. Recorded as data rather than suppressed in the test, so it stays visible and countable, and so any NEW violation still fails."
+    }
+  ]
+}
