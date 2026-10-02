@@ -168,9 +168,26 @@ enforcement point can see:
 Marking it covered would put a green tick beside a control that does not do everything its
 name implies, which is the misrepresentation this document exists to prevent.
 
-The four `DISABLE_*` commands remain a **safety** gap, not a completeness gap. Adding them
-is a change to the path that must work when nothing else does, and `CONSTITUTION.md` §4
-makes that an ADR. **Not built here, and not proposed as a small task.**
+The four `DISABLE_*` commands remain a **safety** gap, not a completeness gap. They are
+specified in **`docs/adrs/ADR-007_component_containment_disable_commands.md`** (PROPOSED,
+awaiting human principal approval per `CONSTITUTION.md` §4.2). That ADR records three
+findings that shape the work more than the command names do:
+
+- **`DISABLE_PROVIDER` presupposes a topology the tree does not have.** The gateway is
+  *provider-agnostic but single-provider* — one instance per composition root. "Disable the
+  provider" is global containment wearing a component-level name.
+- **`ModelStatus.DEPRECATED` is declared and never read.** So `DISABLE_MODEL` is cheaper
+  than it looks (make `DEPRECATED` mean something), and in the meantime the registry can
+  record a lifecycle decision that nothing acts on — the same shape as `backtest.py`'s
+  original booleans.
+- **A halt-vs-degrade question governs all four.** `model_gateway.py:4` documents that on
+  unavailability callers "fall back to deterministic mode", while `CONSTITUTION.md` §3.2
+  says missing data means "NO TRADE / UNKNOWN - never a default value". Implementing
+  `DISABLE_MODEL` or `DISABLE_PROVIDER` by making a component unavailable would therefore
+  **keep trading**, not halt — the opposite of what an operator expects. That question is
+  answerable only once, for all four.
+
+**Not built here, and not proposed as a small task.**
 
 > §4's amendment procedure was re-read while building `REDUCE_ONLY` and an earlier version
 > of this document over-applied it. §4 governs amendments *to the constitution itself* —
