@@ -60,9 +60,22 @@ Tally: **3 covered · 1 partial · 4 absent.**
 | `DISABLE_PROVIDER` | — | ⛔ absent |
 | `DISABLE_BROKER` | — | ⛔ absent |
 
-`ControlAction` has **19 actions**. `LIQUIDATE` appears nowhere in the tree and is
+`ControlAction` has **20 actions**. `LIQUIDATE` appears nowhere in the tree and is
 implemented anyway, as a loop inside `_do_trigger_kill_switch` — found by searching for
 what the code *does*. Two rows of the first mapping draft were wrong by name-search alone.
+
+**`DEPRECATE_MODEL` (20th) retires a model version, and deliberately stops there.**
+`ModelStatus.DEPRECATED` had existed since the enum's first version and was *unreachable* —
+nothing set it, nothing read it — so the lifecycle had no terminal state and a PROMOTED
+version stayed PROMOTED forever. Promotion now also refuses a DEPRECATED version, checked
+before the EVALUATED gate so a retired model cannot be revived by re-evaluating it. Gated at
+RISK_ADMIN, mirroring `PROMOTE_MODEL`.
+
+It moves no capital. Whether deprecating a live model should flatten, reduce, or leave its
+positions alone is [ADR-007](docs/adrs/ADR-007_component_containment_disable_commands.md)'s
+halt-vs-degrade question, and answering it inside a component would be that component deciding
+a capital question that is not its own. The action's return value states `capital_effect:
+none` rather than leaving an operator to assume otherwise.
 
 **`REDUCE_ONLY` was partial, and closing that gap is the most recent change.** It could
 only ask whether an order's *direction* increases exposure, so an oversized `SELL` against

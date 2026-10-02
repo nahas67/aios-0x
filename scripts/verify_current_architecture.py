@@ -29,8 +29,17 @@ VITE = str(REPO / "frontend" / "node_modules" / ".bin" / "vite.cmd")
 results: list[tuple[bool, str, str]] = []
 
 
-def check(name: str, expected: object, actual: object) -> None:
-    results.append((expected == actual, name, f"doc={expected!r} tree={actual!r}"))
+def check(name: str, tree: object, doc: object) -> None:
+    """Record one doc-vs-tree comparison.
+
+    Parameter order is (tree, doc) and the labels say so. The first version took
+    `(name, expected, actual)` and printed `doc={expected} tree={actual}`, which is INVERTED
+    relative to what it was given — every call site passes the tree value as `expected`. So a
+    failure reported `doc=20 tree=19` when the document said 19 and the tree said 20, sending
+    a reader to fix the wrong file. A gate that misdirects on failure is worse than one that
+    is merely silent.
+    """
+    results.append((tree == doc, name, f"tree={tree!r} doc={doc!r}"))
 
 
 def note(name: str, ok: bool, detail: str) -> None:
@@ -203,6 +212,28 @@ def main() -> int:
             if rel in doc
             else "SILENT — an operator-facing subsystem exists in the tree and is not recorded",
         )
+
+    # The registry must keep retirement separate from the mutable status field. A gate
+    # reading `status` looked correct and passed every test, while `mark_evaluated` overwrote
+    # that field and made retirement reversible through a workflow that already existed. The
+    # mutation harness found it; these assertions stop the shape from regressing silently.
+    registries = (REPO / "kernel" / "registries.py").read_text(encoding="utf-8")
+    check(
+        "ModelVersion records retirement in a sticky field",
+        True,
+        "deprecated_at: str | None" in registries,
+    )
+    check(
+        "mark_evaluated cannot overwrite a retirement",
+        True,
+        "was deprecated at" in registries,
+    )
+    control_plane_src = (REPO / "core" / "control_plane.py").read_text(encoding="utf-8")
+    check(
+        "promotion refuses retirement via the sticky field",
+        True,
+        "mv.deprecated_at is not None" in control_plane_src,
+    )
 
     # --- dependency model --------------------------------------------------
     pyproject = (REPO / "pyproject.toml").read_text(encoding="utf-8")

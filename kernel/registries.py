@@ -325,6 +325,13 @@ class ModelVersion(BaseModel):
     artifact_hash: str = ""
     evaluation_metrics: dict[str, float] = Field(default_factory=dict)
     status: ModelStatus = ModelStatus.DEFINED
+    #: When this version was retired. STICKY — never cleared, and deliberately separate from
+    #: `status`, because `status` is a single mutable field that a later lifecycle step can
+    #: overwrite: `mark_evaluated` sets it back to EVALUATED, which resurrected a DEPRECATED
+    #: model and made retirement reversible through a workflow that already existed. A
+    #: retirement is a fact about the version's history; `status` is where it currently sits.
+    #: Conflating them made the first revocable by the second.
+    deprecated_at: str | None = None
     created_at: str = Field(default_factory=_now)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -383,8 +390,43 @@ class ModelRegistry:
         mv = self._versions.get(key)
         if mv is None:
             raise KeyError(f"model version not found: {key!r}")
+        # Refused rather than silently resetting. This is the line that made retirement
+        # reversible: re-evaluating a DEPRECATED version overwrote `status` with EVALUATED and
+        # the model could then be promoted again. Retirement is now recorded in the sticky
+        # `deprecated_at`, and this guard stops the status field being used as an undo.
+        if mv.deprecated_at is not None:
+            raise ValueError(
+                f"model version {key!r} was deprecated at {mv.deprecated_at}; "
+                "a retired version cannot be re-evaluated"
+            )
         mv.status = ModelStatus.EVALUATED
         mv.evaluation_metrics = metrics
+
+    def mark_deprecated(self, model_id: str, version: str) -> None:
+        """Retire a model version.
+
+        `ModelStatus.DEPRECATED` existed from the enum's first version and was unreachable:
+        nothing set it, and nothing read it. So there was no way to retire a model — a
+        PROMOTED version stayed PROMOTED forever, and the lifecycle had no terminal state.
+        That is a governance record that cannot record retirement, which is the same defect
+        class as a setting with no consumer.
+
+        Deliberately NOT implemented here: what happens to capital already allocated to a
+        model that is deprecated. Flattening, reducing, or leaving positions untouched are
+        all defensible, and the choice belongs to ADR-007's halt-vs-degrade decision, which is
+        a human principal's. This method only records the retirement; it moves no capital and
+        changes no trading behaviour. Until ADR-007 lands, a deprecated model keeps whatever
+        positions it already had, and that is stated rather than assumed.
+        """
+        key = f"{model_id}:{version}"
+        mv = self._versions.get(key)
+        if mv is None:
+            raise KeyError(f"model version not found: {key!r}")
+        mv.status = ModelStatus.DEPRECATED
+        # Idempotent: re-deprecating keeps the FIRST retirement time, because that is the fact
+        # an audit cares about and overwriting it would let the clock be reset by repetition.
+        if mv.deprecated_at is None:
+            mv.deprecated_at = _now()
 
     def get(self, model_id: str, version: str) -> ModelVersion:
         key = f"{model_id}:{version}"

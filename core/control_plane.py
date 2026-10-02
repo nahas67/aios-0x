@@ -67,6 +67,7 @@ class ControlAction(StrEnum):
     PROMOTE_CHALLENGER = "promote_challenger"
     EVALUATE_TRIAL = "evaluate_trial"
     PROMOTE_MODEL = "promote_model"
+    DEPRECATE_MODEL = "deprecate_model"
     SET_AUTONOMY = "set_autonomy"
     APPROVE_PLAN = "approve_plan"
     REJECT_PLAN = "reject_plan"
@@ -100,6 +101,10 @@ def _build_matrix() -> dict[OperatorRole, frozenset[ControlAction]]:
         ControlAction.PROMOTE_CHALLENGER,
         ControlAction.EVALUATE_TRIAL,
         ControlAction.PROMOTE_MODEL,
+        # Retirement is the mirror of promotion and is gated identically: RISK_ADMIN, not
+        # OPERATOR. A deprecated version cannot be promoted again, so deprecating a live model
+        # is a governance decision about a model that may already hold capital.
+        ControlAction.DEPRECATE_MODEL,
         ControlAction.SET_AUTONOMY,
         ControlAction.APPROVE_PLAN,
         ControlAction.REJECT_PLAN,
@@ -426,6 +431,16 @@ class ControlPlane:
             mv = models.get(model_id, version)
         except KeyError as exc:
             raise ValueError(f"unknown model {model_id}@{version}") from exc
+        if mv.deprecated_at is not None:
+            # Fail-closed on the STICKY record, not on `status`. Checking `status` was not
+            # enough: `mark_evaluated` overwrites it with EVALUATED, so a retired model could
+            # be re-evaluated and then promoted — retirement undone by a workflow that already
+            # existed. The mutation harness is what surfaced this; the status check passed
+            # every test while the guarantee it appeared to provide did not hold.
+            raise PermissionError(
+                f"model {model_id}@{version} was DEPRECATED at {mv.deprecated_at}; "
+                "a retired version cannot be promoted"
+            )
         if mv.status.value != "EVALUATED":
             raise PermissionError(
                 f"model {model_id}@{version} is {mv.status.value}; requires EVALUATED"
@@ -463,6 +478,55 @@ class ControlPlane:
             "model": f"{model_id}@{version}",
             "evaluation": record.summary,
             "rollback_target": rollback_target,
+        }
+
+    async def _do_deprecate_model(
+        self, operator_id: str, model_id: str = "", version: str = "v1", note: str = ""
+    ) -> dict[str, Any]:
+        """Retire a model version. Governance record only; moves no capital.
+
+        WHY THIS EXISTS. `ModelStatus.DEPRECATED` was declared from the enum's first version
+        and was unreachable: nothing set it and nothing read it. There was no way to retire a
+        model, so the lifecycle had no terminal state and a PROMOTED version stayed PROMOTED
+        forever. That is what ADR-007's notes meant by "the same enforcement point as
+        DISABLE_MODEL" — and unlike ADR-007, this decision does not need the principal,
+        because it resolves nothing about trading continuity.
+
+        WHAT IT DELIBERATELY DOES NOT DO. It does not flatten, reduce, or touch positions
+        already allocated to this model. Whether deprecation should do any of those is exactly
+        ADR-007's halt-vs-degrade question, and answering it here would be a component deciding
+        a capital question that is not its own. Until that ADR is approved, deprecating a model
+        records the retirement and leaves capital alone — and the return value says so, rather
+        than leaving an operator to assume the positions were handled.
+        """
+        if self.kernel_bridge is None:
+            raise RuntimeError("kernel not wired into this console")
+        models = self.kernel_bridge.kernel.models
+        try:
+            mv = models.get(model_id, version)
+        except KeyError as exc:
+            raise ValueError(f"unknown model {model_id}@{version}") from exc
+
+        already = mv.status.value == "DEPRECATED"
+        if not already:
+            models.mark_deprecated(model_id, version)
+            self.store.append_event(
+                "MODEL_DEPRECATED",
+                f"{model_id}:{version}",
+                {
+                    "by": operator_id,
+                    "note": note,
+                    "previous_status": "PROMOTED" if mv.artifact_hash else mv.status.value,
+                },
+            )
+        return {
+            "deprecated": True,
+            "already_deprecated": already,
+            "model": f"{model_id}@{version}",
+            # Stated, not assumed: an operator who deprecates a live model must not have to
+            # guess whether its positions were touched.
+            "capital_effect": "none — positions are untouched; whether deprecation should "
+            "flatten or reduce them is ADR-007's halt-vs-degrade decision and is not decided here",
         }
 
     # ------------------------------------------------- autonomy & approvals
