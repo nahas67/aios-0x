@@ -33,6 +33,15 @@ def check(name: str, expected: object, actual: object) -> None:
     results.append((expected == actual, name, f"doc={expected!r} tree={actual!r}"))
 
 
+def note(name: str, ok: bool, detail: str) -> None:
+    """A check that is not a doc/tree figure comparison — e.g. "is the doc SILENT?".
+
+    Same result plumbing as `check`, separate entry point so a reader can tell at a glance
+    which assertions compare numbers and which assert something structural.
+    """
+    results.append((ok, name, detail))
+
+
 def py_eval(expr: str):  # type: ignore[no-untyped-def]
     """Run a snippet and return stdout.
 
@@ -73,6 +82,24 @@ LAYERS_BLOCK = block(layers_ts, "export const LAYERS = [")
 GROUPS_BLOCK = block(layers_ts, "export const NAV_GROUPS")
 GAPS_BLOCK = block(layers_ts, "export const LAYERS_WITHOUT_WORKSPACE")
 
+
+#: Operator-facing subsystems that must be named in CURRENT_ARCHITECTURE.md.
+#:
+#: A gate that compares published figures cannot detect that a document is SILENT about a
+#: subsystem — six commits of new surface passed this script untouched because it only knew
+#: to look for claims it had been written against. This list is that missing check.
+COVERAGE_REQUIRED = (
+    "core/agent_advisory.py",
+    "core/chat_console.py",
+    "frontend/src/index.css",
+    "frontend/src/lib/layout.ts",
+    "frontend/src/lib/theme.ts",
+    "frontend/src/lib/stateView.ts",
+    "frontend/src/components/ChatPanel.tsx",
+    "frontend/src/components/LayoutPanel.tsx",
+    "scripts/verify_theme_gate.py",
+    "scripts/verify_state_honesty.py",
+)
 
 def main() -> int:
     doc = DOC.read_text(encoding="utf-8")
@@ -155,6 +182,27 @@ def main() -> int:
         + len(re.findall(r"placement: 'not-architecture-derived'", GROUPS_BLOCK)),
         len(re.findall(r"placement: '(?:layer|control-plane|not-architecture-derived)'", GROUPS_BLOCK)),
     )
+
+    # --- COVERAGE: can the document be SILENT about a subsystem? --------------------
+    # Everything above compares a figure the document PUBLISHES against the tree. That
+    # makes silence invisible: a whole subsystem can be added and this script still reports
+    # "all 30 claims agree", because it only knows to look for claims it was written against.
+    #
+    # That is not hypothetical. Six commits added a token layer, runtime themes, an agent
+    # advisory bridge, a chat panel, a layout system and a state-honesty layer. The document
+    # was last touched before the first of them, mentioned none of them, and passed.
+    #
+    # So: every module that carries an operator-facing surface must be NAMED here. A new
+    # subsystem that is not recorded here fails, which is the property a figure check can
+    # never have.
+    for rel in COVERAGE_REQUIRED:
+        note(
+            f"documented: {rel}",
+            rel in doc,
+            "named in CURRENT_ARCHITECTURE.md"
+            if rel in doc
+            else "SILENT — an operator-facing subsystem exists in the tree and is not recorded",
+        )
 
     # --- dependency model --------------------------------------------------
     pyproject = (REPO / "pyproject.toml").read_text(encoding="utf-8")

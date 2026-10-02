@@ -1871,18 +1871,13 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
               {/* High Density Mode & Balance Privacy Mask */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-text-strong text-xs">Ultra-High-Density Grid Layout</div>
-                    <div className="text-text-muted text-[11px]">Tighter padding and tabular numbers for multi-monitor Bloomberg-style display desks.</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={formState.highDensityMode}
-                    onChange={(e) => handleChange('highDensityMode', e.target.checked)}
-                    className="w-4 h-4 rounded accent-accent cursor-pointer"
-                  />
-                </div>
+                {/* REMOVED: `highDensityMode`. This toggle promised "tighter padding and
+                    tabular numbers" and changed nothing — no consumer existed anywhere in
+                    the tree, and it had done since before the token layer existed to
+                    implement it. It is deleted rather than wired because no product
+                    decision has been made about which density should ship by default, and
+                    inventing one here would be presenting my guess as the platform's
+                    design. See `numberFont` below for the same case. */}
 
                 <div className="p-3.5 rounded bg-surface-veil border border-border-subtle flex items-center justify-between">
                   <div>

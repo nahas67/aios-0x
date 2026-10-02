@@ -167,18 +167,69 @@ QuestDB and Iceberg *"candidate"* itself, and they are correctly absent.
 
 ---
 
+## 7b. The operator surface, and what it may not do
+
+Added after `84d456d`. Recorded here because the figure gate in §10 cannot detect *silence*:
+it compares numbers the document publishes, so a whole subsystem can be added to the tree
+without failing a single check. The coverage check in §10 exists because of that.
+
+| Surface | Where | Authority |
+|---|---|---|
+| Design tokens | `frontend/src/index.css` (36 tokens, `@theme`) | presentation |
+| Themes + accent presets | `frontend/src/lib/theme.ts` → `dark-oled`/`paper` × `CYAN`/`EMERALD`/`AMBER`/`VIOLET` | presentation |
+| Workspace layout | `frontend/src/lib/layout.ts`, edited via `frontend/src/components/LayoutPanel.tsx` | presentation |
+| Chat: queries | `core/chat_console.py` → read-only snapshot builders | **none** |
+| Chat: agent advisory | `core/agent_advisory.py` | **none** |
+| Chat: commands | `core/control_plane.py` under the operator's own role | audited |
+| Chat UI | `frontend/src/components/ChatPanel.tsx` → `frontend/src/lib/chatView.ts` | **none** |
+| Empty/unreadable states | `frontend/src/lib/stateView.ts` → `StateView` | presentation |
+
+**The advisory carries no authority, and that is structural rather than a promise.**
+`core/agent_advisory.py` imports neither `core.control_plane` nor any order sink, and
+`tests/test_agent_advisory.py` asserts that from the module's AST. Advisory routing is matched
+*before* command routing, so a question containing a command verb cannot execute at any role.
+Agents are not invoked: they are event-bus sinks whose `on_*` methods mutate state, so an
+advisor reports what an agent has already recorded rather than waking it.
+
+**Reads are an allowlist.** `READ_ONLY_VIEWS` is a closed `frozenset`; `_gather` raises on
+anything absent from it. `SystemSnapshotBuilder` mixes `risk_state()` with
+`settings_plane_put()`, so a dynamically-dispatched view name would have been one careless
+edit from a chat message changing platform settings.
+
+**Empty is not the same as unreadable.** `CONSTITUTION.md` §3.2 forbids substituting a default
+for missing data. `frontend/src/lib/stateView.ts` makes `empty` require an `observedFrom`
+naming the source that reported zero and `unavailable` require a reason — the distinction is in
+the type, so omitting it is a compile error. `LiveTradingWorkspace` previously collapsed an
+unavailable source to `[]` and then captioned it "reported by /api/v1/orders", asserting a
+reading it never took.
+
+**Hiding a workspace cannot disable anything.** `layout.ts` is presentation; the risk
+firewall, kill switch and RBAC are server-side. `NON_HIDEABLE` keeps `settings` visible
+because it holds the layout editor — hiding it would be a one-way door created by a cosmetic
+toggle.
+
+---
+
 ## 8. Verification gates, and their real numbers
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend tests | `pytest -q` | 1762 run · 1717 passed · 45 skipped · **0 failed** |
-| Frontend tests | `vitest run` | 139 across 24 files |
-| Types | `mypy --python-version 3.12 --follow-imports=silent core api communities schemas` | clean, 109 files |
+| Backend tests | `pytest -q` | 1798 run · 1753 passed · 45 skipped · **0 failed** |
+| Frontend tests | `vitest run` | 230 across 28 files |
+| Types | `mypy --python-version 3.12 --follow-imports=silent core api communities schemas` | clean, 110 files |
 | Lint | `ruff check .` | clean |
 | Anti-patterns | `scripts/anti_pattern_lint.py` | clean, 6 rules |
 | Frontend types | `tsc -b --noEmit` | clean |
 | Build | `vite build` | two entries |
 | Operator isolation | `scripts/verify_operator_isolation.py` | green, 25 forbidden modules |
+| Theme tokens | `scripts/verify_theme_gate.py` | 0 hex outside `index.css`, 0 hardcoded palette classes, both themes + all 4 accents complete |
+| State honesty | `scripts/verify_state_honesty.py` | 18 views, no hand-rolled or cause-asserting empty state |
+
+The last two are new, and both answer "can this fail?" with a mutation harness rather than a
+claim: `prove_theme_gate.py` (6 rotations) and `prove_state_honesty.py` (3 rotations). The
+theme gate exists because `tsc`, vitest, the build and the isolation gate were **all green**
+while 58 sites rendered `var(--color-accent-accent-violet)` — nothing type-checks a CSS
+variable's value.
 
 **The type gate's command matters.** `--python-version 3.12` is not optional in this
 environment: numpy 2.5.3's stubs use PEP 695 `type` statements, which a 3.11 target

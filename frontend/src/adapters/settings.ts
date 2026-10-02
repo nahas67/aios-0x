@@ -83,9 +83,7 @@ export const EMPTY_SETTINGS: SystemSettings = {
   pagerDutyIntegration: false,
   // No accentTheme: appearance is client-local (see `lib/theme.ts`). The server never
   // defined the field, so carrying it here only put an unknown key in every settings PUT.
-  numberFont: "SYSTEM",
   refreshRateMs: 0,
-  highDensityMode: false,
   marketClockTimezone: "UTC",
   privacyBalanceMask: false,
   tradingViewApiEnabled: false,
