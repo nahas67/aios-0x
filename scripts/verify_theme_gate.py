@@ -60,6 +60,19 @@ def main() -> int:
     # 3 — where it originally lived — left check 2 reading an unbound local.
     defined = set(TOKEN_DEF.findall(css_text))
 
+    # Accent names are read from the UI's own declaration rather than listed here. A
+    # hardcoded copy would make check 7 vacuous: it would compare the CSS against itself
+    # and could never notice a preset the operator can select but that has no styling.
+    theme_ts = SRC / "lib" / "theme.ts"
+    accent_export = re.search(
+        r"export const ACCENTS:\s*readonly AccentName\[\]\s*=\s*\[(.*?)\]", theme_ts.read_text(encoding="utf-8"), re.S
+    )
+    if not accent_export:
+        failures.append("could not find the ACCENTS export in frontend/src/lib/theme.ts")
+        ACCENT_NAMES_IN_CODE: set[str] = set()
+    else:
+        ACCENT_NAMES_IN_CODE = set(re.findall(r"'([A-Z]+)'", accent_export.group(1)))
+
     # 1. no hex outside index.css
     hex_sites = [
         (p.relative_to(REPO), HEX.findall(p.read_text(encoding="utf-8", errors="replace")))
@@ -122,7 +135,12 @@ def main() -> int:
         )
 
     # 4. both themes define the same tokens
-    root_block = re.search(r"(?m)^:root\s*\{(.*?)^\}", css_text, re.S)
+    # `:root[^{]*\{` rather than `:root\s*\{`: the dark theme block is now `:root,\n
+    # [data-theme='dark-oled'] {`, so the selector spans two lines and a `\s*` between
+    # `:root` and `{` no longer matches. The `[^{]*` also tolerates the comma-selector form
+    # without needing to know which themes are listed — the check is that one block exists
+    # and that it and `paper` define the same tokens, not how the selector is spelled.
+    root_block = re.search(r"(?m)^:root[^{]*\{(.*?)^\}", css_text, re.S)
     paper_block = re.search(r"(?m)^\[data-theme='paper'\]\s*\{(.*?)^\}", css_text, re.S)
     if not root_block or not paper_block:
         failures.append("index.css is missing a :root block or a [data-theme='paper'] block")
@@ -149,18 +167,76 @@ def main() -> int:
             "unused, which is the exact state ADR-004 decision 2 produced"
         )
 
+    # 6. every accent block is complete, and covers both themes.
+    #
+    # Theme and accent are independent axes, so the honest shape is a 2 x N matrix. A block
+    # that sets four of the six accent tokens silently inherits the rest from whatever was
+    # active before — which is how one preset ends up wearing another's tints. And an
+    # accent defined for the dark theme only puts a near-black `--color-info-bg` on the
+    # paper theme. Neither throws; both look broken.
+    # `(?:data-theme='paper'\]\[)?` is the optional compound prefix. The first version of this
+    # pattern wrote `\]data-` — missing the `[` — so it silently matched only the four
+    # dark-theme blocks and reported every accent as half-defined. The gate was wrong, not
+    # the CSS: worth being precise about which, because "the check fired" and "the thing it
+    # checked is broken" are different conclusions.
+    accent_blocks = re.findall(
+        r"(?m)^\[(?:data-theme='paper'\]\[)?data-accent='([A-Z]+)'\]\s*\{(.*?)^\}", css_text, re.S
+    )
+    accent_names = re.findall(r"(?m)^\[data-accent='([A-Z]+)'\]", css_text)
+    if not accent_blocks:
+        failures.append("index.css defines no [data-accent] blocks: the accent picker cannot work")
+
+    per_accent: dict[str, list[set[str]]] = {}
+    for name, body in accent_blocks:
+        per_accent.setdefault(name, []).append(set(TOKEN_DEF.findall(body)))
+
+    for name in sorted(set(accent_names)):
+        variants = per_accent.get(name)
+        if not variants:
+            failures.append(f"accent {name} has no parseable block")
+            continue
+        if len(variants) < 2:
+            failures.append(
+                f"accent {name} is defined for one theme only; theme and accent compose, "
+                "so the other theme would show this accent's dark tints"
+            )
+        reference = max(variants, key=len)
+        for index, tokens in enumerate(variants):
+            missing = sorted(reference - tokens)
+            if missing:
+                failures.append(
+                    f"accent {name} variant {index + 1} is missing "
+                    f"{len(missing)} token(s): " + ", ".join(f"--color-{t}" for t in missing)
+                )
+
+    # 7. accent names in the UI match the accent blocks in the CSS.
+    #
+    # `data-accent="EMERALD"` with no matching block repaints nothing and throws nothing:
+    # typecheck, tests and build all pass. That is exactly how the original accent picker
+    # shipped — a working-looking control wired to no effect at all.
+    for name in sorted(ACCENT_NAMES_IN_CODE):
+        if name not in accent_names:
+            failures.append(
+                f"the UI can select accent {name} but index.css defines no "
+                f"[data-accent='{name}'] block, so selecting it would repaint nothing"
+            )
+
     print(f"hex literals outside index.css : {total_hex}")
     print(f"hardcoded palette classes      : {total_palette}")
     print(f"tokens defined in index.css   : {len(defined)}")
     print(f"tokens referenced in code      : {len(used)}")
     print(f"tokens defined but unused     : {len(defined - used)}")
+    print(f"accent presets (2 themes each) : {len(accent_names)}")
     print()
     if failures:
         for f in failures:
             print(f"  FAIL {f}")
         print(f"\n{len(failures)} check(s) failed")
         return 1
-    print("theme gate green: colours are tokens, tokens exist, both themes agree")
+    print(
+        "theme gate green: colours are tokens, tokens exist, themes and accent "
+        "presets all complete"
+    )
     return 0
 
 

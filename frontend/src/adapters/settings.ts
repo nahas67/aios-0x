@@ -81,7 +81,8 @@ export const EMPTY_SETTINGS: SystemSettings = {
   telegramAlertsEnabled: false,
   telegramChatIdMasked: "",
   pagerDutyIntegration: false,
-  accentTheme: "CYAN",
+  // No accentTheme: appearance is client-local (see `lib/theme.ts`). The server never
+  // defined the field, so carrying it here only put an unknown key in every settings PUT.
   numberFont: "SYSTEM",
   refreshRateMs: 0,
   highDensityMode: false,

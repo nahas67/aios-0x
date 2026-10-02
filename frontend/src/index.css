@@ -1,16 +1,16 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 
 /*
- * DESIGN TOKENS â€” ADR-008.
+ * DESIGN TOKENS — ADR-008.
  *
  * This file is the ONLY place in `frontend/src` permitted to contain a colour literal.
  * The gate is mechanical: `rg '#[0-9a-fA-F]{6}' frontend/src --glob '!index.css'` must
  * return zero hits.
  *
  * WHY A TOKEN LAYER AT ALL, given there was none. Measured before this file was written:
- * 0 uses of `var(--â€¦)` and 206 hex literals across 43 files, 37 distinct values. The
+ * 0 uses of `var(--…)` and 206 hex literals across 43 files, 37 distinct values. The
  * previous `:root` block declared `--bg-dark`, `--panel-dark`, `--accent-cyan` and so on,
- * and nothing consumed them â€” not even the `body` rule three lines below, which hardcoded
+ * and nothing consumed them — not even the `body` rule three lines below, which hardcoded
  * the same value it had just declared. Recolouring the console was therefore not a
  * feature to add; it was a 206-site manual edit that would diverge between two screens.
  *
@@ -22,7 +22,7 @@
  * WHY THE PALETTE IS THE SHIPPED ONE, NOT ADR-004's. ADR-004 specified `#020617` and
  * `#22c55e`. Adopting those would repaint every screen on day one. The shipped surfaces
  * are used instead so this change is a pure refactor with zero visual delta, while
- * ADR-004's *semantic* intent â€” positive green, destructive red, a dense scale â€” is kept.
+ * ADR-004's *semantic* intent — positive green, destructive red, a dense scale — is kept.
  *
  * THEME CONTRACT. `[data-theme]` on <html> selects a block. `theme.ts` applies it and
  * persists the choice; this file never reads storage and never reaches for the DOM.
@@ -36,8 +36,8 @@
   --color-surface-1: #0d0f17;
   --color-surface-2: #0b0d13;
   --color-surface-3: #121520;
-  /* Alpha-composited ramp. The tree reached these by writing `white/[0.02]`â€¦`white/[0.10]`
-     and `black/30`â€¦`black/60` inline, so they are named rather than left as opacity
+  /* Alpha-composited ramp. The tree reached these by writing `white/[0.02]`…`white/[0.10]`
+     and `black/30`…`black/60` inline, so they are named rather than left as opacity
      modifiers: an alpha over an unknown backdrop cannot be themed, because the result
      depends on whatever is behind it. As tokens they resolve per theme. */
   --color-surface-sunken: rgb(0 0 0 / 35%);
@@ -84,12 +84,21 @@
 }
 
 /*
- * The active theme. Values here are the defaults `@theme` declares; restating them is
+ * The dark theme. Values here are the defaults `@theme` declares; restating them is
  * deliberate, because this is the block a theme override replaces wholesale. A theme is a
- * complete palette, not a partial patch â€” a theme that set only `surface-0` would leave
+ * complete palette, not a partial patch — a theme that set only `surface-0` would leave
  * every panel on the previous theme's background.
+ *
+ * WHY `:root` APPEARS IN THIS SELECTOR. `theme.ts` always sets `data-theme`, and the
+ * bootstrap sets it to `dark-oled` before first paint. Naming the default theme only as
+ * `:root` meant `data-theme="dark-oled"` matched no block at all — it worked by accident,
+ * because `:root` supplies the values, but the theme name in the markup was a fiction and
+ * `theme.test.ts` caught it. Listing both makes the contract true: every name in `THEMES`
+ * has a block of its own, and removing this one would make the default theme unreachable
+ * rather than silently inherited.
  */
-:root {
+:root,
+[data-theme='dark-oled'] {
   --color-surface-deep: #050608;
   --color-surface-0: #08090d;
   --color-surface-rail: #090a0f;
@@ -140,7 +149,7 @@
  * untestable in the only sense that matters.
  *
  * Deliberately a LIGHT palette rather than a second dark one, because repainting a light
- * theme forces every token to be re-derived â€” a second dark theme would let several
+ * theme forces every token to be re-derived — a second dark theme would let several
  * tokens go unexercised while still looking correct. `accent` stays cyan here, which is
  * what makes `text-on-accent` a real test: dark text on a saturated chip is the one
  * pairing that fails if the token is wired the wrong way round.
@@ -188,6 +197,103 @@
   --color-border-strong: rgb(12 10 9 / 22%);
 
   color-scheme: light;
+}
+
+/*
+ * ACCENT PRESETS — the second axis of appearance, orthogonal to theme.
+ *
+ * WHAT THIS FIXES. `SettingsWorkspace` shipped an "Accent Palette" picker with four
+ * options. It wrote `accentTheme` into the settings form and read it back, and the
+ * selection repainted nothing: no component consulted it, and every colour in the tree was
+ * a literal. It was a control that looked functional and was not — and because it went
+ * through the settings form, choosing a preset also armed a Save button for a change
+ * already visible, with a PUT the backend had no field for.
+ *
+ * WHY A MATRIX, NOT ONE BLOCK PER ACCENT. Theme and accent are independent axes, so the
+ * honest shape is 2 x 4. A single block per accent would have to commit to one set of
+ * tints, and a dark `--color-info-bg` under the paper theme is a near-black chip on white.
+ * Every block here is therefore complete: same six tokens, no reliance on a previous
+ * theme's values, which is the "theme that sets only surface-0 leaves every panel on the
+ * previous background" failure, one axis over.
+ *
+ * SPECIFICITY. `:root`, `[data-theme='paper']` and `[data-accent='…']` are all a single
+ * simple selector, so source order decides. These blocks come last deliberately: an
+ * accent is allowed to overwrite a theme's accent, and nothing else.
+ *
+ * THE RULE THAT KEEPS THEM READABLE. An accent is always the brighter, more vivid variant
+ * of its hue, and status colours stay muted. Without that, "Terminal Emerald" would be
+ * exactly `--color-positive` (#10b981) and an operator could not tell "system nominal"
+ * from "position profitable" — the one distinction this console exists to make.
+ * `verify_theme_gate.py` enforces that each block defines all six tokens.
+ */
+
+/* --- dark (default) --------------------------------------------------- */
+[data-accent='CYAN'] {
+  --color-accent: #00f0ff;
+  --color-accent-soft: #06b6d4;
+  --color-accent-glow: #67e8f9;
+  --color-accent-info: #38bdf8;
+  --color-info-bg: #083344;
+  --color-text-on-accent: #040810;
+}
+[data-accent='EMERALD'] {
+  --color-accent: #34d399;
+  --color-accent-soft: #059669;
+  --color-accent-glow: #6ee7b7;
+  --color-accent-info: #10b981;
+  --color-info-bg: #064e3b;
+  --color-text-on-accent: #04211a;
+}
+[data-accent='AMBER'] {
+  --color-accent: #fbbf24;
+  --color-accent-soft: #d97706;
+  --color-accent-glow: #fcd34d;
+  --color-accent-info: #f59e0b;
+  --color-info-bg: #451a03;
+  --color-text-on-accent: #1f1300;
+}
+[data-accent='VIOLET'] {
+  --color-accent: #818cf8;
+  --color-accent-soft: #6366f1;
+  --color-accent-glow: #a5b4fc;
+  --color-accent-info: #6366f1;
+  --color-info-bg: #1e1b4b;
+  --color-text-on-accent: #0b0a1f;
+}
+
+/* --- paper ------------------------------------------------------------
+ * Deeper accents for contrast on white, same vivid-relative-to-status rule. */
+[data-theme='paper'][data-accent='CYAN'] {
+  --color-accent: #0891b2;
+  --color-accent-soft: #0e7490;
+  --color-accent-glow: #22d3ee;
+  --color-accent-info: #0284c7;
+  --color-info-bg: #cffafe;
+  --color-text-on-accent: #ffffff;
+}
+[data-theme='paper'][data-accent='EMERALD'] {
+  --color-accent: #10b981;
+  --color-accent-soft: #047857;
+  --color-accent-glow: #34d399;
+  --color-accent-info: #047857;
+  --color-info-bg: #d1fae5;
+  --color-text-on-accent: #ffffff;
+}
+[data-theme='paper'][data-accent='AMBER'] {
+  --color-accent: #d97706;
+  --color-accent-soft: #b45309;
+  --color-accent-glow: #f59e0b;
+  --color-accent-info: #b45309;
+  --color-info-bg: #fef3c7;
+  --color-text-on-accent: #ffffff;
+}
+[data-theme='paper'][data-accent='VIOLET'] {
+  --color-accent: #6366f1;
+  --color-accent-soft: #4f46e5;
+  --color-accent-glow: #818cf8;
+  --color-accent-info: #4f46e5;
+  --color-info-bg: #e0e7ff;
+  --color-text-on-accent: #ffffff;
 }
 
 @layer base {
@@ -256,7 +362,7 @@
 
 /*
  * ADR-004 promised reduced-motion support and it was never implemented. `radar-sweep` and
- * `animate-pulse-subtle` are the two infinite animations, and both are decorative â€” the
+ * `animate-pulse-subtle` are the two infinite animations, and both are decorative — the
  * sweep on a radar widget and a glow. Disabling them costs no information.
  */
 @media (prefers-reduced-motion: reduce) {

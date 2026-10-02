@@ -22,6 +22,45 @@ import {
   LineChart,
 } from 'lucide-react';
 import { SystemSettings, AutonomyLevel } from '../../types';
+import {
+  ACCENTS,
+  THEMES,
+  applyAccent,
+  applyTheme,
+  readStoredAccent,
+  readStoredTheme,
+  type AccentName,
+  type ThemeName,
+} from '../../lib/theme';
+
+/**
+ * Accent and theme labels, keyed by the `lib/theme` union.
+ *
+ * Both lists are DERIVED from `ACCENTS` / `THEMES`, and the metadata is a `Record` over
+ * those same unions. That combination is what prevents drift in both directions: adding an
+ * accent to `lib/theme.ts` and forgetting it here is a compile error (the `Record` is no
+ * longer exhaustive), and the picker cannot offer an option with no label because it is
+ * built from the same list.
+ *
+ * The old inline array inferred `id: string`, which is why the click handler needed
+ * `as any` to satisfy the settings union. Typing `id` as `AccentName` removes the cast and
+ * turns a typo into a compile error instead of a swatch that selects nothing.
+ */
+const ACCENT_META: Record<AccentName, { name: string; desc: string }> = {
+  CYAN: { name: 'Signature Cyan', desc: 'AIOS-0X default' },
+  EMERALD: { name: 'Terminal Emerald', desc: 'High-contrast green' },
+  AMBER: { name: 'Gold & Amber', desc: 'Fixed income terminal' },
+  VIOLET: { name: 'Deep Violet', desc: 'Macro sovereign' },
+};
+
+const ACCENT_PRESETS = ACCENTS.map((id) => ({ id, ...ACCENT_META[id] }));
+
+const THEME_NAMES: Record<ThemeName, string> = {
+  'dark-oled': 'OLED Dark',
+  paper: 'Paper Light',
+};
+
+const THEME_LABELS = THEMES.map((id) => ({ id, name: THEME_NAMES[id] }));
 
 interface SettingsWorkspaceProps {
   settings: SystemSettings;
@@ -92,6 +131,31 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
       setIsDirty(true);
       return { ...prev, venues: nextVenues };
     });
+  };
+
+  /**
+   * APPEARANCE IS CLIENT-LOCAL, NOT A SERVER SETTING.
+   *
+   * `accentTheme` used to live on `SystemSettings`, which meant clicking a swatch marked
+   * the form dirty and armed a Save button — for a change that was already visible and
+   * that the server had never heard of. The setting round-tripped through a PUT the
+   * backend does not define, so "unsaved changes" was a lie in both directions.
+   *
+   * Theme and accent are now applied immediately and kept in localStorage (see
+   * `lib/theme.ts`). They are presentation, they are not policy, and they do not belong in
+   * a payload the server validates. `lib/theme.ts` owns both axes.
+   */
+  const [theme, setTheme] = useState<ThemeName>(() => readStoredTheme());
+  const [accent, setAccent] = useState<AccentName>(() => readStoredAccent());
+
+  const chooseTheme = (next: ThemeName) => {
+    setTheme(next);
+    applyTheme(next);
+  };
+
+  const chooseAccent = (next: AccentName) => {
+    setAccent(next);
+    applyAccent(next);
   };
 
   const handleSave = async () => {
@@ -1674,9 +1738,39 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     Customize institutional data refresh frequencies, numerical monospace typography, and accent themes.
                   </p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-info-bg text-accent border border-accent font-bold">
-                  OLED DARK DEFAULT
-                </span>
+                {/* The static "OLED DARK DEFAULT" badge that stood here asserted a
+                    constant as though it were the current theme. It is replaced by the
+                    live theme readout inside the Console Theme panel below. */}
+              </div>
+
+              {/* Theme + Accent. Both apply immediately — see `chooseTheme` above for
+                  why these are client-local rather than server settings. */}
+              <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-bold text-text-strong text-xs uppercase tracking-wider">
+                    Console Theme
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-info-bg text-accent border border-accent font-bold">
+                    {THEME_LABELS.find(t => t.id === theme)?.name ?? theme}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {THEME_LABELS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      aria-pressed={theme === option.id}
+                      onClick={() => chooseTheme(option.id)}
+                      className={`p-3 rounded border text-left transition-all ${
+                        theme === option.id
+                          ? 'bg-surface-raised border-accent text-text-strong'
+                          : 'bg-surface-sunken border-border-subtle text-text-muted hover:text-text-strong'
+                      }`}
+                    >
+                      <span className="font-bold text-xs">{option.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Accent Theme Selector */}
@@ -1685,29 +1779,39 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                   Signature Intelligence Accent Palette
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {[
-                    { id: 'CYAN', name: 'Signature Cyan', hex: 'var(--color-accent)', desc: 'AIOS-0X default' },
-                    { id: 'EMERALD', name: 'Terminal Emerald', hex: 'var(--color-positive)', desc: 'High-contrast green' },
-                    { id: 'AMBER', name: 'Gold & Amber', hex: 'var(--color-warning)', desc: 'Fixed income terminal' },
-                    { id: 'VIOLET', name: 'Deep Violet', hex: 'var(--color-violet)', desc: 'Macro sovereign' },
-                  ].map((theme) => (
+                  {ACCENT_PRESETS.map((preset) => (
                     <button
-                      key={theme.id}
-                      onClick={() => handleChange('accentTheme', theme.id as any)}
+                      key={preset.id}
+                      type="button"
+                      aria-pressed={accent === preset.id}
+                      onClick={() => chooseAccent(preset.id)}
                       className={`p-3 rounded border text-left transition-all ${
-                        formState.accentTheme === theme.id
-                          ? 'bg-surface-raised border-border-subtle text-text-strong shadow-md'
+                        accent === preset.id
+                          ? 'bg-surface-raised border-accent text-text-strong shadow-md'
                           : 'bg-surface-sunken border-border-subtle text-text-muted hover:text-text-strong'
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: theme.hex }}></div>
-                        <span className="font-bold text-xs">{theme.name}</span>
+                        {/* The swatch previews the preset by applying its own data-accent
+                            locally, then reading the resolved token. A literal here would
+                            show one colour while the console showed another, and would be
+                            a hex outside index.css besides. */}
+                        <span
+                          className="w-3 h-3 rounded-full border border-border-subtle"
+                          data-accent={preset.id}
+                          style={{ backgroundColor: 'var(--color-accent)' }}
+                        />
+                        <span className="font-bold text-xs">{preset.name}</span>
                       </div>
-                      <div className="text-[10px] text-text-muted">{theme.desc}</div>
+                      <div className="text-[10px] text-text-muted">{preset.desc}</div>
                     </button>
                   ))}
                 </div>
+                <p className="text-[10px] text-text-subtle">
+                  Accent applies to live, highlight and focus. Positive, warning and
+                  destructive stay fixed, so &ldquo;nominal&rdquo; is never the same colour
+                  as &ldquo;profitable&rdquo;.
+                </p>
               </div>
 
               {/* Refresh Rate & Number Font */}

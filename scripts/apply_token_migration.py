@@ -1,4 +1,4 @@
-﻿"""Apply the token migration to every colour site in frontend/src. Dry run by default.
+"""Apply the token migration to every colour site in frontend/src. Dry run by default.
 
 WHAT THIS REWRITES, and why each form needs different handling:
 
@@ -13,7 +13,7 @@ resolve `var()`; `stopColor="var(--color-accent)"` renders as nothing, the chart
 gradient, and no error is thrown. So SVG colour attributes are rewritten to `style={{...}}`,
 which is unambiguously CSS.
 
-Cases 1â€“3 produce `var(--color-â€¦)` rather than a bare token name, because an arbitrary
+Cases 1“3 produce `var(--color-…)` rather than a bare token name, because an arbitrary
 Tailwind value must contain a real CSS expression. Cases 4 and 5 come from the generated
 (utility, colour) map.
 
@@ -148,14 +148,14 @@ def main() -> int:
         for rel, before, after in changes[:12]:
             print(f"  {rel}  {before} -> {after} bytes")
         if len(changes) > 12:
-            print(f"  â€¦ and {len(changes) - 12} more")
+            print(f"  … and {len(changes) - 12} more")
         if not apply:
             print("\nDRY RUN. Re-run with --apply to write.")
         return 0
     except Exception:
         for path, data in backups.items():
             path.write_bytes(data)
-        print(f"\nERROR â€” restored {len(backups)} files byte-for-byte.")
+        print(f"\nERROR — restored {len(backups)} files byte-for-byte.")
         raise
 
 

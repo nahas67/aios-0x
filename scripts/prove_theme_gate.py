@@ -20,6 +20,7 @@ PY = str(REPO / ".venv-fresh" / "Scripts" / "python.exe")
 VERIFY = REPO / "scripts" / "verify_theme_gate.py"
 CSS = REPO / "frontend" / "src" / "index.css"
 SURFACE = REPO / "frontend" / "src" / "components" / "LeftIntelligenceRail.tsx"
+THEME_TS = REPO / "frontend" / "src" / "lib" / "theme.ts"
 
 # Anchors are read from the file, not assumed. The first version of this harness used
 # `text-text-muted` and `bg-[var(--color-surface-1)]`, neither of which exists in the rail,
@@ -54,6 +55,20 @@ MUTANTS = [
         "",
         "defined for :root but not for the paper theme",
     ),
+    (
+        "an accent block defines only some of its tokens, so it inherits the rest",
+        CSS,
+        "[data-accent='EMERALD'] {\n  --color-accent: #34d399;",
+        "[data-accent='EMERALD'] {",
+        "is missing",
+    ),
+    (
+        "the UI offers an accent that has no CSS block, so selecting it repaints nothing",
+        THEME_TS,
+        "'VIOLET'];",
+        "'VIOLET', 'SEPIA'];",
+        "index.css defines no",
+    ),
 ]
 
 
@@ -63,7 +78,7 @@ def verify() -> tuple[int, str]:
 
 
 def main() -> int:
-    backups = {p: p.read_bytes() for p in (CSS, SURFACE)}
+    backups = {p: p.read_bytes() for p in (CSS, SURFACE, THEME_TS)}
     code, out = verify()
     print("baseline:", "green" if code == 0 else "RED")
     if code != 0:

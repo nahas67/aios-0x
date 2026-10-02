@@ -457,7 +457,11 @@ export interface SystemSettings {
   pagerDutyIntegration: boolean;
 
   // Display & UI Preferences
-  accentTheme: 'CYAN' | 'EMERALD' | 'AMBER' | 'VIOLET';
+  // NOTE: appearance (theme + accent) is deliberately NOT a field here. It is client-local,
+  // held in localStorage and applied by `lib/theme.ts`. It was previously an `accentTheme`
+  // field the backend never defined, so it round-tripped through a PUT as an unknown key
+  // while marking the settings form dirty — "unsaved changes" for a change already applied
+  // and visible. `theme.test.ts` asserts it stays out, so it cannot quietly return.
   numberFont: 'JETBRAINS' | 'GEIST' | 'SYSTEM';
   refreshRateMs: number;
   highDensityMode: boolean;
