@@ -110,7 +110,14 @@ export const NAV_GROUPS: readonly ArchitectureUnit[] = [
     label: 'System-wide',
     placement: 'not-architecture-derived',
     // Cross-cutting by inspection, not by name: see the module docstring.
-    tabs: ['overview', 'trading'],
+    //
+    // `chat` is here for the same reason `design_system` and `settings` are, and NOT as a
+    // layer: §2 describes no unit for an operator conversation surface. Inventing an L26 to
+    // place it would be inventing architecture to fit a layout — and it would move the
+    // published "layers with a screen" figure, which is gated against the tree. It sits
+    // cross-cutting because it reaches read-only views AND the governed command path, which
+    // is true of no single layer.
+    tabs: ['overview', 'trading', 'chat'],
   },
   { id: 'L2', label: 'L2 · Data Truth Fabric', placement: 'layer', tabs: ['markets'] },
   { id: 'L3', label: 'L3 · Evidence Fabric', placement: 'layer', tabs: ['provenance'] },

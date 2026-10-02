@@ -44,6 +44,7 @@ import { AuditIntegrityWorkspace } from './components/views/AuditIntegrityWorksp
 import { SystemHealthWorkspace } from './components/views/SystemHealthWorkspace';
 import { DesignSystemWorkspace } from './components/views/DesignSystemWorkspace';
 import { SettingsWorkspace } from './components/views/SettingsWorkspace';
+import ChatPanel from './components/ChatPanel';
 import type { SystemSettings } from './types';
 
 const SETTINGS_CACHE_KEY = 'aios0x_settings_cache_v1';
@@ -310,6 +311,8 @@ export default function App() {
 
         {/* Main Content Workspace Container (offset for 56px fixed rail) */}
         <main className="flex-1 ml-14 p-4 sm:p-5 overflow-x-hidden min-h-[calc(100vh-44px)] min-w-0">
+          {activeTab === 'chat' && <ChatPanel />}
+
           {activeTab === 'overview' && (
             <CommandCanvas
               onSelectEvent={(evt) => triggerToast(`Inspecting event: ${evt.title}`)}

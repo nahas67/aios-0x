@@ -16,6 +16,7 @@ import {
   Landmark, 
   FileCheck2, 
   Server, 
+  MessagesSquare,
   Palette,
   Settings as SettingsIcon,
   ChevronRight,
@@ -156,6 +157,10 @@ export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
     { id: 'financial', label: 'Financial Kernel', icon: Landmark },
     { id: 'audit', label: 'Audit', icon: FileCheck2 },
     { id: 'system', label: 'System', icon: Server, badge: systemWired ?? undefined },
+    // The console's own conversation surface: read-only queries, agent advisories, and the
+    // governed command path. Grouped under System-wide in `architectureLayers.ts` because
+    // §2 describes no layer for it.
+    { id: 'chat', label: 'Operator Chat', icon: MessagesSquare },
     { id: 'design_system', label: 'Design System', icon: Palette },
     { id: 'settings', label: 'Settings', icon: SettingsIcon }
   ];

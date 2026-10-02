@@ -86,7 +86,11 @@ export default function ChatPanel(): React.ReactElement {
   );
 
   return (
-    <section className="flex flex-col h-full bg-surface-0 text-text">
+    // A viewport-relative height, not `h-full`: this panel mounts inside a `main` that has
+    // no resolved height (it is `flex-1` with a `min-h`), so `h-full` computes to `auto`
+    // and the scroll area collapses to nothing — leaving a header and an input with no log
+    // between them. The offset clears the fixed top bar plus the main element's padding.
+    <section className="flex flex-col h-[calc(100vh-7.5rem)] min-h-[24rem] bg-surface-0 text-text">
       <header className="flex items-start gap-2 px-4 py-3 border-b border-border-subtle">
         <ShieldCheck className="w-4 h-4 mt-0.5 text-accent shrink-0" aria-hidden />
         <div className="min-w-0">

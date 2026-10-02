@@ -13,6 +13,8 @@
  *     (an invented structure — the failure mode of the IA this replaced)
  */
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { WORKSPACE_TABS } from '../types';
 import {
   LAYERS,
@@ -175,6 +177,53 @@ describe('the gaps the grouping exposes', () => {
     const missing = LAYERS_WITHOUT_WORKSPACE.map((m) => m.id);
     expect(missing).toContain('L23');
     expect(missing).toContain('L25');
+  });
+});
+
+describe('every placed workspace is actually reachable', () => {
+  // WHY THIS EXISTS. The checks above are all about PLACEMENT: a tab is in the union, it
+  // belongs to a group, that group is a real layer. None of them notice that a tab can be
+  // perfectly placed and still render nothing — a nav entry that opens a blank screen.
+  //
+  // That is not hypothetical in this repo. `OperatorChat` existed with a working HTTP
+  // endpoint and ZERO call sites in the frontend, and the accent picker shipped as a
+  // control wired to no effect. Both were invisible to every existing gate because both
+  // were *present*. Presence is not reachability, and only a reachability check tells them
+  // apart.
+  //
+  // Read from source rather than imported, because the render is a conditional inside one
+  // large component — there is no seam to assert against. The same trade the theme
+  // bootstrap test makes for `index.html`.
+
+  const appSource = readFileSync(resolve(__dirname, '..', 'App.tsx'), 'utf-8');
+  const railSource = readFileSync(resolve(__dirname, '..', 'components', 'LeftIntelligenceRail.tsx'), 'utf-8');
+
+  it('renders every tab, so no nav entry opens a blank screen', () => {
+    const blank = WORKSPACE_TABS.filter((tab) => !appSource.includes(`activeTab === '${tab}'`));
+    expect(blank, `placed but never rendered: ${blank.join(', ')}`).toEqual([]);
+  });
+
+  it('gives every tab a label in the rail', () => {
+    // Without this the rail shows an unlabelled slot, or — if the rail derives its own list
+    // — drops the tab from navigation entirely while it still renders.
+    const unlabelled = WORKSPACE_TABS.filter((tab) => !railSource.includes(`id: '${tab}'`));
+    expect(unlabelled, `rendered but absent from the rail: ${unlabelled.join(', ')}`).toEqual([]);
+  });
+
+  it('renders nothing for a tab that is not in the union', () => {
+    // The converse. A stray `activeTab === 'ghost'` branch would be unreachable code that
+    // still type-checks as `never`, so nothing else would notice it.
+    const branches = [...appSource.matchAll(/activeTab === '([a-z_]+)'/g)].map((m) => m[1]);
+    const ghosts = branches.filter((tab) => !(WORKSPACE_TABS as readonly string[]).includes(tab));
+    expect(ghosts, `rendered but not in WORKSPACE_TABS: ${ghosts.join(', ')}`).toEqual([]);
+  });
+
+  it('routes every tab through the rail and the workspace, never only one', () => {
+    // A tab in the rail but not in NAV_GROUPS renders and navigates while claiming no
+    // architecture placement — the split-brain the grouping gate exists to prevent.
+    const grouped = new Set(NAV_GROUPS.flatMap((g) => g.tabs));
+    const dangling = WORKSPACE_TABS.filter((tab) => !grouped.has(tab));
+    expect(dangling).toEqual([]);
   });
 });
 

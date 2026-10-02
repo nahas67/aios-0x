@@ -69,6 +69,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     { id: 'nav-accounting', category: 'NAVIGATION', title: 'Go to Accounting & Tax', subtitle: 'Double-entry ledger & compliance controller sign-off', action: () => { onNavigate('accounting'); onClose(); } },
     { id: 'nav-audit', category: 'NAVIGATION', title: 'Go to Audit & System Integrity', subtitle: 'Merkle hash chain & Constitution v1.0.0', action: () => { onNavigate('audit'); onClose(); } },
     { id: 'nav-system', category: 'NAVIGATION', title: 'Go to System Health', subtitle: 'Wired components & telemetry (live counts)', action: () => { onNavigate('system'); onClose(); } },
+    { id: 'nav-chat', category: 'NAVIGATION', title: 'Go to Operator Chat', subtitle: 'Ask a query, consult an agent, or issue an audited command', action: () => { onNavigate('chat'); onClose(); } },
     { id: 'nav-ds', category: 'NAVIGATION', title: 'Go to Design System Catalog', subtitle: 'Institutional UI component tokens', action: () => { onNavigate('design_system'); onClose(); } },
     { id: 'nav-settings', category: 'NAVIGATION', title: 'Go to System Settings & Config', subtitle: 'Risk limits, venue gateways, multi-agent tuning & governance', action: () => { onNavigate('settings'); onClose(); } },
 

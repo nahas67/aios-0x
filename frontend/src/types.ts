@@ -28,6 +28,7 @@ export const WORKSPACE_TABS = [
   'financial',
   'audit',
   'system',
+  'chat',
   'design_system',
   'settings',
 ] as const;
