@@ -15,7 +15,7 @@ narrative entries record what was *attempted*, this records what is actually *op
 
 | # | Item | Status | Blocker | Where |
 |---|---|---|---|---|
-| 1 | 🟡 `REDUCE_ONLY` overshoot check | 🟡 **PARTIAL** | `classify_plan` has no absolute quantity | `core/reduce_only.py` |
+| 1 | ✅ `REDUCE_ONLY` | ✅ **COVERED** | overshoot gap closed via positions view + portfolio value | `core/reduce_only.py` |
 | 2 | ⛔ `DISABLE_STRATEGY` / `_MODEL` / `_PROVIDER` / `_BROKER` | ⛔ **ABSENT** | halt-vs-degrade decision, then approval | [ADR-007](docs/adrs/ADR-007_component_containment_disable_commands.md) |
 | 3 | 🟡 `ModelStatus.DEPRECATED` never enforced | 🟡 **LATENT GAP** | ADR-007 approval (item 2 precedes it) | `kernel/registries.py:317` |
 | 4 | 🟠 Multi-process concurrency flake | 🟠 **OPEN** | needs a capture; instrumentation suppresses it | `tests/test_v1a2_concurrency.py` |
@@ -80,7 +80,10 @@ the tree.** Three instances, all settled in minutes once looked at.
   universe, an out-of-sample window and a confidence interval.
 - ✅ **`REDUCE_ONLY`** — §8's missing middle setting. Previously an operator wanting
   exposure down could only do nothing or flatten everything. RISK_ADMIN, audited,
-  enforced in `classify_plan`. 34 unit tests + 18 integration, **7 mutations caught**.
+  enforced in `classify_plan`. **Later closed to full coverage**: the overshoot gap
+  needed two inputs the tree already had but never projected — `filled_quantity` from the
+  fill receipt, and a portfolio value at the composition root. 34 unit tests + 32
+  integration/overshoot, **9 mutations caught**.
 - ✅ **Stream-driven refetch** for the five workspaces where a stale figure is a safety
   problem, coalesced so sixteen workspaces do not storm the API. 10 tests, 7 mutations.
 - ✅ §13 → goal-registry mapping recorded (28 → 25 goals; refinement, not drift).

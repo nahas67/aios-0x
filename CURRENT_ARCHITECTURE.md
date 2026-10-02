@@ -45,15 +45,15 @@ modules checked.**
 
 ---
 
-## 2. §8's human control plane — 2 of 8 work
+## 2. §8's human control plane — 3 of 8 work
 
-Tally: **2 covered · 2 partial · 4 absent.**
+Tally: **3 covered · 1 partial · 4 absent.**
 
 | §8 command | Counterpart | State |
 |---|---|---|
 | `STOP` | `PAUSE_TRADING`, `TRIGGER_KILL_SWITCH` | ✅ covered |
 | `NO_NEW_RISK` | `RiskGovernor` → `EMERGENCY_HALT` | 🟡 a *state*, not a command |
-| `REDUCE_ONLY` | `SET_REDUCE_ONLY` → `classify_plan` | 🟡 **partial** |
+| `REDUCE_ONLY` | `SET_REDUCE_ONLY` → `classify_plan` | ✅ covered |
 | `LIQUIDATE` | flatten loop in `_do_trigger_kill_switch` | ✅ covered |
 | `DISABLE_STRATEGY` | — | ⛔ absent |
 | `DISABLE_MODEL` | — | ⛔ absent |
@@ -64,14 +64,18 @@ Tally: **2 covered · 2 partial · 4 absent.**
 implemented anyway, as a loop inside `_do_trigger_kill_switch` — found by searching for
 what the code *does*. Two rows of the first mapping draft were wrong by name-search alone.
 
-**`REDUCE_ONLY` is partial, and that is the honest rendering.** Enforced: any plan whose
-*direction* increases exposure is refused, including every order against a flat book.
-Not enforced: overshoot — one oversized `SELL` against a long can still cross zero and open
-a short, because `classify_plan` has only `position_size_pct`, a share of portfolio risk,
-not an absolute quantity. The quantity-aware half of the rule
-(`core/reduce_only.py::would_increase_exposure`) is written and tested, and wired to no
-gate. Marking it covered would put a green tick beside a control that does not do
-everything its name implies.
+**`REDUCE_ONLY` was partial, and closing that gap is the most recent change.** It could
+only ask whether an order's *direction* increases exposure, so an oversized `SELL` against
+a long passed directionally and would cross through zero to open a short. The fix was two
+missing inputs rather than new logic: `ReplayRunner._positions_view` now projects
+`filled_quantity` from the fill receipt, and `ControlPlane` accepts a `portfolio_value`
+callable so `position_size_pct` can become an absolute quantity. The rule itself
+(`core/reduce_only.py`) was already written and tested — it had simply been wired to no
+gate that could feed it.
+
+Where no portfolio value is supplied the directional rule still refuses every increase and
+only the overshoot refinement is skipped. That fallback is a recorded decision, not an
+oversight: failing closed would let an optional constructor argument halt the whole book.
 
 ---
 
@@ -152,8 +156,10 @@ this release, and the view says so rather than implying a metric is pending.
 **3 required** — imported by shipped modules at import time: `pydantic`,
 `pydantic-settings`, `httpx`.
 
-**4 optional extras** — infrastructure the system connects to, not libraries it imports:
-`postgres` (psycopg), `nats` (nats-py), `ccxt`, `qdrant` (qdrant-client).
+**6 optional extras** — 4 infrastructure the system connects to, not libraries it imports:
+`postgres` (psycopg), `nats` (nats-py), `ccxt`, `qdrant` (qdrant-client); plus `dev` (the
+test/lint/type toolchain) and `all` (an aggregate that repeats the four, deliberately
+rather than by reference — see the comment in `pyproject.toml`).
 
 **Not dependencies:** MLflow — it appears only in two candidate-technology documents, as
 the baseline being compared *against* ClearML. Not installed, not imported. §4 labels

@@ -22,7 +22,7 @@ from typing import Any
 
 from core.event_bus import BaseEventBus
 from core.persistence import BaseMemoryStore
-from core.reduce_only import reduce_only_blocks
+from core.reduce_only import reduce_only_blocks, reduce_only_permits
 from core.risk_governor import RiskGovernor
 from schemas.contracts import (
     DataAnomalyAlert,
@@ -136,6 +136,7 @@ class ControlPlane:
         price_lookup: Callable[[str], float] | None = None,
         flatten_callback: Callable[[str, float], Awaitable[None]] | None = None,
         positions_view: Callable[[], dict[str, dict[str, str]]] | None = None,
+        portfolio_value: Callable[[], float] | None = None,
         trial_evaluator: Callable[[str], Awaitable[dict[str, Any]]] | None = None,
         kernel_bridge: Any = None,
         reconciliation_engine: Any = None,
@@ -152,6 +153,13 @@ class ControlPlane:
         self._price_lookup = price_lookup or (lambda symbol: 0.0)
         self._flatten = flatten_callback
         self._positions_view = positions_view or (lambda: {})
+        # REDUCE_ONLY's overshoot check needs to turn a plan's `position_size_pct` into an
+        # absolute quantity, which requires knowing portfolio value. Only the composition
+        # root does. When it is not supplied the plane keeps enforcing the DIRECTIONAL half
+        # — every increase is still refused — and skips only the overshoot refinement.
+        # Deliberately not fail-closed: treating a missing wiring detail as "halt
+        # everything" would let an optional argument stop the whole book.
+        self._portfolio_value = portfolio_value
         self._trial_evaluator = trial_evaluator
         self.kernel_bridge = kernel_bridge
         # Reconciliation engine for finding resolution (B2). Optional: when no
@@ -477,17 +485,63 @@ class ControlPlane:
         # unreachable whenever autonomy is EXECUTING -- which is the normal operating
         # state, and would have made the command appear to do nothing. Narrowing must
         # also never widen, and testing the ceiling first guarantees that.
-        if self.reduce_only and reduce_only_blocks(
-            self._positions_view(),
-            str(getattr(plan.strategy, "symbol", "")),
-            str(getattr(plan.strategy, "action", "")),
-        ):
+        if self.reduce_only and self._plan_increases_exposure(plan):
             return "HOLD"
         if self.autonomy in EXECUTING_MODES and not self.paused:
             return "EXECUTE"
         if self.autonomy in QUEUING_MODES and not self.paused:
             return "QUEUE"
         return "HOLD"
+
+    def _plan_increases_exposure(self, plan: Any) -> bool:
+        """Does this plan increase exposure in its symbol, under REDUCE_ONLY?
+
+        Two tiers, and the fallback is deliberate.
+
+        With a portfolio value available, the plan's `position_size_pct` is converted to an
+        absolute quantity and the full rule runs, so an oversized order that would cross
+        through zero and open the opposite position is caught. The contract documents
+        `position_size_pct` as the notional *this trade adds*
+        (`notional_pct_of`), so it is an increment, not a target level.
+
+        Without one, the directional rule still applies and the overshoot refinement does
+        not. Failing closed instead would mean a missing optional argument halting every
+        order, which is a worse failure than a missed refinement — and the honest one to
+        choose, because the safety-critical half (no increase at all) is untouched either
+        way.
+        """
+        strategy = getattr(plan, "strategy", None)
+        symbol = str(getattr(strategy, "symbol", ""))
+        action = str(getattr(strategy, "action", ""))
+        positions = self._positions_view()
+
+        if self._portfolio_value is None:
+            return reduce_only_blocks(positions, symbol, action)
+
+        size = self._plan_quantity(strategy, symbol)
+        if size is None:
+            return reduce_only_blocks(positions, symbol, action)
+        return not reduce_only_permits(positions, symbol, action, size)
+
+    def _plan_quantity(self, strategy: Any, symbol: str) -> float | None:
+        """Absolute quantity this plan adds, or None when it cannot be derived.
+
+        Returns None — never a guess — when the price or the equity is missing, or when the
+        contract carries no `position_size_pct`. Inventing a size for an emergency control
+        would make the overshoot check a decoration.
+        """
+        pct = getattr(strategy, "position_size_pct", None)
+        if pct is None:
+            return None
+        try:
+            pct_value = float(pct)
+        except (TypeError, ValueError):
+            return None
+        equity = self._portfolio_value() if self._portfolio_value is not None else 0.0
+        price = self._price_lookup(symbol)
+        if not equity or not price:
+            return None
+        return (pct_value / 100.0) * equity / price
 
     async def queue_for_approval(self, plan: Any) -> dict[str, Any]:
         """SUPERVISED mode: park an approved plan pending human action."""

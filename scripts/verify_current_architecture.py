@@ -77,63 +77,84 @@ GAPS_BLOCK = block(layers_ts, "export const LAYERS_WITHOUT_WORKSPACE")
 def main() -> int:
     doc = DOC.read_text(encoding="utf-8")
 
-    # --- counts the document states as prose -------------------------------
-    # --- the FIGURES THE DOCUMENT PUBLISHES ---------------------------------
-    # Parsed out of the document, never restated here.
-    #
-    # The first version of this script hardcoded the expected numbers and compared the
-    # tree against THEM. Four of five mutations survived that: editing a figure in the
-    # document changed nothing the script looked at, because the script was not reading
-    # the document. It verified the tree against its own assumptions -- which is what it
-    # was already doing before this file existed, and is how the stale "15 canonical" sat
-    # in the checkpoint for months.
-    #
-    # So every published figure below is extracted from the prose and compared to the
-    # tree. A number that drifts in the document now fails here.
     def published(pattern: str, cast=int):  # type: ignore[no-untyped-def]
         m = re.search(pattern, doc)
         return cast(m.group(1)) if m else None
 
-    check("doc: §2 layer count", 25, published(r"§2's (\d+) layers"))
-    check("doc: layers with a screen", 11, published(r"layers — (\d+) have a screen"))
-    check("doc: layers without a screen", 14, published(r"Without one \((\d+)\)"))
-    check("doc: §8 covered of 8", 2, published(r"§8's human control plane — (\d+) of 8"))
-    check("doc: §8 full", 2, published(r"Tally: \*\*(\d+) covered"))
-    check("doc: §8 partial", 2, published(r"covered · (\d+) partial"))
-    check("doc: §8 absent", 4, published(r"partial · (\d+) absent"))
-    check("doc: claim-gate fields", 14, published(r"requires \*\*(\d+) provenance fields"))
-    check("doc: ControlAction count", 19, published(r"has \*\*(\d+) actions"))
-    check("doc: required deps", 3, published(r"\*\*(\d+) required\*\*"))
-    check("doc: optional extras", 4, published(r"\*\*(\d+) optional extras\*\*"))
-    check("doc: operator first-party modules", 7, published(r"\*\*(\d+) first-party modules\*\*"))
+    # --- TREE FIRST --------------------------------------------------------
+    # Everything below compares a figure PUBLISHED IN THE DOCUMENT against the value the
+    # tree actually has. The tree is computed first so those comparisons can be
+    # doc-vs-tree rather than doc-vs-a-constant.
+    #
+    # Both earlier arrangements were wrong in the same way and had to be undone:
+    #   * comparing the tree to numbers hardcoded here meant editing a figure in the
+    #     document changed nothing this script looked at -- four of five mutations
+    #     survived;
+    #   * then "fixing" it by parsing the document but still asserting a hardcoded
+    #     expected value, which merely moved the constant and went stale the moment
+    #     REDUCE_ONLY became fully covered.
+    #
+    # A hardcoded constant appears here ONLY where it is a genuine invariant of the
+    # architecture rather than a restatement of something measurable -- §2 defines 25
+    # layers, §8 names 8 commands, pyproject declares 3 required imports.
+    emergency = (REPO / "frontend/src/lib/emergencyCommands.ts").read_text(encoding="utf-8")
+    tree_commands = len(re.findall(r'^\s*command: "', emergency, re.M))
+    tree_full = len(re.findall(r'coverage: "full"', emergency))
+    tree_partial = len(re.findall(r'coverage: "partial"', emergency))
+    tree_absent = len(re.findall(r'coverage: "none"', emergency))
+    tree_layers = len(re.findall(r"\{ id: 'L\d+'", LAYERS_BLOCK))
+    tree_with_screen = len(re.findall(r"placement: 'layer'", GROUPS_BLOCK))
+    tree_without = len(re.findall(r"^\s*id: 'L\d+',$", GAPS_BLOCK, re.M))
+    tree_claim_fields = int(py_eval("from core.claim_gate import REQUIRED_CLAIM_FIELDS as F; print(len(F))"))
+    tree_actions = int(py_eval("from core.control_plane import ControlAction as C; print(len(list(C)))"))
+
+    pyproject = (REPO / "pyproject.toml").read_text(encoding="utf-8")
+    required_block = block(pyproject, "\ndependencies = [")
+    tree_required_deps = len(re.findall(r'^\s{4}"', required_block, re.M))
+    # Extras are counted by NAME, not by a loose `name = [` pattern: that pattern matches
+    # `requires`, `include`, `testpaths`, `markers` and the ruff/mypy tables too, and an
+    # earlier version of this check reported 5 because the section slice ended early.
+    tree_extras = sum(
+        1 for name in ("postgres", "nats", "ccxt", "qdrant", "dev", "all")
+        if re.search(rf"^{name} = \[", pyproject, re.M)
+    )
+
+    # --- ARCHITECTURAL INVARIANTS (constants that are architecture, not restatements)
+    check("§2 defines exactly 25 layers", 25, tree_layers)
+    check("§8 names exactly 8 commands", 8, tree_commands)
+    check("§8 coverage rows account for every command", tree_commands,
+          tree_full + tree_partial + tree_absent)
+    check("§2 layers: with + without a screen = total", tree_layers,
+          tree_with_screen + tree_without)
+
+    # --- PUBLISHED FIGURES vs TREE -----------------------------------------
+    check("doc/tree: layers", tree_layers, published(r"§2's (\d+) layers"))
+    check("doc/tree: layers with a screen", tree_with_screen, published(r"layers — (\d+) have a screen"))
+    check("doc/tree: layers without a screen", tree_without, published(r"Without one \((\d+)\)"))
+    check("doc/tree: §8 covered of 8", tree_full, published(r"§8's human control plane — (\d+) of 8"))
+    check("doc/tree: §8 full", tree_full, published(r"Tally: \*\*(\d+) covered"))
+    check("doc/tree: §8 partial", tree_partial, published(r"covered · (\d+) partial"))
+    check("doc/tree: §8 absent", tree_absent, published(r"partial · (\d+) absent"))
+    check("doc/tree: claim-gate fields", tree_claim_fields, published(r"requires \*\*(\d+) provenance fields"))
+    check("doc/tree: ControlAction count", tree_actions, published(r"has \*\*(\d+) actions"))
+    check("doc/tree: required deps", tree_required_deps, published(r"\*\*(\d+) required\*\*"))
+    check("doc/tree: optional extras", tree_extras, published(r"\*\*(\d+) optional extras\*\*"))
 
     # A claim the document must NOT make.
     check("doc: does not claim mlflow is a dependency", True,
           "Not dependencies:** MLflow" in doc)
 
     # --- the tree ---------------------------------------------------------
-    check("tree: ControlAction count", 19, int(py_eval("from core.control_plane import ControlAction as C; print(len(list(C)))")))
-    check("tree: required claim fields", 14, int(py_eval("from core.claim_gate import REQUIRED_CLAIM_FIELDS as F; print(len(F))")))
+    # PlatformEventType has no published figure of its own beyond the prose assertion
+    # below, so it is counted directly.
     check("tree: PlatformEventType count", 19, int(py_eval("from core.platform_events import PlatformEventType as P; print(len(list(P)))")))
-    check("tree: architecture layers", 25, len(re.findall(r"\{ id: 'L\d+'", LAYERS_BLOCK)))
     check(
-        "navigation groups (11 layer + 2 plane + 2 other)",
-        15,
+        "navigation groups = with-screen + control-plane + non-architecture",
+        tree_with_screen
+        + len(re.findall(r"placement: 'control-plane'", GROUPS_BLOCK))
+        + len(re.findall(r"placement: 'not-architecture-derived'", GROUPS_BLOCK)),
         len(re.findall(r"placement: '(?:layer|control-plane|not-architecture-derived)'", GROUPS_BLOCK)),
     )
-    check("tree: layers without a screen", 14, len(re.findall(r"^\s*id: 'L\d+',$", GAPS_BLOCK, re.M)))
-    check(
-        "tree: layers with a screen",
-        11,
-        len(re.findall(r"placement: 'layer'", GROUPS_BLOCK)),
-    )
-
-    # --- the §8 tally must match the tested source, not the prose ---------
-    emergency = (REPO / "frontend/src/lib/emergencyCommands.ts").read_text(encoding="utf-8")
-    check("§8 commands", 8, len(re.findall(r'^\s*command: "', emergency, re.M)))
-    check("§8 full", 2, len(re.findall(r'coverage: "full"', emergency)))
-    check("§8 partial", 2, len(re.findall(r'coverage: "partial"', emergency)))
-    check("§8 none", 4, len(re.findall(r'coverage: "none"', emergency)))
 
     # --- dependency model --------------------------------------------------
     pyproject = (REPO / "pyproject.toml").read_text(encoding="utf-8")

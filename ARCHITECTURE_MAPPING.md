@@ -129,7 +129,7 @@ the name appears. The conclusion (do not build) is unchanged; the reasoning was 
 
 ---
 
-## 5. §8's human control plane: 2 of 8 work, 2 partial, 4 absent
+## 5. §8's human control plane: 3 of 8 work, 1 partial, 4 absent
 
 §8 names eight emergency commands and says they *"must be deterministic, must bypass AI,
 must be audited, must survive model/runtime failure."* Checked against the tree:
@@ -138,7 +138,7 @@ must be audited, must survive model/runtime failure."* Checked against the tree:
 |---|---|---|
 | `STOP` | `ControlAction.PAUSE_TRADING`; `TRIGGER_KILL_SWITCH` | covered, named differently |
 | `NO_NEW_RISK` | `RiskGovernor` escalation to `EMERGENCY_HALT`; reconciliation severity | covered as a *state* |
-| `REDUCE_ONLY` | `ControlAction.SET_REDUCE_ONLY` → `classify_plan` | **partial** — see below |
+| `REDUCE_ONLY` | `ControlAction.SET_REDUCE_ONLY` → `classify_plan` | **covered** — see below |
 | `LIQUIDATE` | the flatten loop in `_do_trigger_kill_switch` | covered, named differently |
 | `DISABLE_STRATEGY` | — | **absent** |
 | `DISABLE_MODEL` | — | **absent** (`PROMOTE_MODEL` exists; disabling does not) |
@@ -152,21 +152,30 @@ an adverse price and halts.
 
 `REDUCE_ONLY` used to belong to this family: de-risking without flattening had no
 counterpart, so the only available response to deteriorating conditions was to go flat. It
-now exists — `ControlAction.SET_REDUCE_ONLY`, RISK_ADMIN, audited, and enforced in
-`classify_plan` — and is recorded as **partial rather than covered**, because of what the
-enforcement point can see:
+now exists and is **fully covered**: `ControlAction.SET_REDUCE_ONLY`, RISK_ADMIN, audited,
+enforced in `classify_plan`.
 
-- **Enforced:** any plan whose *direction* increases exposure in its symbol is refused,
-  including every order against a flat book; reductions and closes are permitted.
-- **Not enforced:** overshoot. One oversized `SELL` against a long can still cross zero
-  and open a short while nominally "reducing". Catching that needs an absolute order
-  quantity, and `classify_plan` has only `position_size_pct` — a share of portfolio risk,
-  which is not comparable to a venue quantity without a portfolio value that path does not
-  hold. The quantity-aware half of the rule is written and unit-tested
-  (`core/reduce_only.py::would_increase_exposure`) and wired to no gate.
+It was first recorded as **partial**, because `classify_plan` could ask only whether an
+order's *direction* increased exposure. An oversized `SELL` against a long passed that test
+and would cross through zero to open a short. Closing it needed no new logic — the rule
+(`core/reduce_only.py::would_increase_exposure`) was already written and tested — but two
+inputs the tree already had and never projected:
 
-Marking it covered would put a green tick beside a control that does not do everything its
-name implies, which is the misrepresentation this document exists to prevent.
+- `ReplayRunner._positions_view` now includes `filled_quantity` from the fill receipt, so
+  `net_exposure` has something to sum;
+- `ControlPlane` accepts a `portfolio_value` callable, so the strategy contract's
+  `position_size_pct` — documented as the notional *this trade adds* — becomes an absolute
+  quantity.
+
+Where no portfolio value is supplied, the directional rule still refuses every increase and
+only the overshoot refinement is skipped. That is a recorded decision rather than an
+oversight: failing closed would let an optional constructor argument halt every order.
+
+**Marking it covered was the change worth making honestly rather than quietly.** A green
+tick beside a control that could still flip the book would have been the exact
+misrepresentation §11's claim gate exists to prevent; leaving it `partial` after the fix
+would have understated it. The operator surface's pinned tally moved 2/2/4 → **3/1/4** and
+that test failing is what forced both this paragraph and the code to change.
 
 The four `DISABLE_*` commands remain a **safety** gap, not a completeness gap. They are
 specified in **`docs/adrs/ADR-007_component_containment_disable_commands.md`** (PROPOSED,
@@ -434,7 +443,7 @@ How to re-check every claim above:
 | DR evidence, correctly | `Select-String -Path ..\ARCHITECTURE.txt -Pattern '\bRPO\b\|\bRTO\b'` → expect no matches |
 | control-plane state | read `goals.json` entries `G050`, `G210`, `G220`, `G230` |
 | §8 command names, verbatim | `Select-String ..\ARCHITECTURE.txt` for each of the eight names, anchored — 8 matches |
-| §8 coverage: 2 full, 2 partial, 4 none | `core/control_plane.py` `ControlAction` (19 actions) and `_do_trigger_kill_switch`; `core/reduce_only.py` for REDUCE_ONLY; `frontend/src/lib/emergencyCommands.ts` is the tested source of these counts |
+| §8 coverage: 3 full, 1 partial, 4 none | `core/control_plane.py` `ControlAction` (19 actions) and `_do_trigger_kill_switch`; `core/reduce_only.py` for REDUCE_ONLY; `frontend/src/lib/emergencyCommands.ts` is the tested source of these counts |
 | §4's four infrastructure roles are all optional extras, and MLflow is not a dependency | read `pyproject.toml` `[project.optional-dependencies]` for `postgres`/`nats`/`qdrant`; `rg -n mlflow` finds only the two candidate-technology docs |
 | §4 labels QuestDB and Iceberg as candidates | read `ARCHITECTURE.txt` §4, lines 1323–1365 |
 | `ModelStatus.DEPRECATED` is declared but never read | `rg -n DEPRECATED` → `kernel/registries.py:317` (ModelStatus) and line 42 (a different enum's member); no consumer of the model's own value |

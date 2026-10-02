@@ -104,20 +104,20 @@ describe("§8's human control plane", () => {
 });
 
 describe("coverage as the tree actually implements it", () => {
-  // Pinned deliberately. These three numbers ARE the finding — of §8's 8 commands, 2 work
-  // fully, 2 are reachable only in part, and 4 do not exist. The partials are partial for
-  // different reasons and both say so: NO_NEW_RISK is a distinct command §8 lists that
-  // has no action of its own, while REDUCE_ONLY now exists and is audited but enforces
-  // only the directional half of the rule (no overshoot check — classify_plan has no
-  // absolute quantity). If someone wires the quantity-aware half, this fails and forces
-  // the finding to be restated, which is the point: a safety gap that no test notices is
-  // a safety gap that gets forgotten.
-  it("reports 2 full, 2 partial, 4 none", () => {
-    expect(coverageSummary()).toEqual({ full: 2, partial: 2, none: 4 });
+  // Pinned deliberately. These three numbers ARE the finding — of §8's 8 commands, 3 work
+  // fully, 1 is reachable only in part, and 4 do not exist. REDUCE_ONLY moved from partial
+  // to full once classify_plan gained a portfolio value and could detect an overshoot; this
+  // failing is what forced that finding to be restated rather than left stale.
+  it("reports 3 full, 1 partial, 4 none", () => {
+    expect(coverageSummary()).toEqual({ full: 3, partial: 1, none: 4 });
   });
 
-  it("names STOP and LIQUIDATE as the two that work", () => {
-    expect(availableCommands().map((c) => c.command)).toEqual(["STOP", "LIQUIDATE"]);
+  it("names STOP, REDUCE_ONLY and LIQUIDATE as the three that work", () => {
+    expect(availableCommands().map((c) => c.command)).toEqual([
+      "STOP",
+      "REDUCE_ONLY",
+      "LIQUIDATE",
+    ]);
   });
 
   it("names the four that do not exist", () => {
@@ -129,15 +129,17 @@ describe("coverage as the tree actually implements it", () => {
     ]);
   });
 
-  // REDUCE_ONLY is deliberately partial and not available. It now exists and is audited,
-  // so it left the "none" list; it did not become "full", because classify_plan cannot
-  // detect an overshoot. Both of these assertions exist to stop either half of that
-  // being papered over later.
-  it("treats REDUCE_ONLY as partial, because overshoot is not enforced", () => {
+  // REDUCE_ONLY's overshoot gap was closed by supplying a portfolio value to
+  // classify_plan, so it moved to `full`. It is pinned here as `full` with an empty gap
+  // deliberately: the earlier version of this test asserted `partial` and a non-empty gap
+  // mentioning overshoot, and it is the reason the operator surface read honestly. If the
+  // quantity path is ever unwired, these three assertions go red rather than the surface
+  // quietly over-claiming.
+  it("treats REDUCE_ONLY as fully covered, with no residual gap", () => {
     const reduceOnly = EMERGENCY_COMMANDS.find((c) => c.command === "REDUCE_ONLY");
-    expect(reduceOnly?.coverage).toBe<Coverage>("partial");
+    expect(reduceOnly?.coverage).toBe<Coverage>("full");
     expect(reduceOnly?.via).toEqual(["set_reduce_only"]);
-    expect(reduceOnly?.gap.toLowerCase()).toContain("overshoot");
+    expect(reduceOnly?.gap).toBe("");
   });
 
   it("treats NO_NEW_RISK as partial rather than available", () => {

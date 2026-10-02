@@ -739,8 +739,20 @@ class ReplayRunner:
             )
 
     def _positions_view(self) -> dict[str, dict[str, str]]:
+        """Open positions, keyed by execution id, for the control plane.
+
+        `filled_quantity` is projected as well as symbol/action. Without it the control
+        plane can only ask whether an order's DIRECTION increases exposure — which is what
+        REDUCE_ONLY enforced until the overshoot check needed an absolute size. Reading
+        `pos.receipt.filled_quantity` is safe and exact here: the receipt already carries
+        it, and `_class_exposures` has always read it from the same place.
+        """
         return {
-            eid: {"symbol": pos.receipt.symbol, "action": pos.action}
+            eid: {
+                "symbol": pos.receipt.symbol,
+                "action": pos.action,
+                "filled_quantity": str(pos.receipt.filled_quantity),
+            }
             for eid, pos in self.paper.open_positions.items()
         }
 
@@ -778,6 +790,11 @@ class ReplayRunner:
             price_lookup=self._last_price_of,
             flatten_callback=self._flatten_position,
             positions_view=self._positions_view,
+            # REDUCE_ONLY needs an absolute order size to detect an overshoot, and a plan
+            # carries only `position_size_pct` -- a share of portfolio value. This is the
+            # other half of that conversion, and the runner is the only place that knows
+            # equity. Absent it the control plane still enforces the directional half.
+            portfolio_value=self._current_equity,
             trial_evaluator=self.evaluate_challenger,
             kernel_bridge=self.kernel_bridge,
             # Same engine instance the per-bar pass uses (B2): findings the
@@ -1438,11 +1455,10 @@ class ReplayRunner:
                         )
                 await self._reconcile()
 
-                open_value = 0.0
-                for p in self.paper.open_positions.values():
-                    close = self.fetcher.current_bar(p.receipt.symbol)["close"]
-                    open_value += p.receipt.filled_quantity * close
-                self.equity_curve.append(round(self.paper.cash_balance + open_value, 2))
+                # Was an inline copy of `_current_equity()`. Reusing the method keeps the
+                # curve and the governor reading the same number, and keeps the
+                # control plane's portfolio_value consistent with both.
+                self.equity_curve.append(self._current_equity())
 
                 if exhausted:
                     break
