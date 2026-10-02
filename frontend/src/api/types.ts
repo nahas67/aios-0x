@@ -549,9 +549,42 @@ export interface StreamFrame {
 
 // --------------------------------------------------------------------- chat
 
-export interface ChatResponse {
-  kind: "query" | "command" | "error" | "denied" | string;
+export interface EvidenceRef {
+  label: string;
+  source: string;
+  available: boolean;
+  rows: number | null;
+  detail: string;
+}
+
+export interface AdvisoryAnswer {
+  /** Literal on the server. Rendered prominently: an advisory is not an authorization. */
+  authority: "ADVISORY";
+  agent_id: string;
+  community: string;
+  role: string;
+  question: string;
   answer: string;
+  /** RECORDED = the agent's own published record. MODEL = a model phrased it. UNKNOWN = no
+   *  readable evidence, and nothing was inferred from the gap. */
+  stance: "RECORDED" | "MODEL" | "UNKNOWN" | string;
+  evidence: EvidenceRef[];
+  /** Action NAMES. Nothing on the server can execute them; they are prompts for a human. */
+  proposed_actions: string[];
+  attribution: { mode: "deterministic" | "model" | string; provider?: string; model?: string; note: string };
+  limitations: string[];
+}
+
+export interface ChatResponse {
+  kind: "query" | "command" | "advisory" | "error" | "denied" | "help" | string;
+  answer: string;
+  /** Present on kind === "advisory". */
+  advisory?: AdvisoryAnswer;
+  agent?: string | null;
+  authority?: string;
+  query?: string;
+  action?: string;
+  result?: unknown;
   [key: string]: unknown;
 }
 

@@ -211,8 +211,11 @@ export interface ControlBody {
 export const controlApi = {
   execute: (action: string, body: ControlBody) =>
     http.post<ControlResult>(`${v1}/control/${encodeURIComponent(action)}`, body),
-  chat: (body: { operator_id: string; role: string; message: string }) =>
-    http.post<ChatResponse>(`${v1}/chat`, body),
+  // Only `message` is sent. The server resolves operator identity and role from its own
+  // token map and ignores anything in the body (`api/server.py` `_resolve_request_identity`),
+  // so passing them here implied a client-side authority that does not exist and would be
+  // actively misleading to anyone reading this call site.
+  chat: (body: { message: string }) => http.post<ChatResponse>(`${v1}/chat`, body),
 };
 
 export type {

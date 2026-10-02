@@ -815,7 +815,23 @@ def make_handler(
 
         from core.chat_console import OperatorChat
 
-        chat = OperatorChat(builder, control_plane)
+        # The gateway is OPTIONAL and built per request. `build_gateway` returns None when
+        # no credentials are configured, which is the normal case, and an advisory is fully
+        # produced without it. Building it per request (rather than once at boot) matters
+        # because this handler drives a fresh event loop below and the gateways hold an
+        # `httpx.AsyncClient` bound to the loop that created it — a cached one would be dead
+        # on every request after the first.
+        gateway = None
+        try:
+            from core.config import get_settings
+            from core.model_gateway import build_gateway
+
+            gateway = build_gateway(get_settings())
+        except Exception:
+            # A chat answer must not become an outage because a provider is unreachable.
+            gateway = None
+
+        chat = OperatorChat(builder, control_plane, gateway=gateway)
         loop = asyncio.new_event_loop()
         try:
             return loop.run_until_complete(chat.ask(operator_id, role, message))

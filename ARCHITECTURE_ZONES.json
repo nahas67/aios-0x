@@ -62,6 +62,8 @@
     {"module": "core/control_plane.py", "zone": "D", "service": "control_plane", "plane": "Control"},
     {"module": "core/security.py", "zone": "D", "service": "control_plane", "plane": "Control"},
     {"module": "core/agents.py", "zone": "D", "service": "control_plane", "plane": "Control"},
+    {"module": "core/chat_console.py", "zone": "D", "service": "control_plane", "plane": "Experience"},
+    {"module": "core/agent_advisory.py", "zone": "D", "service": "control_plane", "plane": "Experience"},
     {"module": "core/challenger.py", "zone": "D", "service": "control_plane", "plane": "Control"},
 
     {"module": "communities/c2_research/*", "zone": "C", "service": "research_service", "plane": "Intelligence"},
