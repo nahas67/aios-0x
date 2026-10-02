@@ -71,7 +71,7 @@ improved on it.
 | G230 | Observability | `G210` | Observability and Trace Continuity | renumbered −2, carries §3C |
 | G240 | Formal Assurance | `G220` | Formal Assurance | renumbered −2, carries §3E |
 | G250 | Supply Chain | `G230` (part) | Governance, Security, and Supply-Chain Planes | **merged with §3 A, D, F** |
-| G260 | Disaster Recovery | — | — | **not carried** — see §3 below |
+| G260 | Disaster Recovery | — | — | **not carried** — see §4 below |
 | G270 | Long SHADOW | `G240` | Long Shadow Validation | renumbered −3 |
 | G280 | Canary Capital | `G250` | Canary Capital | renumbered −3 |
 
@@ -93,7 +93,7 @@ re-pairing** (`G160`+`G170` → `G150`+`G160`, two goals to two), **1 insertion*
 | §3 | Plane | Carried by | State |
 |---|---|---|---|
 | A | Governance | `G050` + `G230` | LANDED (policy bundles replaced OPA/Rego) |
-| B | **Model Governance** (MLflow: models, versions, prompts, runs, evals, datasets, features, champion/challenger, deployment, rollback) | **no goal of its own** | **GAP — see §5** |
+| B | **Model Governance** (MLflow: models, versions, prompts, runs, evals, datasets, features, champion/challenger, deployment, rollback) | **no goal of its own** | **GAP — see §6** |
 | C | Observability (OpenTelemetry; *"Why did this trade happen?"*) | `G210` | LANDED |
 | D | Security (sandboxed AI zones, OpenBao) | `G230` | **PARTIAL** — zones and OpenBao have no implementation; §3D is a requirement the tree does not meet |
 | E | Assurance (TLA+) | `G220` | LANDED — 4 of §3E's 8 targets |
@@ -129,7 +129,44 @@ the name appears. The conclusion (do not build) is unchanged; the reasoning was 
 
 ---
 
-## 5. The Model Governance gap
+## 5. §8's human control plane: 3 of 8 commands exist
+
+§8 names eight emergency commands and says they *"must be deterministic, must bypass AI,
+must be audited, must survive model/runtime failure."* Checked against the tree:
+
+| §8 command | Counterpart in the tree | |
+|---|---|---|
+| `STOP` | `ControlAction.PAUSE_TRADING`; `TRIGGER_KILL_SWITCH` | covered, named differently |
+| `NO_NEW_RISK` | `RiskGovernor` escalation to `EMERGENCY_HALT`; reconciliation severity | covered as a *state* |
+| `LIQUIDATE` | the flatten loop in `_do_trigger_kill_switch` | covered, named differently |
+| `REDUCE_ONLY` | — | **absent** |
+| `DISABLE_STRATEGY` | — | **absent** |
+| `DISABLE_MODEL` | — | **absent** (`PROMOTE_MODEL` exists; disabling does not) |
+| `DISABLE_PROVIDER` | — | **absent** |
+| `DISABLE_BROKER` | — | **absent** |
+
+**Five of eight are absent, and they are one coherent family.** §8 asks for
+*component-level* containment — stop this strategy, this model, this provider, this broker
+— and the tree has a *global* containment: one kill switch that flattens every position at
+an adverse price and halts. `REDUCE_ONLY` is the odd one out; de-risking without flattening
+has no counterpart at all, so the only available response to deteriorating conditions is to
+go flat.
+
+That is a **safety** gap, not a completeness gap, which is why it is recorded rather than
+scheduled. Adding a kill switch is a change to the path that must work when nothing else
+does, and `CONSTITUTION.md` §4 makes that an ADR. **Not built here, and not proposed as a
+small task.**
+
+> Two rows here were nearly recorded as absent on the strength of a name search.
+> `LIQUIDATE` has no occurrence anywhere in the tree, and it is covered anyway — the
+> capability is `_do_trigger_kill_switch`'s flatten loop, found by searching for what it
+> *does* rather than what it is called. Same shape as the `RPO` / `CO·RPO·RATE` false
+> positive in §4 below, and the reason this table names the counterpart instead of only
+> the verdict.
+
+---
+
+## 6. The Model Governance gap
 
 §3B asks for MLflow-equivalent tracking of **models, model versions, prompts, training
 runs, evaluations, datasets, features, champion/challenger, deployment, and rollback.**
@@ -148,7 +185,7 @@ unresolved and is recorded here rather than quietly settled in either direction.
 
 ---
 
-## 6. Verification
+## 7. Verification
 
 How to re-check every claim above:
 
@@ -158,6 +195,8 @@ How to re-check every claim above:
 | §13 goal list | read `ARCHITECTURE.txt` §13, lines 1754–1852 |
 | DR evidence, correctly | `Select-String -Path ..\ARCHITECTURE.txt -Pattern '\bRPO\b\|\bRTO\b'` → expect no matches |
 | control-plane state | read `goals.json` entries `G050`, `G210`, `G220`, `G230` |
+| §8 command names, verbatim | `Select-String ..\ARCHITECTURE.txt` for each of the eight names, anchored — 8 matches |
+| §8 coverage: 3 of 8 | `core/control_plane.py` `ControlAction` (18 actions) and `_do_trigger_kill_switch`; `core/risk_governor.py` for `EMERGENCY_HALT`; `tests/test_kill_switch_constitution.py` pins *flatten, then halt* |
 
 **Not verifiable in-repo:** `ARCHITECTURE.txt` itself. That is the finding this file exists
 to make visible, and the reason the first row of the table above is worth reading twice.
