@@ -185,7 +185,69 @@ unresolved and is recorded here rather than quietly settled in either direction.
 
 ---
 
-## 7. Verification
+## 7. The live-data path: the plan's premise was wrong
+
+The approved plan's P6 was "SSE adoption beyond SystemHealth · gate: no polling left
+where a stream exists", justified by "only `SystemHealthWorkspace` reads the live
+stream; the other 16 poll."
+
+**The second clause is false, and the difference is not cosmetic.** Nothing in the
+console polls.
+
+There are exactly three timers in the whole frontend, and each is doing something other
+than polling. (The count is three *calls*: a plain `setInterval` search returns four,
+because `api/stream.ts:40` mentions the name in a `ReturnType<typeof …>` annotation. A
+name search is not a capability search, and this file records the distinction so the next
+reader does not have to rediscover it.)
+
+| Timer | What it does | Polling? |
+|---|---|---|
+| `api/stream.ts:68` | SSE heartbeat | no — keeps an open stream alive |
+| `hooks/useLiveExecutive.ts:123` | refetch, gated by `shouldPoll(status)` | only while the stream is **not** live |
+| `components/TopSystemBar.tsx:55` | UTC clock string | no — touches no data |
+
+`hooks/useApi.ts` is the single fetch hook and it has no timer at all: it loads on mount
+and again when its `deps` change, plus an explicit `refresh()`.
+
+So the gate is satisfied vacuously — there is no polling to remove. Reporting it as
+"adoption completed" would credit the plan with a fix it did not make.
+
+### The actual deficiency, which is larger and different
+
+`useLiveExecutive` is stream-first with a deliberate poll fallback, which is the right
+design. The problem is upstream of it: **the stream carries almost nothing.**
+
+`api/server.py:350` publishes exactly two things every 2 seconds:
+
+```python
+payload = {
+    "ts": time.time(),
+    "executive": builder.executive(),
+    "platform_tail": builder.platform_feed(limit=10),
+}
+```
+
+The frontend reads roughly thirty endpoints (`positions`, `orders`, `executions`,
+`equity`, `agents`, `alerts`, `audit`, `models`, `accounting`, `graduation`, …). Two of
+them have a live path. The other seventeen fetch once and stay static until something
+changes a dep — so their figures are silently as-of-load with no indication on screen.
+
+A richer event bus already exists internally (`core/event_bus.py`, topic-scoped
+`subscribe`) and is not exposed over SSE.
+
+### Why this is a decision and not a task
+
+Closing it means changing what the server publishes on a two-second hot loop — the SSE
+payload shape is a contract, and widening it is backend design work, not frontend
+adoption. It is recorded here rather than built, and it is the one item in the plan's
+sequencing that cannot proceed on the plan's own authority.
+
+The narrower alternative — labelling each non-streamed workspace's data as-of-fetched —
+is a UI change nobody has asked for, so it is not done either.
+
+---
+
+## 8. Verification
 
 How to re-check every claim above:
 
@@ -197,6 +259,11 @@ How to re-check every claim above:
 | control-plane state | read `goals.json` entries `G050`, `G210`, `G220`, `G230` |
 | §8 command names, verbatim | `Select-String ..\ARCHITECTURE.txt` for each of the eight names, anchored — 8 matches |
 | §8 coverage: 3 of 8 | `core/control_plane.py` `ControlAction` (18 actions) and `_do_trigger_kill_switch`; `core/risk_governor.py` for `EMERGENCY_HALT`; `tests/test_kill_switch_constitution.py` pins *flatten, then halt* |
+| only 3 timers exist, none polling | `rg -n "setInterval\s*\(" frontend/src` → expect exactly 3 hits: `api/stream.ts:68`, `hooks/useLiveExecutive.ts:123`, `components/TopSystemBar.tsx:55`. **Not** `rg -n "setInterval"`, which returns 4 — the extra hit is `api/stream.ts:40`, a `ReturnType<typeof setInterval>` type annotation, not a timer |
+| `useApi` never polls | read `frontend/src/hooks/useApi.ts` — no timer; loads on mount and on `deps` |
+| stream payload is 2 keys | read `api/server.py:350` — `executive` and `platform_tail` only |
+| §2's 25 layers, and which have a screen | `frontend/src/lib/architectureLayers.ts`; gate is `architectureLayers.test.ts` (29 tests, 13 mutations caught) |
+| operator surface shares no runtime | `python scripts/verify_operator_isolation.py` — reads sourcemaps, not comments |
 
 **Not verifiable in-repo:** `ARCHITECTURE.txt` itself. That is the finding this file exists
 to make visible, and the reason the first row of the table above is worth reading twice.
