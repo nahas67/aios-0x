@@ -377,7 +377,53 @@ needs a capture to close.
 
 ---
 
-## 9. Verification
+## 9. §4's infrastructure and the three-dependency rule: there is no conflict
+
+This session opened with an open question recorded as *"§4's Qdrant/MLflow vs the
+three-dependency rule — unresolved, needs you."* **That framing was wrong.** It asserted a
+conflict between two documents without checking either against the tree.
+
+`ARCHITECTURE.txt` §4 opens *"Preserve the current strong AIOS foundation"* and lists six
+infrastructure roles. Read against the actual dependency model:
+
+| §4 role | In this tree | Verdict |
+|---|---|---|
+| PostgreSQL — financial truth | `postgres = ["psycopg[binary]>=3.3,<4"]` | correct: optional extra |
+| NATS JetStream — event transport | `nats = ["nats-py>=2.15,<3"]` | correct: optional extra |
+| Qdrant — semantic memory | `qdrant = ["qdrant-client>=1.19,<2"]` | correct: optional extra |
+| MLflow — model/experiment governance | **not a dependency at all** | see below |
+| QuestDB — hot tick data | absent | §4 itself labels it *"candidate"* |
+| Iceberg — historical/PIT datasets | absent | §4 itself labels it *"candidate"* |
+
+Two facts dissolve the apparent conflict:
+
+1. **The two rules govern different things.** The three-dependency rule covers *required
+   runtime imports*, and `pyproject.toml` says so in its own comment: *"Imported by shipped
+   modules at import time, so these are not optional."* PostgreSQL, NATS and Qdrant are
+   infrastructure the system **connects to**, not libraries it imports — which is exactly
+   what an optional extra is for. Nothing about declaring them as extras violates a rule
+   about required imports.
+
+2. **MLflow was never a dependency here.** It appears in the tree only inside
+   `AIOS_PHASE2_CANDIDATE_TECHNOLOGY_STACK.md` and
+   `AIOS_PHASE2B_BENCHMARK_PROTOCOL_v0.1.md`, in both cases as the **baseline being
+   evaluated against ClearML** ("Does ClearML offer materially lower… overhead than
+   MLflow"). It is not installed and not imported by a single module. So there is no
+   MLflow dependency to reconcile against a rule — it is an unadopted candidate, and §4's
+   "preserve the current foundation" framing means an absent MLflow is not a violation.
+
+QuestDB and Iceberg are the cleanest confirmation of the reading: §4 labels them
+*"candidate"* itself, and they are correctly absent.
+
+**Consequence:** no ADR is needed, no dependency is admitted, and the question this session
+carried open is closed. The recorded lesson is the third instance of one pattern — asserting
+a conflict from memory instead of reading both sides against the tree, the same shape as the
+"mypy is broken" claim in this session's verification notes. Both were checked in minutes
+once actually looked at.
+
+---
+
+## 10. Verification
 
 How to re-check every claim above:
 
@@ -389,6 +435,9 @@ How to re-check every claim above:
 | control-plane state | read `goals.json` entries `G050`, `G210`, `G220`, `G230` |
 | §8 command names, verbatim | `Select-String ..\ARCHITECTURE.txt` for each of the eight names, anchored — 8 matches |
 | §8 coverage: 2 full, 2 partial, 4 none | `core/control_plane.py` `ControlAction` (19 actions) and `_do_trigger_kill_switch`; `core/reduce_only.py` for REDUCE_ONLY; `frontend/src/lib/emergencyCommands.ts` is the tested source of these counts |
+| §4's four infrastructure roles are all optional extras, and MLflow is not a dependency | read `pyproject.toml` `[project.optional-dependencies]` for `postgres`/`nats`/`qdrant`; `rg -n mlflow` finds only the two candidate-technology docs |
+| §4 labels QuestDB and Iceberg as candidates | read `ARCHITECTURE.txt` §4, lines 1323–1365 |
+| `ModelStatus.DEPRECATED` is declared but never read | `rg -n DEPRECATED` → `kernel/registries.py:317` (ModelStatus) and line 42 (a different enum's member); no consumer of the model's own value |
 | only 3 timers exist, none polling | `rg -n "setInterval\s*\(" frontend/src` → expect exactly 3 hits: `api/stream.ts:68`, `hooks/useLiveExecutive.ts:123`, `components/TopSystemBar.tsx:55`. **Not** `rg -n "setInterval"`, which returns 4 — the extra hit is `api/stream.ts:40`, a `ReturnType<typeof setInterval>` type annotation, not a timer |
 | `useApi` never polls | read `frontend/src/hooks/useApi.ts` — no timer; loads on mount and on `deps` |
 | stream payload is 2 keys | read `api/server.py:350` — `executive` and `platform_tail` only |
