@@ -21,6 +21,7 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { WorkspaceTab } from '../types';
+import { buildNavSections } from '../lib/architectureLayers';
 
 interface LeftIntelligenceRailProps {
   activeTab: WorkspaceTab;
@@ -63,6 +64,68 @@ export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
   const countBadge = (n: number | null | undefined): string | number | undefined =>
     n !== null && n !== undefined && n > 0 ? n : undefined;
 
+  /**
+   * One nav row. Extracted so the §2 grouping can decide the ORDER without the row
+   * markup being duplicated inside the grouping loop — the previous shape inlined the
+   * button into a flat `.map()`, which left nowhere to put a group heading.
+   */
+  const renderNavItem = (item: NavItemConfig) => {
+    const Icon = item.icon;
+    const isActive = activeTab === item.id;
+
+    return (
+      <button
+        key={item.id}
+        onClick={() => onSelectTab(item.id)}
+        className={`group w-full flex items-center gap-2.5 px-2 py-2 rounded transition-all text-left relative ${
+          isActive
+            ? 'bg-cyan-950/40 text-cyan-300 font-medium border border-cyan-700/40 shadow-[0_0_12px_rgba(0,240,255,0.12)]'
+            : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.04] border border-transparent'
+        }`}
+        title={!isExpanded ? item.label : undefined}
+      >
+        {/* Active bar */}
+        {isActive && (
+          <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-cyan-400 rounded-r shadow-[0_0_6px_#00f0ff]" />
+        )}
+
+        <div className="flex items-center justify-center shrink-0 w-6 h-6">
+          <Icon
+            className={`w-4 h-4 transition-transform group-hover:scale-105 ${
+              isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-slate-200'
+            }`}
+          />
+        </div>
+
+        {/* Label (Visible on hover expansion) */}
+        <span
+          className={`text-[12px] whitespace-nowrap overflow-hidden transition-all duration-150 ${
+            isExpanded ? 'opacity-100 translate-x-0 w-auto' : 'opacity-0 -translate-x-2 w-0 hidden'
+          }`}
+        >
+          {item.label}
+        </span>
+
+        {/* Badges */}
+        {item.badge && (
+          <span
+            className={`ml-auto text-[9px] font-mono px-1 rounded border leading-tight ${
+              item.badgeColor === 'amber'
+                ? 'bg-amber-950/80 text-amber-300 border-amber-800/60'
+                : item.badgeColor === 'cyan'
+                ? 'bg-cyan-950/80 text-cyan-300 border-cyan-800/60'
+                : item.badgeColor === 'violet'
+                ? 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60'
+                : 'bg-white/[0.04] text-slate-400 border-white/[0.06]'
+            } ${!isExpanded ? 'absolute top-1 right-1 px-0.5 text-[8px]' : ''}`}
+          >
+            {item.badge}
+          </span>
+        )}
+      </button>
+    );
+  };
+
   const navItems: NavItemConfig[] = [
     { id: 'overview', label: 'Command Canvas', icon: LayoutDashboard },
     { id: 'trading', label: 'Live Trading', icon: CandlestickChart },
@@ -103,64 +166,29 @@ export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
         isExpanded ? 'w-48 shadow-[8px_0_24px_rgba(0,0,0,0.6)]' : 'w-14'
       }`}
     >
-      {/* Top Nav List */}
+      {/* Top Nav List, ordered by ARCHITECTURE.txt section 2's layers rather than by the
+          order the items happened to be declared in. `architectureLayers.ts` owns the
+          order and the grouping; this file owns only the icons, labels and badges. */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-2.5 px-1.5 space-y-1">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeTab === item.id;
+        {(() => {
+          // Ordering and grouping are `buildNavSections`' job, not this file's: it is
+          // pure and tested, and the one bug that matters here — an item quietly
+          // vanishing from the nav — is invisible in JSX and obvious in a test.
+          const sections = buildNavSections(navItems);
 
-          return (
-            <button
-              key={item.id}
-              onClick={() => onSelectTab(item.id)}
-              className={`group w-full flex items-center gap-2.5 px-2 py-2 rounded transition-all text-left relative ${
-                isActive
-                  ? 'bg-cyan-950/40 text-cyan-300 font-medium border border-cyan-700/40 shadow-[0_0_12px_rgba(0,240,255,0.12)]'
-                  : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.04] border border-transparent'
-              }`}
-              title={!isExpanded ? item.label : undefined}
-            >
-              {/* Active bar */}
-              {isActive && (
-                <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-cyan-400 rounded-r shadow-[0_0_6px_#00f0ff]" />
+          return sections.map((section) => (
+            <div key={section.label} className="space-y-1">
+              {/* Layer headers only when expanded: the collapsed rail is 14px wide, and a
+                  heading reduced to a stray glyph there is noise, not information. */}
+              {isExpanded && (
+                <div className="px-2 pt-2 pb-0.5 text-[9px] font-mono uppercase tracking-wider text-slate-600 truncate">
+                  {section.label}
+                </div>
               )}
-
-              <div className="flex items-center justify-center shrink-0 w-6 h-6">
-                <Icon
-                  className={`w-4 h-4 transition-transform group-hover:scale-105 ${
-                    isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-slate-200'
-                  }`}
-                />
-              </div>
-
-              {/* Label (Visible on hover expansion) */}
-              <span
-                className={`text-[12px] whitespace-nowrap overflow-hidden transition-all duration-150 ${
-                  isExpanded ? 'opacity-100 translate-x-0 w-auto' : 'opacity-0 -translate-x-2 w-0 hidden'
-                }`}
-              >
-                {item.label}
-              </span>
-
-              {/* Badges */}
-              {item.badge && (
-                <span
-                  className={`ml-auto text-[9px] font-mono px-1 rounded border leading-tight ${
-                    item.badgeColor === 'amber'
-                      ? 'bg-amber-950/80 text-amber-300 border-amber-800/60'
-                      : item.badgeColor === 'cyan'
-                      ? 'bg-cyan-950/80 text-cyan-300 border-cyan-800/60'
-                      : item.badgeColor === 'violet'
-                      ? 'bg-indigo-950/80 text-indigo-300 border-indigo-800/60'
-                      : 'bg-white/[0.04] text-slate-400 border-white/[0.06]'
-                  } ${!isExpanded ? 'absolute top-1 right-1 px-0.5 text-[8px]' : ''}`}
-                >
-                  {item.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+              {section.items.map((item) => renderNavItem(item))}
+            </div>
+          ));
+        })()}
       </div>
 
       {/* Rail Footer Toggle */}

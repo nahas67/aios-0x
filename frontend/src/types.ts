@@ -2,24 +2,36 @@ export type AutonomyLevel = 'MANUAL' | 'ASSISTED' | 'SUPERVISED' | 'AUTONOMOUS' 
 export type ExecutionMode = 'PAPER' | 'LIVE';
 export type MarketState = 'OPEN' | 'CLOSED' | 'PRE_MARKET' | 'POST_MARKET';
 
-export type WorkspaceTab = 
-  | 'overview'
-  | 'trading'
-  | 'portfolio'
-  | 'markets'
-  | 'research'
-  | 'agents'
-  | 'strategies'
-  | 'execution'
-  | 'risk'
-  | 'models'
-  | 'provenance'
-  | 'accounting'
-  | 'financial'
-  | 'audit'
-  | 'system'
-  | 'design_system'
-  | 'settings';
+/**
+ * Every workspace tab, as a runtime value rather than only a type.
+ *
+ * The union alone could not be checked: a test cannot iterate over a type, so the
+ * architecture grouping gate could only assert that the workspaces it knows about are
+ * grouped -- never that every tab is grouped. A seventeenth tab added to the union
+ * would have passed silently. Deriving the type from this array means the two cannot
+ * drift apart, so the gate can demand totality.
+ */
+export const WORKSPACE_TABS = [
+  'overview',
+  'trading',
+  'portfolio',
+  'markets',
+  'research',
+  'agents',
+  'strategies',
+  'execution',
+  'risk',
+  'models',
+  'provenance',
+  'accounting',
+  'financial',
+  'audit',
+  'system',
+  'design_system',
+  'settings',
+] as const;
+
+export type WorkspaceTab = typeof WORKSPACE_TABS[number];
 
 export type TimelineEventType = 
   | 'AGENT_CONSENSUS'
