@@ -129,7 +129,7 @@ the name appears. The conclusion (do not build) is unchanged; the reasoning was 
 
 ---
 
-## 5. §8's human control plane: 3 of 8 commands exist
+## 5. §8's human control plane: 2 of 8 work, 2 partial, 4 absent
 
 §8 names eight emergency commands and says they *"must be deterministic, must bypass AI,
 must be audited, must survive model/runtime failure."* Checked against the tree:
@@ -138,24 +138,47 @@ must be audited, must survive model/runtime failure."* Checked against the tree:
 |---|---|---|
 | `STOP` | `ControlAction.PAUSE_TRADING`; `TRIGGER_KILL_SWITCH` | covered, named differently |
 | `NO_NEW_RISK` | `RiskGovernor` escalation to `EMERGENCY_HALT`; reconciliation severity | covered as a *state* |
+| `REDUCE_ONLY` | `ControlAction.SET_REDUCE_ONLY` → `classify_plan` | **partial** — see below |
 | `LIQUIDATE` | the flatten loop in `_do_trigger_kill_switch` | covered, named differently |
-| `REDUCE_ONLY` | — | **absent** |
 | `DISABLE_STRATEGY` | — | **absent** |
 | `DISABLE_MODEL` | — | **absent** (`PROMOTE_MODEL` exists; disabling does not) |
 | `DISABLE_PROVIDER` | — | **absent** |
 | `DISABLE_BROKER` | — | **absent** |
 
-**Five of eight are absent, and they are one coherent family.** §8 asks for
+**Four of eight are absent, and they are one coherent family.** §8 asks for
 *component-level* containment — stop this strategy, this model, this provider, this broker
 — and the tree has a *global* containment: one kill switch that flattens every position at
-an adverse price and halts. `REDUCE_ONLY` is the odd one out; de-risking without flattening
-has no counterpart at all, so the only available response to deteriorating conditions is to
-go flat.
+an adverse price and halts.
 
-That is a **safety** gap, not a completeness gap, which is why it is recorded rather than
-scheduled. Adding a kill switch is a change to the path that must work when nothing else
-does, and `CONSTITUTION.md` §4 makes that an ADR. **Not built here, and not proposed as a
-small task.**
+`REDUCE_ONLY` used to belong to this family: de-risking without flattening had no
+counterpart, so the only available response to deteriorating conditions was to go flat. It
+now exists — `ControlAction.SET_REDUCE_ONLY`, RISK_ADMIN, audited, and enforced in
+`classify_plan` — and is recorded as **partial rather than covered**, because of what the
+enforcement point can see:
+
+- **Enforced:** any plan whose *direction* increases exposure in its symbol is refused,
+  including every order against a flat book; reductions and closes are permitted.
+- **Not enforced:** overshoot. One oversized `SELL` against a long can still cross zero
+  and open a short while nominally "reducing". Catching that needs an absolute order
+  quantity, and `classify_plan` has only `position_size_pct` — a share of portfolio risk,
+  which is not comparable to a venue quantity without a portfolio value that path does not
+  hold. The quantity-aware half of the rule is written and unit-tested
+  (`core/reduce_only.py::would_increase_exposure`) and wired to no gate.
+
+Marking it covered would put a green tick beside a control that does not do everything its
+name implies, which is the misrepresentation this document exists to prevent.
+
+The four `DISABLE_*` commands remain a **safety** gap, not a completeness gap. Adding them
+is a change to the path that must work when nothing else does, and `CONSTITUTION.md` §4
+makes that an ADR. **Not built here, and not proposed as a small task.**
+
+> §4's amendment procedure was re-read while building `REDUCE_ONLY` and an earlier version
+> of this document over-applied it. §4 governs amendments *to the constitution itself* —
+> draft ADR, human principal approves, recompute the pinned SHA-256. Adding a control action
+> does not amend §1, §2 or §3, so no constitution change was required. The binding
+> constraint was §2.2 (kill sequence cancel→flatten→`EMERGENCY_HALT`), and
+> `set_reduce_only` deliberately does not touch that path: it cancels nothing, flattens
+> nothing, and cannot lift a drawdown halt.
 
 > Two rows here were nearly recorded as absent on the strength of a name search.
 > `LIQUIDATE` has no occurrence anywhere in the tree, and it is covered anyway — the
@@ -317,7 +340,7 @@ How to re-check every claim above:
 | DR evidence, correctly | `Select-String -Path ..\ARCHITECTURE.txt -Pattern '\bRPO\b\|\bRTO\b'` → expect no matches |
 | control-plane state | read `goals.json` entries `G050`, `G210`, `G220`, `G230` |
 | §8 command names, verbatim | `Select-String ..\ARCHITECTURE.txt` for each of the eight names, anchored — 8 matches |
-| §8 coverage: 3 of 8 | `core/control_plane.py` `ControlAction` (18 actions) and `_do_trigger_kill_switch`; `core/risk_governor.py` for `EMERGENCY_HALT`; `tests/test_kill_switch_constitution.py` pins *flatten, then halt* |
+| §8 coverage: 2 full, 2 partial, 4 none | `core/control_plane.py` `ControlAction` (19 actions) and `_do_trigger_kill_switch`; `core/reduce_only.py` for REDUCE_ONLY; `frontend/src/lib/emergencyCommands.ts` is the tested source of these counts |
 | only 3 timers exist, none polling | `rg -n "setInterval\s*\(" frontend/src` → expect exactly 3 hits: `api/stream.ts:68`, `hooks/useLiveExecutive.ts:123`, `components/TopSystemBar.tsx:55`. **Not** `rg -n "setInterval"`, which returns 4 — the extra hit is `api/stream.ts:40`, a `ReturnType<typeof setInterval>` type annotation, not a timer |
 | `useApi` never polls | read `frontend/src/hooks/useApi.ts` — no timer; loads on mount and on `deps` |
 | stream payload is 2 keys | read `api/server.py:350` — `executive` and `platform_tail` only |

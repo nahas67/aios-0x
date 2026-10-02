@@ -22,6 +22,7 @@ from typing import Any
 
 from core.event_bus import BaseEventBus
 from core.persistence import BaseMemoryStore
+from core.reduce_only import reduce_only_blocks
 from core.risk_governor import RiskGovernor
 from schemas.contracts import (
     DataAnomalyAlert,
@@ -53,6 +54,7 @@ QUEUING_MODES = frozenset({AutonomyMode.SUPERVISED})
 
 class ControlAction(StrEnum):
     PAUSE_TRADING = "pause_trading"
+    SET_REDUCE_ONLY = "set_reduce_only"
     RESUME_TRADING = "resume_trading"
     CANCEL_OPEN_ORDERS = "cancel_open_orders"
     FREEZE_SYMBOL = "freeze_symbol"
@@ -89,6 +91,10 @@ def _build_matrix() -> dict[OperatorRole, frozenset[ControlAction]]:
     risk_admin = operator | {
         ControlAction.SET_MAX_POSITION_PCT,
         ControlAction.SET_HALT_DRAWDOWN_PCT,
+        # REDUCE_ONLY caps exposure without flattening it. RISK_ADMIN rather than
+        # OPERATOR because it is a standing capital constraint that governs every later
+        # order, exactly as SET_MAX_POSITION_PCT and SET_AUTONOMY do.
+        ControlAction.SET_REDUCE_ONLY,
         ControlAction.TRIGGER_KILL_SWITCH,
         ControlAction.RESET_LOCKOUT,
         ControlAction.PROMOTE_CHALLENGER,
@@ -153,6 +159,11 @@ class ControlPlane:
         # chain without claiming durable store state.
         self.reconciliation_engine = reconciliation_engine
         self.paused = False
+        # ARCHITECTURE.txt section 8 REDUCE_ONLY. False by default: a ceiling on new
+        # exposure is an explicit RISK_ADMIN act, never a default. Enforced in
+        # `classify_plan`; the rule itself lives in core/reduce_only.py so it can be
+        # tested without constructing a control plane.
+        self.reduce_only = False
         self.live_capital_approved_by: str | None = None
         self.autonomy: AutonomyMode = AutonomyMode.SUPERVISED  # fail-closed: no auto-execution by default
         self.pending_approvals: dict[str, dict[str, Any]] = {}  # plan_id -> plan dump
@@ -253,6 +264,37 @@ class ControlPlane:
     async def _do_resume_trading(self, operator_id: str) -> dict[str, Any]:
         self.paused = False
         return {"paused": False}
+
+    async def _do_set_reduce_only(self, operator_id: str, enabled: str = "true") -> dict[str, Any]:
+        """ARCHITECTURE.txt section 8 REDUCE_ONLY: permit reductions, refuse increases.
+
+        The missing middle setting. Until this existed, containment was entirely global:
+        an operator who wanted exposure down could do nothing or flatten everything, and
+        there was no third option. This is that option, and it is deliberately NOT a
+        liquidation -- positions decay as they are closed rather than being sliced here.
+
+        It does not touch the kill-switch sequence (constitution 2.2), does not cancel
+        working orders, and does not alter the drawdown halt. It is a ceiling on new
+        exposure, not a flattening, so it composes with STOP: pausing stops all execution
+        including the reductions this command exists to permit.
+
+        Audited as its own event rather than only through the generic CONTROL_ACTION
+        envelope, because a standing capital constraint that is later found to have been
+        on when it should not have been needs a first-class record.
+        """
+        on = str(enabled).strip().lower() in {"1", "true", "yes", "on"}
+        previous = self.reduce_only
+        self.reduce_only = on
+        self.store.append_event(
+            "REDUCE_ONLY_SET",
+            None,
+            {
+                "operator_id": operator_id,
+                "enabled": on,
+                "previous": previous,
+            },
+        )
+        return {"reduce_only": on, "previous": previous}
 
     async def _do_cancel_open_orders(self, operator_id: str) -> dict[str, Any]:
         cancelled: list[str] = []
@@ -430,6 +472,17 @@ class ControlPlane:
 
     def classify_plan(self, plan: Any) -> str:
         """Where should this approved plan go under current autonomy?"""
+        # REDUCE_ONLY is checked FIRST, before autonomy and pause. It has to be: each
+        # branch below returns immediately, so a reduce-only check placed after them is
+        # unreachable whenever autonomy is EXECUTING -- which is the normal operating
+        # state, and would have made the command appear to do nothing. Narrowing must
+        # also never widen, and testing the ceiling first guarantees that.
+        if self.reduce_only and reduce_only_blocks(
+            self._positions_view(),
+            str(getattr(plan.strategy, "symbol", "")),
+            str(getattr(plan.strategy, "action", "")),
+        ):
+            return "HOLD"
         if self.autonomy in EXECUTING_MODES and not self.paused:
             return "EXECUTE"
         if self.autonomy in QUEUING_MODES and not self.paused:

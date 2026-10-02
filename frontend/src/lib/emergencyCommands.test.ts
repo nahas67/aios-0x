@@ -52,6 +52,7 @@ const CONTROL_ACTIONS = [
   "approve_plan",
   "reject_plan",
   "set_research_mode",
+  "set_reduce_only",
   "resolve_reconciliation_finding",
 ] as const;
 
@@ -103,26 +104,40 @@ describe("§8's human control plane", () => {
 });
 
 describe("coverage as the tree actually implements it", () => {
-  // Pinned deliberately. These three numbers ARE the finding — 2 of §8's 8 commands
-  // work, 1 is reachable only in part, 5 do not exist. If someone implements
-  // REDUCE_ONLY, this test fails and forces the finding to be restated, which is the
-  // point: a safety gap that no test notices is a safety gap that gets forgotten.
-  it("reports 2 full, 1 partial, 5 none", () => {
-    expect(coverageSummary()).toEqual({ full: 2, partial: 1, none: 5 });
+  // Pinned deliberately. These three numbers ARE the finding — of §8's 8 commands, 2 work
+  // fully, 2 are reachable only in part, and 4 do not exist. The partials are partial for
+  // different reasons and both say so: NO_NEW_RISK is a distinct command §8 lists that
+  // has no action of its own, while REDUCE_ONLY now exists and is audited but enforces
+  // only the directional half of the rule (no overshoot check — classify_plan has no
+  // absolute quantity). If someone wires the quantity-aware half, this fails and forces
+  // the finding to be restated, which is the point: a safety gap that no test notices is
+  // a safety gap that gets forgotten.
+  it("reports 2 full, 2 partial, 4 none", () => {
+    expect(coverageSummary()).toEqual({ full: 2, partial: 2, none: 4 });
   });
 
   it("names STOP and LIQUIDATE as the two that work", () => {
     expect(availableCommands().map((c) => c.command)).toEqual(["STOP", "LIQUIDATE"]);
   });
 
-  it("names the five that do not exist", () => {
+  it("names the four that do not exist", () => {
     expect(missingCommands().map((c) => c.command)).toEqual([
-      "REDUCE_ONLY",
       "DISABLE_STRATEGY",
       "DISABLE_MODEL",
       "DISABLE_PROVIDER",
       "DISABLE_BROKER",
     ]);
+  });
+
+  // REDUCE_ONLY is deliberately partial and not available. It now exists and is audited,
+  // so it left the "none" list; it did not become "full", because classify_plan cannot
+  // detect an overshoot. Both of these assertions exist to stop either half of that
+  // being papered over later.
+  it("treats REDUCE_ONLY as partial, because overshoot is not enforced", () => {
+    const reduceOnly = EMERGENCY_COMMANDS.find((c) => c.command === "REDUCE_ONLY");
+    expect(reduceOnly?.coverage).toBe<Coverage>("partial");
+    expect(reduceOnly?.via).toEqual(["set_reduce_only"]);
+    expect(reduceOnly?.gap.toLowerCase()).toContain("overshoot");
   });
 
   it("treats NO_NEW_RISK as partial rather than available", () => {

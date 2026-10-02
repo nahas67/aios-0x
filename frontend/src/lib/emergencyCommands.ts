@@ -89,14 +89,31 @@ export const EMERGENCY_COMMANDS: readonly EmergencyCommand[] = [
   {
     command: "REDUCE_ONLY",
     intent: "Permit closing and reducing exposure; permit no increase.",
-    coverage: "none",
-    via: [],
+    // Partial, not full, and the distinction is the point rather than a hedge.
+    //
+    // The command now exists: set_reduce_only is a RISK_ADMIN control action, audited,
+    // and enforced in classify_plan, which refuses any plan whose direction would
+    // increase exposure and permits the reductions this command exists for.
+    //
+    // What is NOT enforced: the overshoot check. classify_plan sees a plan's symbol and
+    // action but no absolute quantity — the strategy contract carries position_size_pct,
+    // a share of portfolio risk, which cannot be compared to a venue quantity without a
+    // portfolio value that path does not hold. So a single oversized SELL against a long
+    // can still cross through zero and open a short while nominally "reducing".
+    //
+    // The quantity-aware half of the rule IS written and tested (core/reduce_only.py,
+    // would_increase_exposure) and is not wired to any gate. Marking this "full" would
+    // put a green tick beside a control that does not do everything its name implies,
+    // which is the specific misrepresentation this file exists to avoid.
+    coverage: "partial",
+    via: ["set_reduce_only"],
     gap:
-      "No action reduces without halting. The only de-risking capability in the tree is " +
-      "the flatten loop inside the kill switch, which goes all the way to flat in one " +
-      "step. An operator who wants exposure down has two choices — do nothing, or " +
-      "flatten everything — and there is no middle setting. Searched by capability " +
-      "(reduce-only, de-risk, derisk, flatten, step_down, reduce_position): nothing.",
+      "Enforced directionally in classify_plan: any order whose direction increases " +
+      "exposure in its symbol is refused, including every order against a flat book, " +
+      "and reductions are permitted. NOT enforced: overshoot. A single oversized SELL " +
+      "against a long can still cross zero and open a short. The check that would catch " +
+      "it needs an absolute order quantity, which the classification path does not " +
+      "have — see core/reduce_only.py reduce_only_blocks for the same caveat in the code.",
   },
   {
     command: "LIQUIDATE",
