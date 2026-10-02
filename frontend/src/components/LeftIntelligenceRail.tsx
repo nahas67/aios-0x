@@ -22,11 +22,14 @@ import {
   ChevronRight,
   ChevronLeft
 } from 'lucide-react';
-import { WorkspaceTab } from '../types';
+import { WORKSPACE_TABS, type WorkspaceTab } from '../types';
 import { buildNavSections } from '../lib/architectureLayers';
+import { visibleTabs, type WorkspaceLayout } from '../lib/layout';
 
 interface LeftIntelligenceRailProps {
   activeTab: WorkspaceTab;
+  /** Operator layout: display order and hidden tabs. Presentation only. */
+  layout?: WorkspaceLayout;
   onSelectTab: (tab: WorkspaceTab) => void;
   /** Live count from /approvals — badge hidden while unknown. */
   pendingApprovalsCount?: number | null;
@@ -53,6 +56,7 @@ interface NavItemConfig {
 
 export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
   activeTab,
+  layout,
   onSelectTab,
   pendingApprovalsCount = null,
   activeRiskWarnings = null,
@@ -181,7 +185,16 @@ export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
           // Ordering and grouping are `buildNavSections`' job, not this file's: it is
           // pure and tested, and the one bug that matters here — an item quietly
           // vanishing from the nav — is invisible in JSX and obvious in a test.
-          const sections = buildNavSections(navItems);
+          // The operator's order and hidden set are applied HERE, at the last moment before
+          // render, rather than by mutating `navItems`: ordering and grouping are
+          // `buildNavSections`' job and are tested there, and filtering before that call
+          // would mean two sources of truth for what is visible.
+          const shown = layout ? visibleTabs(layout, WORKSPACE_TABS) : WORKSPACE_TABS;
+          const rank = new Map(shown.map((id: WorkspaceTab, index: number) => [id, index]));
+          const ordered = [...navItems]
+            .filter((item) => rank.has(item.id))
+            .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+          const sections = buildNavSections(ordered);
 
           return sections.map((section) => (
             <div key={section.label} className="space-y-1">

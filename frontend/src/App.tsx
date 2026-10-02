@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   WorkspaceTab,
   AutonomyLevel,
@@ -45,7 +45,14 @@ import { SystemHealthWorkspace } from './components/views/SystemHealthWorkspace'
 import { DesignSystemWorkspace } from './components/views/DesignSystemWorkspace';
 import { SettingsWorkspace } from './components/views/SettingsWorkspace';
 import ChatPanel from './components/ChatPanel';
+import {
+  normalizeLayout,
+  readStoredLayout,
+  visibleTabs,
+  type WorkspaceLayout,
+} from './lib/layout';
 import type { SystemSettings } from './types';
+import { WORKSPACE_TABS } from './types';
 
 const SETTINGS_CACHE_KEY = 'aios0x_settings_cache_v1';
 
@@ -70,6 +77,21 @@ function readSettingsCache(): CachedSettings | null {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('overview');
+  // Presentation only. Nothing here reaches the backend, and hiding a workspace cannot
+  // weaken a control — see `lib/layout.ts` for why that distinction is load-bearing.
+  const [layout, setLayout] = useState<WorkspaceLayout>(() =>
+    normalizeLayout(readStoredLayout(WORKSPACE_TABS), WORKSPACE_TABS),
+  );
+
+  // Hiding the workspace you are currently in must not leave the console rendering
+  // nothing: relocate to the first visible tab instead.
+  const onLayoutChange = useCallback((next: WorkspaceLayout) => {
+    setLayout(next);
+    setActiveTab((current) => {
+      if (!next.hidden.includes(current)) return current;
+      return visibleTabs(next, WORKSPACE_TABS)[0] ?? 'overview';
+    });
+  }, []);
 
   // Server-owned settings (GET /api/v1/settings/v1 wins; localStorage is an
   // offline cache only). The Settings tab edits a working copy and PUTs it.
@@ -300,6 +322,7 @@ export default function App() {
         {/* Persistent Slim Left Intelligence Rail */}
         <LeftIntelligenceRail
           activeTab={activeTab}
+          layout={layout}
           onSelectTab={setActiveTab}
           pendingApprovalsCount={pendingApprovals}
           activeRiskWarnings={riskWarnings}
@@ -409,6 +432,8 @@ export default function App() {
               serverVersion={serverVersion}
               serverAvailable={settingsPlaneAvailable}
               serverReason={settingsPlaneReason}
+              activeTab={activeTab}
+              onLayoutChange={onLayoutChange}
               onSaveSettings={handleSaveSettings}
               onResetDefaults={handleResetSettings}
               onTriggerToast={triggerToast}

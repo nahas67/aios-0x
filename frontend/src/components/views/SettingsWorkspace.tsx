@@ -32,6 +32,10 @@ import {
   type AccentName,
   type ThemeName,
 } from '../../lib/theme';
+import LayoutPanel from '../LayoutPanel';
+import { WORKSPACE_TABS } from '../../types';
+import type { WorkspaceLayout } from '../../lib/layout';
+import type { WorkspaceTab } from '../../types';
 
 /**
  * Accent and theme labels, keyed by the `lib/theme` union.
@@ -64,6 +68,10 @@ const THEME_LABELS = THEMES.map((id) => ({ id, name: THEME_NAMES[id] }));
 
 interface SettingsWorkspaceProps {
   settings: SystemSettings;
+  /** Which workspace is open, so the layout editor can warn before you hide it. */
+  activeTab: WorkspaceTab;
+  /** Presentation only: reorder and hide. Cannot affect what the backend enforces. */
+  onLayoutChange: (next: WorkspaceLayout) => void;
   serverVersion: number | null;
   serverAvailable: boolean;
   serverReason: string | null;
@@ -94,6 +102,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
   serverVersion,
   serverAvailable,
   serverReason,
+  activeTab,
+  onLayoutChange,
   onSaveSettings,
   onResetDefaults,
   onTriggerToast,
@@ -1742,6 +1752,8 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                     constant as though it were the current theme. It is replaced by the
                     live theme readout inside the Console Theme panel below. */}
               </div>
+
+              <LayoutPanel tabs={WORKSPACE_TABS} activeTab={activeTab} onLayoutChange={onLayoutChange} />
 
               {/* Theme + Accent. Both apply immediately — see `chooseTheme` above for
                   why these are client-local rather than server settings. */}

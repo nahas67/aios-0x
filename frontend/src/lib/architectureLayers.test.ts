@@ -17,6 +17,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { WORKSPACE_TABS } from '../types';
 import {
+  NON_HIDEABLE,
+  defaultLayout,
+  isHidden,
+  normalizeLayout,
+  setHidden,
+  visibleTabs,
+} from './layout';
+import {
   LAYERS,
   LAYERS_WITHOUT_WORKSPACE,
   NAV_GROUPS,
@@ -224,6 +232,61 @@ describe('every placed workspace is actually reachable', () => {
     const grouped = new Set(NAV_GROUPS.flatMap((g) => g.tabs));
     const dangling = WORKSPACE_TABS.filter((tab) => !grouped.has(tab));
     expect(dangling).toEqual([]);
+  });
+});
+
+describe('the operator layout cannot strand anyone', () => {
+  // Phase 6 added reorder/hide. Hiding a workspace is presentation only — it cannot weaken a
+  // control — but it CAN remove a workspace from the console, and one removal is fatal:
+  // hiding Settings removes the layout editor, which is the only way to restore the layout.
+  //
+  // A cosmetic toggle that can create a one-way door is the worst harm-to-intent ratio in the
+  // feature, so the rule lives in `lib/layout.ts` and is asserted here against the real tab
+  // list rather than left to the button's `disabled` attribute.
+  it('keeps the layout editor itself reachable', () => {
+    for (const stored of [
+      { order: ['settings'], hidden: ['settings'] },
+      { order: [], hidden: ['settings'] },
+      { order: [...WORKSPACE_TABS], hidden: ['settings'] },
+      null,
+      'garbage',
+    ]) {
+      const layout = normalizeLayout(stored, WORKSPACE_TABS);
+      expect(visibleTabs(layout, WORKSPACE_TABS), JSON.stringify(stored)).toContain('settings');
+    }
+  });
+
+  it('refuses to hide it through the setter too, not only on read', () => {
+    const layout = setHidden(defaultLayout(WORKSPACE_TABS), 'settings', true);
+    expect(isHidden(layout, 'settings')).toBe(false);
+    expect(layout.hidden).toEqual([]);
+  });
+
+  it('still lets every other workspace be hidden, so the feature is not a no-op', () => {
+    const layout = defaultLayout(WORKSPACE_TABS);
+    const hideable = WORKSPACE_TABS.filter((tab) => !NON_HIDEABLE.includes(tab));
+    expect(hideable.length).toBeGreaterThan(WORKSPACE_TABS.length - 2);
+    for (const tab of hideable) {
+      expect(isHidden(setHidden(layout, tab, true), tab), `could not hide ${tab}`).toBe(true);
+    }
+  });
+
+  it('never lets a layout change which workspaces EXIST', () => {
+    // Reordering and hiding are about the operator's list, never about the platform's. The
+    // union is fixed by the architecture, and a layout may not add to or remove from it.
+    const layout = normalizeLayout(
+      { order: ['ghost' as never], hidden: ['phantom' as never] },
+      WORKSPACE_TABS,
+    );
+    expect(new Set(layout.order)).toEqual(new Set(WORKSPACE_TABS));
+  });
+
+  it('keeps at least one workspace visible, whatever the layout says', () => {
+    const allHidden = {
+      order: [...WORKSPACE_TABS],
+      hidden: WORKSPACE_TABS.filter((tab) => !NON_HIDEABLE.includes(tab)),
+    };
+    expect(visibleTabs(normalizeLayout(allHidden, WORKSPACE_TABS), WORKSPACE_TABS).length).toBeGreaterThan(0);
   });
 });
 
