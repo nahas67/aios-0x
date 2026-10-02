@@ -247,7 +247,66 @@ is a UI change nobody has asked for, so it is not done either.
 
 ---
 
-## 8. Verification
+## 8. An unexplained flake in the multi-process concurrency tests
+
+Not architecture, but found while verifying the above and recorded because it is real,
+rare, and currently undiagnosable.
+
+### What is observed
+
+Two failures, both `sqlite` tier, both in `tests/test_v1a2_concurrency.py`, both only
+under load:
+
+1. `test_two_outbox_workers_claim_disjoint_batches[sqlite]` — once, in a full-suite run.
+   **The assertion is unknown**: that run used `--tb=no`, so only the test name survived.
+2. `test_two_processes_cannot_overfill_one_order[sqlite]` — once, under 6 CPU spinners,
+   as `AssertionError: worker failed (1)` with **empty stdout AND empty stderr**.
+
+Different tests, same file, so the fault is not in either test's logic.
+
+### The clue
+
+A handled Python exception always writes a traceback to stderr. Empty stderr with a
+non-zero exit is not that. A subprocess that dies silently is indistinguishable from one
+that was killed, one that timed out, and one that exited through a path that prints
+nothing — and `run_workers` reports all four with the same message, then lets pytest
+truncate the evidence.
+
+SQLite contention is *not* an adequate explanation: `core/financial_kernel.py:877` sets
+`PRAGMA busy_timeout = 10000` with WAL, against a 120 s worker timeout.
+
+### What was ruled out
+
+| Attempt | Result |
+|---|---|
+| single test, 12 runs | 12 pass |
+| whole file, 10 runs, no load | 10 pass |
+| whole file under 6 then 10 CPU spinners, 24 runs | 24 pass |
+| full suite, 5 runs | 5 pass |
+| standalone two-process race, 8 attempts under load | 8 pass |
+
+### Why there is no fix here
+
+Adding diagnostics changed the timing enough to stop the fault appearing at all — a
+heisenbug cannot be pinned down by making the system slower. **A speculative fix would be
+worse than none**, so none was written.
+
+What was done instead is make the next occurrence diagnosable: `run_workers` now appends
+one JSON line per worker (mode, returncode, stdout/stderr length and tail) to
+`$AIOS_WORKER_DIAG` when that variable is set, and does nothing when it is unset. Verified
+to capture 320 records across a 14-iteration run.
+
+```powershell
+$env:AIOS_WORKER_DIAG="$env:TEMP\worker.jsonl"
+python -m pytest tests/test_v1a2_concurrency.py -q
+```
+
+This is a diagnostic, not a control, and it fixes nothing. The flake remains open and
+needs a capture to close.
+
+---
+
+## 9. Verification
 
 How to re-check every claim above:
 

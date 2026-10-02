@@ -78,6 +78,45 @@ def run_workers(
     with ThreadPoolExecutor(max_workers=len(commands)) as pool:
         completed = list(pool.map(_launch, commands))
 
+    # Worker forensics, opt-in and free when unset.
+    #
+    # This exists because of a real, still-unexplained flake, and because the
+    # AssertionError below is what makes it unexplainable. The observed signature was
+    # `worker failed (1)` with BOTH stdout and stderr empty -- which is not what a
+    # handled exception looks like, since Python always writes a traceback to stderr.
+    # A subprocess that dies silently is indistinguishable from one that was killed, one
+    # that timed out, and one that exited through a path that prints nothing, and this
+    # harness reports all four identically. Worse, pytest truncates the output, so the
+    # one piece of evidence is discarded at the moment it is needed.
+    #
+    # Set AIOS_WORKER_DIAG=<path> to append one JSON line per worker per call. Verified
+    # to capture 320 records across a 14-iteration run with zero failures.
+    #
+    # What this does NOT do: fix anything. It makes the next occurrence diagnosable.
+    # Note also that adding it changed the timing enough to stop the fault reproducing
+    # -- 24 file runs and 5 full-suite runs green with it in place, against 2 failures in
+    # ~30 runs without it -- so it is a diagnostic, not a control.
+    _diag_path = os.environ.get("AIOS_WORKER_DIAG")
+    if _diag_path:
+        try:
+            with open(_diag_path, "a", encoding="utf-8") as _fh:
+                for _cmd, _proc in zip(commands, completed, strict=True):
+                    _fh.write(
+                        json.dumps(
+                            {
+                                "mode": _cmd[_cmd.index("--mode") + 1],
+                                "returncode": _proc.returncode,
+                                "stdout_len": len(_proc.stdout or ""),
+                                "stderr_len": len(_proc.stderr or ""),
+                                "stdout": (_proc.stdout or "")[-3000:],
+                                "stderr": (_proc.stderr or "")[-3000:],
+                            }
+                        )
+                        + "\n"
+                    )
+        except Exception as _exc:  # pragma: no cover -- diagnostics never fail a test
+            print(f"worker diagnostics unavailable: {_exc}")
+
     results: list[dict] = []
     for command, proc in zip(commands, completed, strict=True):
         if proc.returncode != 0:
