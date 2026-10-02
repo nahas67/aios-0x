@@ -9,6 +9,7 @@ import {
   GitFork, 
   Zap, 
   ShieldAlert, 
+  ShieldCheck, 
   Binary, 
   Network, 
   ReceiptText, 
@@ -134,6 +135,7 @@ export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
     { id: 'research', label: 'Research', icon: BrainCircuit, badge: countBadge(researchCount) },
     { id: 'agents', label: 'Agents', icon: Users2, badge: countBadge(agentsCount), badgeColor: 'cyan' },
     { id: 'strategies', label: 'Strategies', icon: GitFork, badge: countBadge(strategiesCount) },
+    { id: 'certification', label: 'Certification', icon: ShieldCheck },
     { id: 'execution', label: 'Execution', icon: Zap },
     {
       id: 'risk',

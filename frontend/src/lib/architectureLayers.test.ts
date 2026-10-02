@@ -64,7 +64,10 @@ describe('the §2 layer list', () => {
 });
 
 describe('every workspace is placed', () => {
-  it('places all 17 tabs, so there are no orphans', () => {
+  // Deliberately does not say "17" in its name: WORKSPACE_TABS grew when the
+  // certification view was added, and a test name that pins a count goes quietly
+  // stale while its assertion stays correct.
+  it('places every tab, so there are no orphans', () => {
     const orphans = WORKSPACE_TABS.filter((tab) => placementOf(tab) === undefined);
     expect(orphans).toEqual([]);
   });

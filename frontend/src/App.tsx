@@ -36,6 +36,7 @@ import { RiskCommandCenterWorkspace } from './components/views/RiskCommandCenter
 import { ExecutionWorkspace } from './components/views/ExecutionWorkspace';
 import { ResearchWorkspace } from './components/views/ResearchWorkspace';
 import { StrategyResearchWorkspace } from './components/views/StrategyResearchWorkspace';
+import { CertificationWorkspace } from './components/views/CertificationWorkspace';
 import { ModelGovernanceWorkspace } from './components/views/ModelGovernanceWorkspace';
 import { AccountingTaxWorkspace } from './components/views/AccountingTaxWorkspace';
 import { FinancialKernelWorkspace } from './components/views/FinancialKernelWorkspace';
@@ -369,6 +370,10 @@ export default function App() {
 
           {activeTab === 'strategies' && (
             <StrategyResearchWorkspace />
+          )}
+
+          {activeTab === 'certification' && (
+            <CertificationWorkspace />
           )}
 
           {activeTab === 'models' && (

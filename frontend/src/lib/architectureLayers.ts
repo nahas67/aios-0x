@@ -124,10 +124,11 @@ export const NAV_GROUPS: readonly ArchitectureUnit[] = [
     id: 'L7',
     label: 'L7 · Strategy Certification Firewall',
     placement: 'layer',
-    // The closest existing screen to Layer 7. It is not the certification view itself:
-    // Layer 7 is the gate that decides whether a strategy may trade at all, and no
-    // workspace shows that gate's verdict and refusal reason. See P5 / ARCHITECTURE_MAPPING.md.
-    tabs: ['strategies'],
+    // Layer 7's own screen, added in P5: the certification verdict, its checks, and
+    // the reason any figure is refused. `strategies` sits here too but is NOT this —
+    // it is strategy research, while Layer 7 is the gate deciding whether a strategy
+    // may trade at all.
+    tabs: ['strategies', 'certification'],
   },
   {
     id: 'L13',
