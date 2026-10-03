@@ -56,6 +56,13 @@ MUTANTS: list[tuple[str, pathlib.Path, str, str, str]] = [
         '"kernel/playbook.py": "DEAD PARALLEL IMPLEMENTATION.',
         "delete the entry, the debt is paid",
     ),
+    (
+        "a 7th goal's gates reach no live evidence, undocumented",
+        VERIFY,
+        '"G060": "test_quant_factory.py touches none of kernel/factors.py, kernel/strategies.py "',
+        '"G190": "test_quant_factory.py touches none of kernel/factors.py, kernel/strategies.py "',
+        "its guarantee is verified only against",
+    ),
 ]
 
 

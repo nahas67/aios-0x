@@ -277,6 +277,40 @@ trial on screen.
 
 **L23 Institutional Memory is now the last terminus without a screen.**
 
+### And six goals have gates that protect nothing
+
+The sharpest form of the same defect, and the reason the gate above has a third dimension.
+**Six LANDED goals have gate tests that reach none of their live evidence.** Every one of
+those tests passes, comprehensively, about code no production module imports — so the
+invariant is true of a file and false of the system.
+
+| Goal | Gates | Reach |
+|---|---|---|
+| **G090** | `test_feature_parity.py` | only the dead `core/feature_store.py` |
+| G110 | `test_decision_gate.py`, `test_conformal.py` | only the dead pair |
+| G160 | `test_execution_twin.py` | only the dead twin |
+| G130 | `test_portfolio_brain.py` | not the live portfolio path |
+| G150 | `test_execution_algorithms.py` | only the dead `algorithms.py` |
+| G060 | `test_quant_factory.py` | none of its three dead modules |
+
+**G090 is the one that should worry an owner.** Its stated guarantee is *"the offline
+point-in-time feature and the in-process online feature produce identical values … so a model
+trained on one is served the other."* `ARCHITECTURE.txt` §12 places the Feature Fabric
+between Data Quality and the Fast Expert Model, and the parity test verifies it for
+`core/feature_store.py` — which nothing runs. Production computes transforms **inline in
+`simulation/replay_runner.py`**; `core/indicators.py` (`ema`, `rsi`, `macd`, `bollinger`) is
+imported by exactly one caller, `api/views.py:market_candles()`, to draw a chart.
+
+So the failure G090 exists to prevent — a model trained offline and served different
+features online — is not prevented for the code that actually serves. **Whether to route the
+live loop through `OfflineStore`/`OnlineStore` is a human decision and was not made here:**
+it would change model inputs and therefore invalidate every recorded backtest, and it is
+possible the inline transforms are the intended design with `feature_store` kept as the
+reference implementation the parity test pins.
+
+`verify_landed_evidence_is_live.py` reports all three dimensions — barren goals, dead
+modules, and vacuous gates — and every instance is listed with a reason and self-clears.
+
 ---
 
 ---
@@ -418,12 +452,12 @@ a LANDED goal and no screen** (L1, L5, L6, L8, L9, L10, L11, L21, L23, L25).
 | State honesty | `scripts/verify_state_honesty.py` | 18 views, no hand-rolled or cause-asserting empty state |
 | Dead settings | `scripts/verify_no_dead_settings.py` | 83 fields, 17 documented inert, **0 undocumented** |
 | Goal-ID divergence | `scripts/verify_goal_id_divergence.py` | 28 §13 IDs = 25 registry IDs, arithmetic closes, `G260` decline re-checked |
-| Landed evidence | `scripts/verify_landed_evidence_is_live.py` | 23 LANDED goals, **3 with no live evidence at all**, 21 dead modules, 0 undocumented |
+| Landed evidence | `scripts/verify_landed_evidence_is_live.py` | 23 LANDED goals, **3 barren**, **21 dead modules**, **6 with vacuous gates**, 0 undocumented |
 
 Five of these gates are new, and each answers "can this fail?" with a mutation harness rather
 than a claim: `scripts/prove_theme_gate.py` (6 rotations),
 `scripts/prove_state_honesty.py` (3), `scripts/prove_dead_settings_gate.py` (3),
-`scripts/prove_goal_id_divergence.py` (4) and `scripts/prove_landed_evidence_gate.py` (4).
+`scripts/prove_goal_id_divergence.py` (4) and `scripts/prove_landed_evidence_gate.py` (5).
 A gate that has never been observed red is an assertion about itself, not about the tree.
 
 Two of those gates exist because everything else was green while the tree was wrong. The

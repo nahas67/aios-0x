@@ -145,6 +145,28 @@ KNOWN_DEAD_MODULES: dict[str, str] = {
     "Every ABSTAIN/REJECT/NO_NEW_RISK restraint should retain one and nothing does.",
 }
 
+#: LANDED goals whose stated guarantee is verified ONLY against evidence that no production
+#: module imports. Every gate test in these goals passes, comprehensively, about code that does
+#: not run -- so the invariant is real as a statement about the module and vacuous as a
+#: statement about the system.
+VACUOUS_GATES: dict[str, str] = {
+    "G090": "test_feature_parity.py imports only the dead core/feature_store.py. The "
+    "offline/online parity invariant -- 'a model trained on one is served the other' -- is "
+    "therefore verified for nothing. Production computes transforms inline in "
+    "simulation/replay_runner.py; core/indicators.py serves only a chart view. This is the "
+    "highest-consequence entry: it is the exact failure G090 exists to prevent.",
+    "G110": "test_decision_gate.py and test_conformal.py test the dead pair while the live "
+    "TRADE/WAIT/ESCALATE/ABSTAIN router is kernel/playbook.py, which no goal gate covers.",
+    "G160": "test_execution_twin.py tests the dead twin. G160's whole subject is unwired, "
+    "which is also why layer 21 has no screen.",
+    "G130": "test_portfolio_brain.py does not reach the live portfolio path; "
+    "communities/c9_portfolio/optimizer.py is the goal's only evidence and is unimported.",
+    "G150": "test_execution_algorithms.py tests communities/c5_execution/algorithms.py, "
+    "which nothing imports -- worth confirming execution does not bypass its own algorithms.",
+    "G060": "test_quant_factory.py touches none of kernel/factors.py, kernel/strategies.py "
+    "or research/reporting.py, all three of which are unimported.",
+}
+
 IMPORT_LINE = r"^\s*(?:from|import)\s+\S*\b{module}\b"
 
 
@@ -224,6 +246,60 @@ def main() -> int:
     print(f"dead evidence modules in otherwise-live goals: {len(dead_modules) - len(barren_goals)}")
     print(f"total dead evidence modules                 : {len(dead_modules)}")
 
+    # --- a goal's GUARANTEE must be verified against code that runs --------------
+    # Distinct from the checks above. A goal can have perfectly good live evidence and
+    # still have every gate test aimed at its dead modules, which makes the stated
+    # invariant true of a file and false of the system.
+    def gate_tests(goal: dict[str, object]) -> list[str]:
+        out: list[str] = []
+        for gate in goal.get("gates", []) or []:
+            found = re.search(r"test:(\S+)", str(gate.get("check", "")))
+            if found and (REPO / found.group(1)).is_file():
+                out.append(found.group(1))
+        return out
+
+    def touches(entry: str, texts: list[str]) -> bool:
+        pattern = importer_pattern(pathlib.Path(entry).stem)
+        return any(pattern.search(text) for text in texts)
+
+    vacuous_now: list[str] = []
+    for goal in goals:
+        if goal.get("status") != "LANDED":
+            continue
+        evidence = [
+            e
+            for e in goal.get("evidence", [])
+            if e.endswith(".py") and e.startswith(LIBRARY_PREFIXES) and e in prod
+        ]
+        dead = [e for e in evidence if not is_live(e)]
+        if not dead:
+            continue
+        texts = [
+            (REPO / t).read_text(encoding="utf-8", errors="replace")
+            for t in gate_tests(goal)
+        ]
+        live_evidence = [e for e in evidence if is_live(e)]
+        if live_evidence and any(touches(e, texts) for e in live_evidence):
+            continue
+        vacuous_now.append(goal["id"])
+        if goal["id"] not in VACUOUS_GATES:
+            failures.append(
+                f"{goal['id']} is LANDED with dead evidence ({', '.join(dead)}) and none of "
+                f"its gate tests reach live evidence: its guarantee is verified only against "
+                f"code no production module imports. Declare it in VACUOUS_GATES with a "
+                f"reason, wire it, or point the gate at live code"
+            )
+
+    for gid in VACUOUS_GATES:
+        if gid not in vacuous_now:
+            failures.append(
+                f"{gid} is in VACUOUS_GATES but its gates now reach live evidence -- "
+                f"delete the entry, the debt is paid"
+            )
+
+    print(f"goals whose gates reach NO live evidence    : {len(vacuous_now)} "
+          f"{sorted(vacuous_now)}")
+
     # --- undocumented instances fail -------------------------------------------
     for gid in sorted(barren_goals):
         if gid not in KNOWN_DEAD_GOALS:
@@ -274,8 +350,9 @@ def main() -> int:
         return 1
 
     print(
-        f"landed-evidence gate green: {len(barren_goals)} barren goal(s) and "
-        f"{len(dead_modules)} dead module(s), all documented, 0 undocumented"
+        f"landed-evidence gate green: {len(barren_goals)} barren goal(s), "
+        f"{len(dead_modules)} dead module(s), {len(vacuous_now)} vacuous-gate goal(s), "
+        f"all documented, 0 undocumented"
     )
     return 0
 
