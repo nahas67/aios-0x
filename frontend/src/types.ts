@@ -19,6 +19,7 @@ export const WORKSPACE_TABS = [
   'agents',
   'strategies',
   'certification',
+  'arena',
   'execution',
   'risk',
   'models',

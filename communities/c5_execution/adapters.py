@@ -409,6 +409,17 @@ class CcxtExecutionAdapter(BaseExecutionAdapter):
         return 1
 
     def positions_snapshot(self) -> dict[str, float]:
+        """Signed net position per symbol, as the venue reports it.
+
+        Sign comes from ``side``, not from ``contracts``. No venue hands back a
+        signed ``contracts``: ccxt's ``gate`` explicitly applies
+        ``Precise.string_abs(size)``, and Deribit's OpenAPI defines
+        ``position.size`` as a quote-currency magnitude with the direction
+        carried in a separate ``direction`` field. Reading ``contracts`` alone
+        therefore reports every short as a long — a phantom divergence that
+        reconciliation reports forever, and the reason the base class's "Shorts
+        are negative" contract needs implementing here rather than inheriting.
+        """
         positions = self._client.fetch_positions()
         out: dict[str, float] = {}
         for position in positions or []:
@@ -419,6 +430,8 @@ class CcxtExecutionAdapter(BaseExecutionAdapter):
                     aios_symbol = base
                     break
             qty = float(position.get("contracts") or 0.0)
+            if str(position.get("side", "")).lower() == "short":
+                qty = -abs(qty)
             if qty != 0.0:
                 out[aios_symbol] = out.get(aios_symbol, 0.0) + qty
         return out

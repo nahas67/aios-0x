@@ -92,6 +92,25 @@ class ChallengeRegistry:
         self._promotions = promotions
         self._rollbacks = rollbacks
 
+    @property
+    def kernel_wired(self) -> bool:
+        """Whether promotion can record a rollback target.
+
+        Exposed because `promote()` refuses without it, so an operator surface has to be able
+        to say so BEFORE offering the button rather than after a refusal.
+        """
+        return self._promotions is not None and self._rollbacks is not None
+
+    def all_trials(self) -> list[ChallengerTrial]:
+        """Every trial this registry owns, newest state-change last.
+
+        A read for the operator surface (ARCHITECTURE.txt layer 25, Champion/Challenger
+        Arena). Ordered by name rather than insertion so the view is stable across polls --
+        an operator watching a list should not see rows jump because a background staging
+        pass added a trial.
+        """
+        return [self.trials[name] for name in sorted(self.trials)]
+
     def propose(self, name: str, description: str = "", metric: str = "pnl") -> ChallengerTrial:
         trial = ChallengerTrial(name=name, description=description, metric=metric)
         self.trials[name] = trial

@@ -315,11 +315,30 @@ export const StrategyResearchWorkspace: React.FC = () => {
               </div>
             )}
 
-            {/* Promotion: no backend flow */}
-            <div className="p-3 rounded bg-surface-veil border border-border-subtle text-[11px] text-text-subtle">
-              Promotion to production is not wired: no promotion endpoint exists, so status changes are
-              withheld rather than staged locally.
-            </div>
+            {/*
+              REMOVED: "Promotion to production is not wired: no promotion endpoint exists."
+
+              That was false, and it was false in the direction that hides capability. The
+              endpoints exist -- POST /api/v1/control/promote_challenger and
+              POST /api/v1/control/evaluate_trial, both RISK_ADMIN, dispatched by
+              core/control_plane.py -- and they are wired: serve_command_center.py passes the
+              single ControlPlane that ReplayRunner builds with both a challenge_registry and
+              a trial_evaluator attached.
+
+              An operator reading that note would have concluded the system could not promote a
+              challenger, and would have had no reason to look for the control that does it.
+              That is CONSTITUTION.md 3.1 as surely as the LIVE badge was: a claim about the
+              system's own capability that the code contradicts.
+
+              Promotion is not on this screen because it belongs to the trial it acts on, and a
+              trial is not a backtest window. The Arena workspace (L25) owns it now, and it
+              renders the recommendation, the evaluation verdict and the real preconditions
+              rather than a claim that nothing exists.
+
+              The sibling claims in this area were checked rather than assumed to share the
+              defect: order submission, trim and flatten really do have no endpoint, so those
+              notes stand.
+            */}
           </div>
         </>
       )}

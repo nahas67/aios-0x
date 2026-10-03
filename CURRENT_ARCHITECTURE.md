@@ -92,7 +92,7 @@ oversight: failing closed would let an optional constructor argument halt the wh
 
 ---
 
-## 3. §2's 25 layers — 11 have a screen
+## 3. §2's 25 layers — 12 have a screen
 
 §2 defines 25 named LAYER boxes in causal order. The console is grouped along them.
 
@@ -101,7 +101,13 @@ Research · L7 Strategy Certification Firewall · L13 Robust Portfolio Brain · 
 Truth · L15 Position Accounting · L18 Deterministic Capital Firewall · L20 Execution Kernel
 · L22 Reconciliation · L24 Governed Learning
 
-**Without one (14):** L1, L5, L6, L8, L9, L10, L11, L12, L16, L17, L19, L21, L23, L25.
+**Without one (13):** L1, L5, L6, L8, L9, L10, L11, L12, L16, L17, L19, L21, L23.
+
+**L25 Champion/Challenger Arena now has one** — see §7bb. It was the terminus of §12's own
+chain, and `LAYERS_WITHOUT_WORKSPACE` used to say so while `promote_model` existed without a
+view. **L23 Institutional Memory is the remaining terminus**, and `/api/v1/memory` reaches
+only `aios.c6.observation_completed` payloads — not the tiers, counterfactuals or promotion
+records that make the layer what it is.
 
 Three of the missing are load-bearing rather than incidental:
 
@@ -223,6 +229,56 @@ toggle.
 
 ---
 
+## 7bb. L25 Champion/Challenger Arena: a governance surface that worked, and said it did not
+
+The arena was fully built and fully wired, and the console claimed otherwise.
+
+`StrategyResearchWorkspace.tsx` carried the sentence *"Promotion to production is not wired:
+no promotion endpoint exists."* Both endpoints exist — `POST /api/v1/control/promote_challenger`
+and `POST /api/v1/control/evaluate_trial`, both `RISK_ADMIN`, dispatched from
+`core/control_plane.py` — and `scripts/serve_command_center.py` passes the single
+`ControlPlane` that `ReplayRunner` builds with both a `challenge_registry` and a
+`trial_evaluator` attached. `lib/control.ts` already carried the metadata. Nothing called it.
+
+That is `CONSTITUTION.md` §3.1 pointing the *opposite* way from the LIVE badge: not a control
+claiming a capability it lacks, but a view denying one the code has. An operator reading that
+sentence would not have gone looking for the control that does the work.
+
+I checked the sibling claims rather than assume they shared the defect. Order submission,
+trim and flatten really do have no endpoint — every route is GET except `control/{action}`
+and `chat` — so those notes stand.
+
+**Underneath the missing screen, promotion was silently unsafe.** `promote()` guarded the
+kernel promotion receipt and the rollback-target registration with
+`if self._promotions is not None and self._rollbacks is not None:`, so a registry built
+without those controllers promoted the challenger, wrote a `CHALLENGER_DECISION` reading
+PROMOTED, and returned `{"promoted": True}` having registered nothing that could undo it.
+And `ReplayRunner` had two factories for that singleton which disagreed about the
+dependencies, both guarded on `hasattr`, so whichever ran first won — and staging calls
+`build_challenge_registry()`. Promotion now refuses before any state change or audit write,
+and there is one factory.
+
+The read model keeps four facts apart, because collapsing any of them is a lie:
+
+| Fact | Meaning |
+|---|---|
+| `wired: false` | no registry on this composition root — a wiring fact, **not** an empty arena |
+| `recommendation: INSUFFICIENT_EVIDENCE` | the trial has not been run on both sides — **not** a number, a narrow loss, or a tie |
+| `verdict: null` | no `EvaluationRecord`; promotion is refused without one |
+| `kernel_wired: false` | the promote button would be refused — say so before the press |
+
+`frontend/src/adapters/arena.ts` carries these and derives the preconditions;
+`frontend/src/components/views/ArenaWorkspace.tsx` renders them. The adapter refuses to
+recompute the recommendation client-side — that would be authority the view must not have —
+so `INSUFFICIENT_EVIDENCE` arrives with every figure null rather than as a zero. Both control
+actions go through `runControl`, nothing local is mutated on click, and the arena is re-read
+from the server after every accepted action, so a refusal cannot leave a promoted-looking
+trial on screen.
+
+**L23 Institutional Memory is now the last terminus without a screen.**
+
+---
+
 ## 7c. Where the tree stands against `ARCHITECTURE.txt` §13, and three things the goals do not say
 
 ### The goal numbering does not match
@@ -305,7 +361,7 @@ a LANDED goal and no screen** (L1, L5, L6, L8, L9, L10, L11, L21, L23, L25).
 | Anti-patterns | `scripts/anti_pattern_lint.py` | clean, 6 rules |
 | Frontend types | `tsc -b --noEmit` | clean |
 | Build | `vite build` | two entries |
-| Operator isolation | `scripts/verify_operator_isolation.py` | green, 25 forbidden modules |
+| Operator isolation | `scripts/verify_operator_isolation.py` | green, **26** forbidden modules — the list is derived from the filesystem, so adding a workspace widens the operator's isolation automatically |
 | Theme tokens | `scripts/verify_theme_gate.py` | 0 hex outside `index.css`, 0 hardcoded palette classes, both themes + all 4 accents complete |
 | State honesty | `scripts/verify_state_honesty.py` | 18 views, no hand-rolled or cause-asserting empty state |
 | Dead settings | `scripts/verify_no_dead_settings.py` | 83 fields, 17 documented inert, **0 undocumented** |
@@ -346,7 +402,7 @@ Ordered by consequence, with the blocker named rather than implied.
 | 4 × `DISABLE_*` | ⛔ absent | [ADR-007](docs/adrs/ADR-007_component_containment_disable_commands.md) — one halt-vs-degrade decision governs all four |
 | `ModelStatus.DEPRECATED` | 🟡 latent gap | ADR-007 approval; same enforcement point as `DISABLE_MODEL` |
 | Multi-process flake | 🟠 open | `worker failed (1)` with empty stdout **and** stderr, load-sensitive; instrumentation suppresses it, so it needs a capture |
-| 14 of 25 layers | 🟡 gap | incl. §12's own terminus |
+| 13 of 25 layers | 🟡 gap | §12's terminus (L25 Arena) now has a screen; **L23 Institutional Memory** is the remaining terminus |
 | SSE payload | 🟡 2 keys | consumer-side coalescing landed; topic-delta is a contract change |
 | `DISABLE_BROKER` | ⛔ blocked | enforcement point `communities/c5_execution/adapters.py` has another work stream's uncommitted edits |
 | UI layout | 🔵 reserved | the §2 spine is built; the visual arrangement is deliberately unchosen |

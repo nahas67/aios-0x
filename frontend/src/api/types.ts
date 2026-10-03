@@ -389,6 +389,91 @@ export interface EvaluationRecord {
   summary: string;
 }
 
+// ---------------------------------------------- champion/challenger (layer 25)
+//
+// GET /api/v1/arena is the read model for ARCHITECTURE.txt §2 layer 25.
+//
+// TWO FLAGS THAT MUST NOT COLLAPSE INTO EACH OTHER, and which is why this is not
+// modelled as `{ available: boolean, trials: [] }`:
+//
+//   `wired`       — is a ChallengeRegistry attached to the composition root at all?
+//                   FALSE IS A WIRING FACT, NOT AN EMPTY ARENA. The server can read
+//                   the endpoint perfectly well and still have nothing registered to
+//                   report, so `wired: false` carries `trials: []` with a note saying
+//                   exactly that. Rendering it as "no trials" would state that an
+//                   operator asked and was told there are none, which nobody did.
+//   `kernel_wired` — are the promotion and rollback controllers attached? Promotion
+//                   REFUSES without them, so the flag decides whether the buttons will
+//                   work, and an operator must be able to see that BEFORE pressing one.
+//
+// `recommendation` is a discriminated union on `recommendation` itself, not a
+// loose bag of optional numbers. `INSUFFICIENT_EVIDENCE` is what `recommend()`
+// returns until BOTH sides have been run: it carries no metric, no margin and no
+// comparison, and the type therefore has nowhere to put a number that could be
+// rendered as a loss.
+
+/** One side of a trial. `null` on a trial means the side was never run. */
+export interface ArenaSide {
+  side: string;
+  trades: number;
+  pnl: number;
+  directional_accuracy_pct: number;
+  max_drawdown_pct: number;
+}
+
+export interface ArenaRecommendationInsufficient {
+  recommendation: "INSUFFICIENT_EVIDENCE";
+  /** Never present. There is nothing to compare, so there is nothing to report. */
+  metric?: undefined;
+  champion?: undefined;
+  challenger?: undefined;
+  margin?: undefined;
+  note?: string;
+}
+
+export interface ArenaRecommendationCompared {
+  recommendation: "PROMOTE" | "REJECT";
+  metric?: string;
+  champion?: number;
+  challenger?: number;
+  margin?: number;
+  note?: string;
+}
+
+export type ArenaRecommendation =
+  | ArenaRecommendationInsufficient
+  | ArenaRecommendationCompared;
+
+/** The EvaluationRecord attached to a trial. Promotion is refused without one. */
+export interface ArenaVerdict {
+  evaluation_id: string;
+  verdict: string;
+  evaluator: string;
+  summary: string;
+  created_at: string;
+}
+
+export interface ArenaTrial {
+  name: string;
+  description: string;
+  metric: string;
+  state: "PROPOSED" | "EVALUATED" | "PROMOTED" | "REJECTED";
+  promoted_by: string | null;
+  evaluated_at: string | null;
+  champion: ArenaSide | null;
+  challenger: ArenaSide | null;
+  recommendation: ArenaRecommendation;
+  verdict: ArenaVerdict | null;
+  notes: string[];
+}
+
+export interface ArenaView {
+  wired: boolean;
+  kernel_wired: boolean;
+  trials: ArenaTrial[];
+  note: string;
+}
+
 // ------------------------------------------------- market chart (Phase: A5)
 //
 // GET /api/v1/market/candles?symbol=&tf= answers either

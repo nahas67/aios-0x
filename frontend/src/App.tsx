@@ -36,6 +36,7 @@ import { ExecutionWorkspace } from './components/views/ExecutionWorkspace';
 import { ResearchWorkspace } from './components/views/ResearchWorkspace';
 import { StrategyResearchWorkspace } from './components/views/StrategyResearchWorkspace';
 import { CertificationWorkspace } from './components/views/CertificationWorkspace';
+import { ArenaWorkspace } from './components/views/ArenaWorkspace';
 import { ModelGovernanceWorkspace } from './components/views/ModelGovernanceWorkspace';
 import { AccountingTaxWorkspace } from './components/views/AccountingTaxWorkspace';
 import { FinancialKernelWorkspace } from './components/views/FinancialKernelWorkspace';
@@ -391,6 +392,10 @@ export default function App() {
 
           {activeTab === 'certification' && (
             <CertificationWorkspace />
+          )}
+
+          {activeTab === 'arena' && (
+            <ArenaWorkspace />
           )}
 
           {activeTab === 'models' && (

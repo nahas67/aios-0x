@@ -100,7 +100,7 @@ export const LAYERS = [
  * groups that exist for navigation only.
  *
  * Only layers that actually have a screen appear. Listing all twenty-five would put
- * fourteen permanent empty headings in front of an operator, which is worse than the
+ * thirteen permanent empty headings in front of an operator, which is worse than the
  * gap it would document — so the absent layers are named in `LAYERS_WITHOUT_WORKSPACE`
  * where they are a finding rather than clutter.
  */
@@ -159,6 +159,16 @@ export const NAV_GROUPS: readonly ArchitectureUnit[] = [
   { id: 'L20', label: 'L20 · Execution Kernel', placement: 'layer', tabs: ['execution'] },
   { id: 'L22', label: 'L22 · Reconciliation', placement: 'layer', tabs: ['audit'] },
   { id: 'L24', label: 'L24 · Governed Learning', placement: 'layer', tabs: ['agents'] },
+  {
+    id: 'L25',
+    label: 'L25 · Champion / Challenger Arena',
+    placement: 'layer',
+    // §12's terminus: Memory -> Counterfactual evaluation -> Champion/Challenger. This is
+    // the screen that makes the promotion gate and its two control actions reachable at
+    // all; before it, `promote_challenger` was registered in the control catalog with no
+    // surface to press it from.
+    tabs: ['arena'],
+  },
   { id: '§3B', label: '§3B · Model Governance', placement: 'control-plane', tabs: ['models'] },
   { id: '§3C', label: '§3C · Observability', placement: 'control-plane', tabs: ['system'] },
   {
@@ -174,8 +184,9 @@ export const NAV_GROUPS: readonly ArchitectureUnit[] = [
  *
  * Not padding. Several of these are the load-bearing parts of the architecture:
  * L23 Institutional Memory is what §12's tail (`Memory → Counterfactual evaluation`)
- * depends on, and L25 Champion/Challenger Arena is the destination of that same chain.
- * A console that cannot show either is not showing the system the architecture describes.
+ * depends on, so the console still cannot show the CHAIN'S START even now that its
+ * terminus (L25, `arena`) has a screen. A console that cannot show L23 is still not
+ * showing the system the architecture describes — the gap moved, it did not close.
  */
 export const LAYERS_WITHOUT_WORKSPACE: readonly { id: string; label: string; note: string }[] =
   [
@@ -242,12 +253,7 @@ export const LAYERS_WITHOUT_WORKSPACE: readonly { id: string; label: string; not
     {
       id: 'L23',
       label: 'Institutional Memory',
-      note: 'No screen. §12 ends with Memory → Counterfactual evaluation → Champion/Challenger.',
-    },
-    {
-      id: 'L25',
-      label: 'Champion / Challenger Arena',
-      note: 'No screen, and it is the terminus of §12. `promote_model` exists without a view.',
+      note: 'No screen. §12 ends with Memory → Counterfactual evaluation → Champion/Challenger, and the terminus now has one — but the chain still starts here, unsurfaced, so an operator sees the comparison without the memory that produced it.',
     },
   ];
 

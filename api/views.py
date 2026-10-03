@@ -97,6 +97,7 @@ class SystemSnapshotBuilder:
         market_fetcher: Any = None,
         debate_sessions: list[dict[str, Any]] | None = None,
         settings_plane: Any = None,
+        challenge_registry: Any = None,
     ) -> None:
         self.store = store
         self.ledger = ledger
@@ -133,6 +134,10 @@ class SystemSnapshotBuilder:
         )
         # Versioned settings store (plan §4 B1); None means the plane is unwired.
         self.settings_plane = settings_plane
+        # Champion/Challenger Arena (layer 25). None means no registry is attached, which
+        # the view reports as unwired rather than as "zero trials" -- an arena that cannot
+        # be read is a different fact from an arena holding nothing.
+        self.challenge_registry = challenge_registry
 
     # ------------------------------------------------- durable financial kernel
 
@@ -1791,6 +1796,89 @@ class SystemSnapshotBuilder:
         }
 
     # ---------------------------------------------------------------- health
+
+    def challenger_arena(self) -> dict[str, Any]:
+        """Champion/Challenger Arena read model (ARCHITECTURE.txt layer 25).
+
+        Reports what the registry holds and, for each trial, the recommendation its own
+        evidence supports. `recommend()` returns INSUFFICIENT_EVIDENCE until both sides have
+        been run, and that string is passed through verbatim rather than being smoothed into
+        a number -- a trial with no comparison is not a trial that lost.
+
+        The kernel_wired flag is load-bearing. Promotion refuses without the promotion and
+        rollback controllers, so an operator looking at this view needs to know whether the
+        buttons will work before pressing them, not after.
+        """
+        if self.challenge_registry is None:
+            return {
+                "wired": False,
+                "trials": [],
+                "kernel_wired": False,
+                "note": (
+                    "No ChallengeRegistry is attached to this composition root, so the "
+                    "arena cannot be read. This is a wiring fact, not an empty arena."
+                ),
+            }
+
+        trials: list[dict[str, Any]] = []
+        for trial in self.challenge_registry.all_trials():
+            evaluation = trial.evaluation
+            trials.append(
+                {
+                    "name": trial.name,
+                    "description": trial.description,
+                    "metric": trial.metric,
+                    "state": trial.state.value,
+                    "promoted_by": trial.promoted_by,
+                    "evaluated_at": trial.evaluated_at.isoformat() if trial.evaluated_at else None,
+                    "champion": (
+                        {
+                            "side": trial.champion.side,
+                            "trades": trial.champion.trades,
+                            "pnl": trial.champion.pnl,
+                            "directional_accuracy_pct": trial.champion.directional_accuracy_pct,
+                            "max_drawdown_pct": trial.champion.max_drawdown_pct,
+                        }
+                        if trial.champion
+                        else None
+                    ),
+                    "challenger": (
+                        {
+                            "side": trial.challenger.side,
+                            "trades": trial.challenger.trades,
+                            "pnl": trial.challenger.pnl,
+                            "directional_accuracy_pct": trial.challenger.directional_accuracy_pct,
+                            "max_drawdown_pct": trial.challenger.max_drawdown_pct,
+                        }
+                        if trial.challenger
+                        else None
+                    ),
+                    "recommendation": trial.recommend(),
+                    "verdict": (
+                        {
+                            "evaluation_id": evaluation.evaluation_id,
+                            "verdict": evaluation.verdict.value,
+                            "evaluator": evaluation.evaluator,
+                            "summary": evaluation.summary,
+                            "created_at": evaluation.created_at.isoformat(),
+                        }
+                        if evaluation
+                        else None
+                    ),
+                    "notes": list(trial.notes),
+                }
+            )
+
+        registry = self.challenge_registry
+        return {
+            "wired": True,
+            "trials": trials,
+            "kernel_wired": registry.kernel_wired,
+            "note": (
+                "Single-window evidence; a recommendation is not a conviction. Promotion "
+                "requires BOTH an identified human and a PASS verdict."
+            ),
+        }
 
     def health(self) -> dict[str, Any]:
         ok, bad_seq = self.store.verify_chain()

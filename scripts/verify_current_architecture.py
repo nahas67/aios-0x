@@ -111,6 +111,14 @@ COVERAGE_REQUIRED = (
     "scripts/verify_no_dead_settings.py",
     "scripts/verify_goal_id_divergence.py",
     "scripts/prove_goal_id_divergence.py",
+    # ARCHITECTURE.txt layer 25, Champion/Challenger Arena. LAYERS_WITHOUT_WORKSPACE called
+    # it "the terminus of 12" with `promote_model` existing without a view -- and worse, a
+    # sibling view asserted no promotion endpoint existed while both were wired and
+    # RISK_ADMIN-gated. Surfacing a governance surface that works is the fix; keeping the
+    # read model honest (INSUFFICIENT_EVIDENCE is not a number, unwired is not empty) is
+    # what stops the new screen repeating the old lie.
+    "frontend/src/adapters/arena.ts",
+    "frontend/src/components/views/ArenaWorkspace.tsx",
     # ARCHITECTURE.txt 13 G260 "Disaster Recovery" has NO goal in the registry -- and that is
     # a deliberate, documented decline, not an oversight. Registry G220's notes record it
     # alongside failover: each appears in ARCHITECTURE.txt once, as a bare label, with
@@ -277,7 +285,12 @@ def main() -> int:
     out = proc.stdout + proc.stderr
     check("operator isolation gate green", 0, proc.returncode)
     forbidden = re.search(r"(\d+) forbidden modules checked", out)
-    check("forbidden modules", 25, int(forbidden.group(1)) if forbidden else -1)
+    # 26, not 25: the isolation gate derives its pattern list from the filesystem
+    # (FORBIDDEN_DIRS = components/views + hooks), so adding the L25 Arena workspace widened
+    # the set of modules the operator surface must never reach. The operator's isolation
+    # therefore covers a new workspace without anyone editing the isolation gate -- which is
+    # the property worth having, and the reason this number moves when a screen is added.
+    check("forbidden modules", 26, int(forbidden.group(1)) if forbidden else -1)
     modules = re.search(r"first-party modules reachable from operator\.html: (\d+)", out)
     check("operator first-party modules", 7, int(modules.group(1)) if modules else -1)
     # The document quotes the operator entry's size in prose; asserted as a substring

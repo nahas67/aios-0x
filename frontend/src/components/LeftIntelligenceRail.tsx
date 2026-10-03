@@ -10,6 +10,7 @@ import {
   Zap, 
   ShieldAlert, 
   ShieldCheck, 
+  Swords,
   Binary, 
   Network, 
   ReceiptText, 
@@ -141,6 +142,9 @@ export const LeftIntelligenceRail: React.FC<LeftIntelligenceRailProps> = ({
     { id: 'agents', label: 'Agents', icon: Users2, badge: countBadge(agentsCount), badgeColor: 'cyan' },
     { id: 'strategies', label: 'Strategies', icon: GitFork, badge: countBadge(strategiesCount) },
     { id: 'certification', label: 'Certification', icon: ShieldCheck },
+    // ARCHITECTURE.txt §2 layer 25, the terminus of §12's chain. Its position in the rail
+    // is decided by NAV_GROUPS (buildNavSections), not by where it is declared here.
+    { id: 'arena', label: 'Arena', icon: Swords },
     { id: 'execution', label: 'Execution', icon: Zap },
     {
       id: 'risk',

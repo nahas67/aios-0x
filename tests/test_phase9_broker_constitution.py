@@ -161,6 +161,55 @@ def test_positions_snapshot_maps_symbols_back(fake_adapter) -> None:
     assert snapshot["ETH/USDT"] == pytest.approx(-2.0)
 
 
+def test_ccxt_positions_snapshot_branches_on_side_not_just_contracts() -> None:
+    """A short must not be reported as a long (defect #71).
+
+    The base class documents "Shorts are negative" and PaperExecutionAdapter
+    implements it, but real venues do not hand over a signed ``contracts``:
+    ccxt's ``gate`` applies ``Precise.string_abs(size)``, and Deribit's OpenAPI
+    defines ``size`` as a quote-currency magnitude carrying direction in a
+    separate field. So the adapter has to consult ``side`` itself.
+
+    The client below returns exactly the shape ccxt produces for a Gate short.
+    """
+    from kernel.tool_governance import ToolGuardian
+
+    class UnsignedShortClient:
+        """Mirrors ccxt: unsigned ``contracts``, direction in ``side``."""
+
+        def set_sandbox_mode(self, flag: bool) -> None:
+            self.sandbox = flag
+
+        def fetch_positions(self) -> list[dict[str, object]]:
+            return [
+                {"symbol": "BTC/USDT:USDT", "contracts": 2.0, "side": "long"},
+                {"symbol": "ETH/USDT:USDT", "contracts": 3.0, "side": "short"},
+            ]
+
+    client = UnsignedShortClient()
+    adapter = CcxtExecutionAdapter(
+        "gate",
+        api_key_env="AIOS_T_KEY",
+        secret_env="AIOS_T_SECRET",
+        env={
+            "AIOS_ALLOW_LIVE_EXECUTION": "1",
+            "AIOS_EXCHANGE_TESTNET": "1",
+            "AIOS_T_KEY": "k",
+            "AIOS_T_SECRET": "s",
+        },
+        client_builder=lambda exchange_id, options: client,
+        guardian=ToolGuardian(b"phase9-sign-test-key"),
+    )
+
+    snapshot = adapter.positions_snapshot()
+
+    assert snapshot["BTC/USDT:USDT"] == pytest.approx(2.0)
+    assert snapshot["ETH/USDT:USDT"] == pytest.approx(-3.0), (
+        "a short reported positive is a phantom long: reconciliation diverges "
+        "permanently and G240's zero-violation gate could never pass"
+    )
+
+
 def test_real_money_blocked_without_constitution_gate(fake_adapter) -> None:
     from kernel.tool_governance import ToolGuardian
 

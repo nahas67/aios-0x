@@ -11,6 +11,7 @@ import type {
   Agent,
   Alert,
   Approval,
+  ArenaView,
   AuditRow,
   BacktestResult,
   CalibrationReport,
@@ -130,6 +131,23 @@ export const researchApi = {
     http.get<DecisionDrilldown>(`${v1}/decisions/${encodeURIComponent(executionId)}`),
   backtest: (closes: number[], train_bars = 90, test_bars = 30) =>
     http.post<BacktestResult>(`${v1}/research/backtest`, { closes, train_bars, test_bars }),
+};
+
+/**
+ * Champion/challenger arena (ARCHITECTURE.txt §2 layer 25). Read-only by
+ * construction — there is no POST here.
+ *
+ * Every mutation in this domain is an audited control action (`evaluate_trial`,
+ * `promote_challenger`) and goes through `controlApi` via `lib/control.ts`, so the
+ * server stays the only RBAC authority. Putting a promote call next to this one
+ * would be an invitation to bypass it, which is why this group stays GET-only.
+ *
+ * The endpoint answers with `wired: false` rather than `{available: false}`, and
+ * that is deliberate on the server's side: an arena that cannot be read is a
+ * different fact from one holding nothing. See `adapters/arena.ts`.
+ */
+export const arenaApi = {
+  arena: () => http.get<ArenaView>(`${v1}/arena`),
 };
 
 export const marketApi = {

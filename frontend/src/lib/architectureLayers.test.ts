@@ -148,14 +148,15 @@ describe('the navigation spine', () => {
 });
 
 describe('the gaps the grouping exposes', () => {
-  // 25 layers, 11 of them carrying a screen, so 14 have none. Pinned because the count
-  // IS the finding: a console that shows 11 of the architecture's 25 layers is not
-  // showing the architecture. If someone builds the L23 or L25 view, this fails.
-  it('reports 14 of 25 layers as having no workspace', () => {
+  // 25 layers, 12 of them carrying a screen, so 13 have none. Pinned because the count
+  // IS the finding: a console that shows 12 of the architecture's 25 layers is not
+  // showing the architecture. Surfacing L25 (the arena) moved the number by one; it did
+  // not close the gap. If someone builds the L23 view, this fails again.
+  it('reports 13 of 25 layers as having no workspace', () => {
     const withScreens = LAYER_IDS.filter((id) => NAV_GROUPS.some((g) => g.id === id));
-    expect(withScreens).toHaveLength(11);
+    expect(withScreens).toHaveLength(12);
     expect(LAYERS_WITHOUT_WORKSPACE).toHaveLength(25 - withScreens.length);
-    expect(LAYERS_WITHOUT_WORKSPACE).toHaveLength(14);
+    expect(LAYERS_WITHOUT_WORKSPACE).toHaveLength(13);
   });
 
   it('never lists a layer as missing that actually has a workspace', () => {
@@ -179,12 +180,15 @@ describe('the gaps the grouping exposes', () => {
     }
   });
 
-  // §12's chain ends Memory → Counterfactual evaluation → Champion/Challenger, and the
-  // console can show neither end. That is the most consequential single line here.
-  it('flags the terminus of §12 as unreachable from the console', () => {
+  // §12's chain ends Memory → Counterfactual evaluation → Champion/Challenger. The
+  // `arena` view surfaced L25, so the terminus is now reachable — but the chain's START is
+  // still not, which is why L23 stays in the missing list and why this assertion is now
+  // two-sided rather than "both ends missing".
+  it('reaches the terminus of §12 while its start remains unreachable', () => {
     const missing = LAYERS_WITHOUT_WORKSPACE.map((m) => m.id);
     expect(missing).toContain('L23');
-    expect(missing).toContain('L25');
+    expect(missing).not.toContain('L25');
+    expect(placementOf('arena')?.id).toBe('L25');
   });
 });
 

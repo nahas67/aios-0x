@@ -12,6 +12,7 @@ Routes:
     GET /api/v1/accounting   -> ledger balances + lots
     GET /api/v1/research     -> calibration report
     GET /api/v1/health       -> system health (unauthenticated)
+    GET /api/v1/arena        -> champion/challenger trials + promotion readiness (layer 25)
     GET /metrics             -> Prometheus exposition
 
 POST /api/v1/control/{action}  body {params}
@@ -565,6 +566,8 @@ def make_handler(
                     self._json({"alerts": builder.alerts()})
                 elif path == "/api/v1/memory":
                     self._json(builder.memory_center())
+                elif path == "/api/v1/arena":
+                    self._json(builder.challenger_arena())
                 elif path == "/api/v1/graduation":
                     self._json(builder.graduation())
                 elif path == "/api/v1/knowledge":

@@ -853,6 +853,7 @@ class ReplayRunner:
             regime_engine=self.regime_engine,
             equity_curve=self.equity_curve,
             benchmark_curve=getattr(self, "benchmark_curve", []),
+            challenge_registry=self.build_challenge_registry(),
             research_engine=self.research_engine,
             kernel_bridge=self.kernel_bridge,
             ca_workflow=self.ca_workflow,
