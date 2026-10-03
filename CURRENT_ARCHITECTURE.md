@@ -279,6 +279,58 @@ trial on screen.
 
 ---
 
+---
+
+## 7bb2. LANDED is a claim about evidence, and 21 pieces of evidence are unreachable
+
+A goal marked `LANDED` cites files as `evidence`. **Twenty-one of those files are imported by
+nothing outside `tests/`.** A test importing a module proves the module works; it does not
+prove anything reaches it. Every other gate here compares published *figures* against the
+tree, so all of them were green.
+
+**Three goals have no live library evidence at all:**
+
+| Goal | Sole library evidence | Consequence |
+|---|---|---|
+| G090 Feature Fabric | `core/feature_store.py` | §12 places the Feature Fabric before the Fast Expert Model |
+| G130 Portfolio Brain | `communities/c9_portfolio/optimizer.py` | portfolio proposals come from the live path instead |
+| G160 Execution Digital Twin | `simulation/execution_twin.py` | **this is why layer 21 has no screen** — the twin is not on any production path |
+
+**The sharpest of the other eighteen is G110.** Its summary promises *"conformal calibration
+producing … a decision of TRADE, WAIT, ESCALATE, or ABSTAIN, where ABSTAIN is the default
+under uncertainty."* Its `core/conformal.py` and `core/decision_gate.py` are imported by
+nothing. The capability is not missing — `kernel/playbook.py` carries a live
+TRADE/WAIT/ESCALATE/ABSTAIN router, wired through `kernel/bootstrap.py` and
+`core/capital_firewall.py`. **The registry cites a dead parallel implementation of something
+that is live elsewhere.**
+
+Three more are why **L23 cannot yet have a meaningful screen**: `kernel/memory_tiers.py`,
+`kernel/retrieval_contract.py` and `kernel/counterfactuals.py` are all unimported.
+`CounterfactualStore` is instantiated *nowhere* outside tests — every ABSTAIN / REJECT /
+NO_NEW_RISK restraint should retain one and nothing does. A screen over that would render an
+empty list and call the layer delivered.
+
+`scripts/verify_landed_evidence_is_live.py` now enforces this, with every instance listed and
+a reason, and both lists self-clear: a listed goal that gains a live module, or a listed
+module that gains an importer, fails the gate and the entry must go. It also fails when a
+goal cites a file that is not in the tree at all.
+
+**Two bugs this gate shipped with, both caught by its own harness.** The exclusion test
+`".venv" in parts` did not match `.venv-fresh`, counting 4794 virtualenv modules as
+first-party. Worse: reusing a compiled regex's `.pattern` **discards its flags**, so `^`
+anchored to the start of each file and found zero importers anywhere — reporting 21 of 23
+LANDED goals as dead, including `core/control_plane.py`, which `api/server.py` imports on
+line 42. I reported that bogus number as a finding before catching it. Both defects are
+commented at the code that would reintroduce them, because a verification artifact that is
+confidently wrong is worse than no artifact.
+
+**Stated limit:** this is a textual import check. It cannot see `importlib.import_module`, a
+re-export, or attribute access through a registry, and it does not claim the imported path is
+exercised at runtime — only that something outside the test suite references it. Two modules
+in the tree use dynamic import, so the blind spot is small rather than absent.
+
+---
+
 ## 7c. Where the tree stands against `ARCHITECTURE.txt` §13, and three things the goals do not say
 
 ### The goal numbering does not match
@@ -366,12 +418,13 @@ a LANDED goal and no screen** (L1, L5, L6, L8, L9, L10, L11, L21, L23, L25).
 | State honesty | `scripts/verify_state_honesty.py` | 18 views, no hand-rolled or cause-asserting empty state |
 | Dead settings | `scripts/verify_no_dead_settings.py` | 83 fields, 17 documented inert, **0 undocumented** |
 | Goal-ID divergence | `scripts/verify_goal_id_divergence.py` | 28 §13 IDs = 25 registry IDs, arithmetic closes, `G260` decline re-checked |
+| Landed evidence | `scripts/verify_landed_evidence_is_live.py` | 23 LANDED goals, **3 with no live evidence at all**, 21 dead modules, 0 undocumented |
 
-Four of these gates are new, and each answers "can this fail?" with a mutation harness rather
+Five of these gates are new, and each answers "can this fail?" with a mutation harness rather
 than a claim: `scripts/prove_theme_gate.py` (6 rotations),
-`scripts/prove_state_honesty.py` (3), `scripts/prove_dead_settings_gate.py` (3) and
-`scripts/prove_goal_id_divergence.py` (4). A gate that has never been observed red is an
-assertion about itself, not about the tree.
+`scripts/prove_state_honesty.py` (3), `scripts/prove_dead_settings_gate.py` (3),
+`scripts/prove_goal_id_divergence.py` (4) and `scripts/prove_landed_evidence_gate.py` (4).
+A gate that has never been observed red is an assertion about itself, not about the tree.
 
 Two of those gates exist because everything else was green while the tree was wrong. The
 theme gate: `tsc`, vitest, the build and the isolation gate were **all green** while 58 sites

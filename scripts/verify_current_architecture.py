@@ -111,6 +111,8 @@ COVERAGE_REQUIRED = (
     "scripts/verify_no_dead_settings.py",
     "scripts/verify_goal_id_divergence.py",
     "scripts/prove_goal_id_divergence.py",
+    "scripts/verify_landed_evidence_is_live.py",
+    "scripts/prove_landed_evidence_gate.py",
     # ARCHITECTURE.txt layer 25, Champion/Challenger Arena. LAYERS_WITHOUT_WORKSPACE called
     # it "the terminus of 12" with `promote_model` existing without a view -- and worse, a
     # sibling view asserted no promotion endpoint existed while both were wired and
