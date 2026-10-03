@@ -8,6 +8,7 @@ import pytest
 from core.challenger import ChallengeRegistry, TrialState
 from core.persistence import SqliteMemoryStore
 from core.reputation import compute_reputations
+from kernel.bootstrap import create_kernel
 from research.disaster import (
     drill_corrupt_feed_freeze,
     drill_ingestion_outage,
@@ -28,7 +29,11 @@ def small_csv(tmp_path: Path) -> Path:
 
 def test_challenger_promotion_requires_human_gate(tmp_path: Path) -> None:
     store = SqliteMemoryStore(tmp_path / "trial.db")
-    registry = ChallengeRegistry(store)
+    # The kernel promotion/rollback controllers are REQUIRED, not optional decoration:
+    # `promote()` refuses without them so a promoted challenger always has a registered
+    # rollback target. This test asserts the human gate, so it must satisfy the other gate.
+    kernel = create_kernel()
+    registry = ChallengeRegistry(store, kernel.promotions, kernel.rollbacks)
 
     trial = registry.propose("mean-reversion-rr-2.0", metric="pnl")
     assert trial.state == TrialState.PROPOSED
@@ -68,7 +73,8 @@ def test_challenger_promotion_requires_human_gate(tmp_path: Path) -> None:
 
 def test_challenger_rejects_on_negative_evidence(tmp_path: Path) -> None:
     store = SqliteMemoryStore(tmp_path / "rej.db")
-    registry = ChallengeRegistry(store)
+    kernel = create_kernel()
+    registry = ChallengeRegistry(store, kernel.promotions, kernel.rollbacks)
     registry.propose("worse-challenger", metric="pnl")
 
     class FakeSummary:

@@ -103,7 +103,10 @@ def _evaluated_registry(tmp_path: Path, trades: int, champ_pnl: float, chall_pnl
 
 def test_promotion_denied_without_evaluation_record(tmp_path: Path) -> None:
     store = SqliteMemoryStore(tmp_path / "c.db")
-    registry = ChallengeRegistry(store)
+    # Controllers wired so the refusal under test is the missing record, not the missing
+    # rollback wiring -- otherwise this test would pass for the wrong reason.
+    kernel = create_kernel()
+    registry = ChallengeRegistry(store, kernel.promotions, kernel.rollbacks)
     registry.propose("bare")
     registry.trials["bare"].state = TrialState.EVALUATED
     with pytest.raises(PermissionError, match="no EvaluationRecord"):

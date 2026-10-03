@@ -767,15 +767,9 @@ class ReplayRunner:
 
     def build_control_plane(self) -> "ControlPlane":
         """Wire the audited operator console over live components."""
-        from core.challenger import ChallengeRegistry
         from core.control_plane import ControlPlane
 
-        if not hasattr(self, "_challenge_registry"):
-            self._challenge_registry = ChallengeRegistry(
-                self.store,
-                promotions=self.kernel_bridge.kernel.promotions,
-                rollbacks=self.kernel_bridge.kernel.rollbacks,
-            )
+        challenge_registry = self.build_challenge_registry()
         if not hasattr(self, "_control_plane"):
             plane = ControlPlane(
             store=self.store,
@@ -785,7 +779,7 @@ class ReplayRunner:
             order_manager=self.order_manager,
             governor=self.governor,
             paper_engine=self.paper,
-            challenge_registry=self._challenge_registry,
+            challenge_registry=challenge_registry,
             settings_ref=self.settings,
             price_lookup=self._last_price_of,
             flatten_callback=self._flatten_position,
@@ -817,10 +811,29 @@ class ReplayRunner:
         return self._control_plane
 
     def build_challenge_registry(self) -> "ChallengeRegistry":
+        """The ONE factory for the run's ChallengeRegistry.
+
+        This used to be a second construction site beside the one in
+        `build_control_plane`, and the two disagreed: that one passed
+        `promotions`/`rollbacks` from the kernel, this one passed neither. Both guarded on
+        `hasattr(self, "_challenge_registry")`, so whichever ran FIRST won -- and
+        `promote()` skips the kernel promotion receipt and rollback-target registration
+        entirely when those are None, while still returning `{"promoted": True}`. A
+        registry built here therefore promoted models with no way to roll them back, and
+        reported success.
+
+        Staging (`_stage_auto_research`) calls this during a run, so it can genuinely run
+        before `build_control_plane` does. One factory, full dependencies, no ordering
+        hazard.
+        """
         if not hasattr(self, "_challenge_registry"):
             from core.challenger import ChallengeRegistry
 
-            self._challenge_registry = ChallengeRegistry(self.store)
+            self._challenge_registry = ChallengeRegistry(
+                self.store,
+                promotions=self.kernel_bridge.kernel.promotions,
+                rollbacks=self.kernel_bridge.kernel.rollbacks,
+            )
         return self._challenge_registry
 
     def build_snapshot_builder(self) -> "SystemSnapshotBuilder":

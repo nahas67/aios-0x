@@ -140,9 +140,9 @@ class ChallengeRegistry:
         trial.state = TrialState.EVALUATED
         trial.evaluated_at = datetime.now(UTC)
 
-        # Formal EvaluationRecord (§14): verdict with honesty gates, stored on
+        # Formal EvaluationRecord (Â§14): verdict with honesty gates, stored on
         # the trial and in the audit trail. This record is what promotion
-        # requires — the raw recommendation alone is no longer sufficient.
+        # requires â€” the raw recommendation alone is no longer sufficient.
         metric_value_map = {
             "pnl": (trial.champion.pnl, trial.challenger.pnl),
             "directional_accuracy_pct": (
@@ -189,10 +189,26 @@ class ChallengeRegistry:
         """HUMAN-GATED + EVIDENCE-GATED promotion.
 
         Requires: (1) EVALUATED state, (2) an EvaluationRecord with verdict
-        PASS. A human CANNOT override a FAIL/INCONCLUSIVE verdict — that is
-        the §21 rule "no self-promotion" applied to operators too.
+        PASS. A human CANNOT override a FAIL/INCONCLUSIVE verdict â€” that is
+        the Â§21 rule "no self-promotion" applied to operators too.
         """
         trial = self._get(name)
+        if self._promotions is None or self._rollbacks is None:
+            # Fail closed, BEFORE any state change. This branch used to be a silent skip:
+            # the kernel promotion receipt and the rollback-target registration were both
+            # guarded by `if ... is not None`, so a registry built without them promoted a
+            # challenger that could not be rolled back, logged "PROMOTED", and returned
+            # {"promoted": True}. A governance step that vanishes without changing the answer
+            # is the failure mode Â§3.1 exists to prevent -- the operator is told a safety
+            # mechanism engaged when it did not.
+            #
+            # Promotion without a registered rollback target is not a degraded promotion; it
+            # is an irreversible one wearing a receipt. Refuse instead.
+            raise PermissionError(
+                f"trial {name} promotion refused: the kernel promotion and rollback "
+                "controllers are not wired to this registry, so a promoted challenger could "
+                "not be rolled back. Wire them or do not promote."
+            )
         if not operator_id or not operator_id.strip():
             raise PermissionError(
                 f"trial {name} promotion refused: no operator named. An explicit "
@@ -210,7 +226,7 @@ class ChallengeRegistry:
         if trial.evaluation.verdict is not EvaluationVerdict.PASS:
             raise PermissionError(
                 f"trial {name} verdict is {trial.evaluation.verdict.value}; "
-                "promotion requires PASS — humans cannot overrule evidence"
+                "promotion requires PASS â€” humans cannot overrule evidence"
             )
 
         rec = trial.recommend()
@@ -223,14 +239,15 @@ class ChallengeRegistry:
             logger.warning("challenger %s rejected on evidence", name)
             return {"promoted": False, "state": trial.state.value}
 
-        # Kernel promotion controller: receipt + rollback target registration.
-        rollback_version = ""
-        if self._promotions is not None and self._rollbacks is not None:
-            self._promotions.propose("trial", name, "challenger", evaluation_ref=trial.evaluation.evaluation_id)
-            self._promotions.mark_evaluated("trial", name, "challenger")
-            self._rollbacks.register_target("trial", name, "challenger", "baseline")
-            self._promotions.promote("trial", name, "challenger", operator_id, rollback_target_version="baseline")
-            rollback_version = "baseline"
+        # Kernel promotion controller: receipt + rollback target registration. The guard above
+        # has already refused promotion unless both exist, so this cannot be skipped.
+        rollback_version = "baseline"
+        self._promotions.propose("trial", name, "challenger", evaluation_ref=trial.evaluation.evaluation_id)
+        self._promotions.mark_evaluated("trial", name, "challenger")
+        self._rollbacks.register_target("trial", name, "challenger", rollback_version)
+        self._promotions.promote(
+            "trial", name, "challenger", operator_id, rollback_target_version=rollback_version
+        )
 
         trial.state = TrialState.PROMOTED
         trial.promoted_by = operator_id

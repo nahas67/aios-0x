@@ -15,12 +15,19 @@ import pytest
 
 from core.challenger import ChallengeRegistry, TrialResult, TrialState
 from core.persistence import SqliteMemoryStore
+from kernel.bootstrap import create_kernel
 from research.evaluation import EvaluationRecord, EvaluationVerdict
 
 
 @pytest.fixture()
 def registry(tmp_path: Path) -> ChallengeRegistry:
-    return ChallengeRegistry(SqliteMemoryStore(tmp_path / "trial.db"))
+    # The kernel promotion/rollback controllers are required: `promote()` refuses without
+    # them, so that a promoted challenger always has a registered rollback target. These
+    # tests exercise the honesty gates, so the wiring gate has to be satisfied first.
+    kernel = create_kernel()
+    return ChallengeRegistry(
+        SqliteMemoryStore(tmp_path / "trial.db"), kernel.promotions, kernel.rollbacks
+    )
 
 
 def _evaluated(
@@ -116,6 +123,32 @@ def test_pass_plus_human_promotes_and_records_both(
         event.get("state") == "PROMOTED" and event.get("by") == "human-1"
         for event in decisions
     )
+
+
+def test_promotion_refused_when_rollback_wiring_is_absent(tmp_path: Path) -> None:
+    """A promotion that cannot be rolled back must not happen.
+
+    This is the regression test for a SILENT skip. `promote()` used to guard the kernel
+    promotion receipt and the rollback-target registration with
+    `if self._promotions is not None and self._rollbacks is not None`, so a registry built
+    without them promoted the challenger, wrote a CHALLENGER_DECISION event saying PROMOTED,
+    and returned {"promoted": True} -- while never registering anything that could undo it.
+    The operator was told a safety mechanism had engaged when it had not.
+
+    The replay runner had two factories for this singleton and they disagreed about the
+    dependencies, so which one you got depended on call order. This pins the behaviour that
+    makes that irrelevant: absent wiring means no promotion.
+    """
+    unwired = ChallengeRegistry(SqliteMemoryStore(tmp_path / "unwired.db"))
+    _evaluated(unwired)
+
+    with pytest.raises(PermissionError, match="could not be rolled back"):
+        unwired.promote("trial-1", "human-1")
+
+    # Refused BEFORE any state change, and with nothing written to the audit log.
+    assert unwired.trials["trial-1"].state is TrialState.EVALUATED
+    assert unwired.trials["trial-1"].promoted_by is None
+    assert not unwired.store.iter_event_payloads("CHALLENGER_DECISION")
 
 
 def test_rejection_is_always_available(registry: ChallengeRegistry) -> None:
