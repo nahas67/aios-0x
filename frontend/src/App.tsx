@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   WorkspaceTab,
   AutonomyLevel,
-  ExecutionMode,
   Position,
   AgentNode,
 } from './types';
@@ -183,12 +182,10 @@ export default function App() {
   }, [knowledgeQ.data]);
 
   const [autonomy, setAutonomy] = useState<AutonomyLevel>(serverSettings.autonomyLevel);
-  const [executionMode, setExecutionMode] = useState<ExecutionMode>(serverSettings.defaultExecutionMode);
 
   // Follow the server blob when it (re)loads.
   useEffect(() => {
     setAutonomy(serverSettings.autonomyLevel);
-    setExecutionMode(serverSettings.defaultExecutionMode);
   }, [serverSettings]);
 
   // Modals & Drawers
@@ -253,20 +250,16 @@ export default function App() {
     }
   };
 
-  const handleExecutionModeToggle = async () => {
-    const nextMode: ExecutionMode = executionMode === 'PAPER' ? 'LIVE' : 'PAPER';
-    const prev = executionMode;
-    setExecutionMode(nextMode);
-    const result = await handleSaveSettings({ ...serverSettings, defaultExecutionMode: nextMode });
-    if (!result.ok) {
-      setExecutionMode(prev);
-      triggerToast(
-        result.authRequired
-          ? 'Execution-mode change blocked: operator token required (PUT answered 401).'
-          : `Execution-mode change failed: ${result.reason}`,
-      );
-    }
-  };
+  // REMOVED: handleExecutionModeToggle.
+  //
+  // It flipped React state, PUT `defaultExecutionMode` to a field the backend has never
+  // defined (zero occurrences in any .py), and changed nothing about execution. Venue
+  // selection is governed by AIOS_ALLOW_LIVE_EXECUTION and AIOS_EXCHANGE_TESTNET in
+  // communities/c5_execution/adapters.py. The badge it drove rendered "LIVE" while the
+  // adapter independently refused real-money routing.
+  //
+  // ARCHITECTURE.txt §13 specifies a staged progression (G240 Long Shadow, then G250 Canary
+  // Capital), not a console toggle. scripts/verify_no_dead_controls.py fails if this returns.
 
   // Global Shortcut (⌘K)
   useEffect(() => {
@@ -308,8 +301,6 @@ export default function App() {
       <TopSystemBar
         autonomy={autonomy}
         onAutonomyChange={handleAutonomyChange}
-        executionMode={executionMode}
-        onExecutionModeToggle={handleExecutionModeToggle}
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         onTriggerKillSwitch={() => setIsKillSwitchOpen(true)}
         drawdownPct={drawdownPct}

@@ -108,6 +108,24 @@ COVERAGE_REQUIRED = (
     "frontend/src/components/LayoutPanel.tsx",
     "scripts/verify_theme_gate.py",
     "scripts/verify_state_honesty.py",
+    "scripts/verify_no_dead_settings.py",
+    "scripts/verify_goal_id_divergence.py",
+    "scripts/prove_goal_id_divergence.py",
+    # ARCHITECTURE.txt 13 G260 "Disaster Recovery" has NO goal in the registry -- and that is
+    # a deliberate, documented decline, not an oversight. Registry G220's notes record it
+    # alongside failover: each appears in ARCHITECTURE.txt once, as a bare label, with
+    # RPO/RTO/backup/restore at zero occurrences, so modelling either would mean inventing
+    # requirements -- what the section 14 freeze rule exists to prevent.
+    #
+    # What this entry guards is a NAMING COLLISION, which is the actual hazard here.
+    # research/disaster.py is "Disaster-lab drills (Directive 60)": OutageThenHealFetcher
+    # injects ConnectionError at chosen bars mid-replay and the drill asserts the run freezes
+    # or escalates instead of fabricating results. That is fault injection against the real
+    # stack, NOT RPO/RTO backup-and-restore. An earlier draft of CURRENT_ARCHITECTURE.md read
+    # it as the G260 capability because the filename matched -- the same "a name search is not
+    # a capability search" error made about execution_twin.py and L21. Keeping the module in
+    # this list means the distinction stays written down where the next reader will hit it.
+    "research/disaster.py",
 )
 
 def main() -> int:

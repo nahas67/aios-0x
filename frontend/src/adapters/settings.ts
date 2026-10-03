@@ -14,7 +14,6 @@ import { type Unavailable } from "./absent";
 
 export const EMPTY_SETTINGS: SystemSettings = {
   autonomyLevel: "SUPERVISED",
-  defaultExecutionMode: "PAPER",
   multiSigThresholdUsd: 0,
   require2FAForRebalance: false,
   emergencyHaltDrawdownPct: 3,

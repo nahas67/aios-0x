@@ -223,6 +223,77 @@ toggle.
 
 ---
 
+## 7c. Where the tree stands against `ARCHITECTURE.txt` §13, and three things the goals do not say
+
+### The goal numbering does not match
+
+`ARCHITECTURE.txt` §13 specifies **28** goal IDs (`G010`–`G280`). `docs/goals/goals.json`
+carries **25** (`G010`–`G250`), and the two schemes disagree on which number means what from
+`G180` onward. Previously unrecorded; §7c below now resolves it exactly.
+
+### The 28-to-25 arithmetic closes exactly, and G260 was declined on purpose
+
+The 28-vs-25 gap is not three dropped goals. It resolves completely:
+
+| Cause | §13 IDs | Effect |
+|---|---|---|
+| `Memory`, `Learning`, `Counterfactuals` collapsed into one goal | `G190`, `G200`, `G210` | −2 → registry `G180` *Institutional Memory, Governed Learning, and Counterfactuals* |
+| `Disaster Recovery` declined | `G260` | −1 |
+
+`28 − 2 − 1 = 25`, with no residue — so **every** §13 ID is accounted for, and nothing was
+silently lost. The renumbering I first reported as "the tail was renumbered" actually begins
+at `G220`→`G200`, because the three-way merge above shifts every later ID by one. §13 `G180`
+(`OMS`) is covered by registry `G150` *Execution Kernel and Order Management*.
+
+**`G260` was declined deliberately, with a stated reason.** Registry `G220`'s notes record it
+alongside failover: both appear in `ARCHITECTURE.txt` **once, as a bare label**, with
+`RPO`/`RTO`/`backup`/`restore` at **zero occurrences**. Modelling either would mean inventing
+the requirements, which is what the §14 freeze rule exists to prevent. The decline is sound.
+
+**`research/disaster.py` is not that capability.** It is *"Disaster-lab drills (Directive
+60): chaos scenarios against the REAL stack"* — `OutageThenHealFetcher` injects `ConnectionError`
+at chosen bars mid-replay and the drill asserts the run freezes, escalates or blocks rather
+than fabricating results. That is **resilience testing against the real stack**, and it is
+governed work under other goals. It shares a name with §13 `G260` and implements something
+else: fault injection, not `RPO`/`RTO` backup-and-restore.
+
+An earlier draft of this section recorded `G260` as "implemented, tested and ungoverned".
+That was wrong twice over — it read `research/disaster.py` as the capability because the
+filename matched, and it missed the decline recorded in `G220`'s notes. `scripts/
+verify_goal_id_divergence.py` now makes the whole mapping machine-checked, and re-checks the
+`G260` rationale against the tree so the decline cannot quietly become stale.
+
+### Twenty per cent of the settings API is inert
+
+Measured across the 83 fields of `SystemSettings`: **17 have no consumer in any
+component.** Four more were found and removed — `accentTheme`, `highDensityMode`,
+`numberFont`, and `defaultExecutionMode`, the last of which had **two** controls writing it
+(a `TopSystemBar` toggle and a `SettingsWorkspace` button pair) while rendering *"LIVE
+GATEWAY"* in amber. `defaultExecutionMode` had **zero backend occurrences**: venue selection
+is governed entirely by `AIOS_ALLOW_LIVE_EXECUTION` and `AIOS_EXCHANGE_TESTNET`, which no UI
+could reach. A console that says LIVE while the adapter refuses real-money routing is
+`CONSTITUTION.md` §3.1 — a fabricated capability.
+
+`scripts/verify_no_dead_settings.py` now enforces this. It **fails on any unlisted dead
+field** and **fails when a listed field gains a consumer**, so the list shrinks itself and
+"we'll get to it" cannot quietly become permanent. 17 entries are listed with reasons,
+mostly reserved capital-governance parameters (`var95DailyLimitUsd`, `maxSectorBetaCap`,
+`mandatoryChallengerGate`) whose deletion is a product decision rather than a bug fix.
+
+**The architecture does not describe a console execution-mode toggle at all.** §13 specifies
+a staged progression — `G270` Long Shadow, then `G280` Canary Capital — which is a
+governance gate. Removing the toggle is therefore working *exact* the architecture, not
+departing from it.
+
+### What remains is not engineering
+
+`G240` and `G250` are the only two goals not LANDED, and both are human-held: a broker
+testnet connection plus the five Phase 5.0 gates, and the `CONSTITUTION.md` §1 amendment
+respectively. The buildable backlog is not the goal list — it is the **ten layers that have
+a LANDED goal and no screen** (L1, L5, L6, L8, L9, L10, L11, L21, L23, L25).
+
+---
+
 ## 8. Verification gates, and their real numbers
 
 | Gate | Command | Result |
@@ -237,12 +308,26 @@ toggle.
 | Operator isolation | `scripts/verify_operator_isolation.py` | green, 25 forbidden modules |
 | Theme tokens | `scripts/verify_theme_gate.py` | 0 hex outside `index.css`, 0 hardcoded palette classes, both themes + all 4 accents complete |
 | State honesty | `scripts/verify_state_honesty.py` | 18 views, no hand-rolled or cause-asserting empty state |
+| Dead settings | `scripts/verify_no_dead_settings.py` | 83 fields, 17 documented inert, **0 undocumented** |
+| Goal-ID divergence | `scripts/verify_goal_id_divergence.py` | 28 §13 IDs = 25 registry IDs, arithmetic closes, `G260` decline re-checked |
 
-The last two are new, and both answer "can this fail?" with a mutation harness rather than a
-claim: `prove_theme_gate.py` (6 rotations) and `prove_state_honesty.py` (3 rotations). The
-theme gate exists because `tsc`, vitest, the build and the isolation gate were **all green**
-while 58 sites rendered `var(--color-accent-accent-violet)` — nothing type-checks a CSS
-variable's value.
+Four of these gates are new, and each answers "can this fail?" with a mutation harness rather
+than a claim: `scripts/prove_theme_gate.py` (6 rotations),
+`scripts/prove_state_honesty.py` (3), `scripts/prove_dead_settings_gate.py` (3) and
+`scripts/prove_goal_id_divergence.py` (4). A gate that has never been observed red is an
+assertion about itself, not about the tree.
+
+Two of those gates exist because everything else was green while the tree was wrong. The
+theme gate: `tsc`, vitest, the build and the isolation gate were **all green** while 58 sites
+rendered `var(--color-accent-accent-violet)` — nothing type-checks a CSS variable's value.
+The dead-settings gate: four inert controls, one rendering *"LIVE GATEWAY"*, passed every
+type and test check, because a field with no consumers is valid TypeScript.
+
+`scripts/prove_goal_id_divergence.py` mutates a **temp copy** of `ARCHITECTURE.txt` via
+`AIOS_ARCHITECTURE_PATH`, never the frozen file: a probe interrupted between mutation and
+restore would corrupt the one document every other claim is measured against. It also
+declares what it cannot prove — whether a bare label has quietly acquired requirements *in
+place* is not mechanically decidable, so that stays a human review duty.
 
 **The type gate's command matters.** `--python-version 3.12` is not optional in this
 environment: numpy 2.5.3's stubs use PEP 695 `type` statements, which a 3.11 target

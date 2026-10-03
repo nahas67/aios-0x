@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adaptSettingsV1, EMPTY_SETTINGS } from "./settings";
+import { adaptSettingsV1 } from "./settings";
 
 describe("settingsAdapter", () => {
   it("merges a partial server blob over neutral defaults and keeps the version", () => {
@@ -14,7 +14,9 @@ describe("settingsAdapter", () => {
     expect(out.settings.autonomyLevel).toBe("MANUAL");
     expect(out.settings.maxSlippageBps).toBe(9);
     // Untouched keys fall back to neutral defaults, never to fake servers.
-    expect(out.settings.defaultExecutionMode).toBe(EMPTY_SETTINGS.defaultExecutionMode);
+    // `defaultExecutionMode` was here and was removed: it had no backend field, and the
+    // two controls that wrote it (a TopSystemBar toggle and a Settings button pair) changed
+    // nothing about execution. `scripts/verify_no_dead_controls.py` now guards its absence.
     expect(out.settings.venues).toEqual([]);
   });
 

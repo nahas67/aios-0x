@@ -13,13 +13,11 @@ import {
   
   Settings as SettingsIcon
 } from 'lucide-react';
-import { AutonomyLevel, ExecutionMode, WorkspaceTab } from '../types';
+import { AutonomyLevel, WorkspaceTab } from '../types';
 
 interface TopSystemBarProps {
   autonomy: AutonomyLevel;
   onAutonomyChange: (level: AutonomyLevel) => void;
-  executionMode: ExecutionMode;
-  onExecutionModeToggle: () => void;
   onOpenCommandPalette: () => void;
   onTriggerKillSwitch: () => void;
   drawdownPct: number | null;
@@ -32,8 +30,6 @@ interface TopSystemBarProps {
 export const TopSystemBar: React.FC<TopSystemBarProps> = ({
   autonomy,
   onAutonomyChange,
-  executionMode,
-  onExecutionModeToggle,
   onOpenCommandPalette,
   onTriggerKillSwitch,
   drawdownPct,
@@ -174,19 +170,16 @@ export const TopSystemBar: React.FC<TopSystemBarProps> = ({
           )}
         </div>
 
-        {/* Live / Paper Switch */}
-        <button
-          onClick={onExecutionModeToggle}
-          className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] font-mono transition-colors ${
-            executionMode === 'LIVE'
-              ? 'bg-warning-bg text-warning border-warning shadow-[0_0_8px_rgba(245,158,11,0.2)]'
-              : 'bg-surface-veil text-accent border-accent'
-          }`}
-          title="Toggle between Paper Trading and Gated Live Trading"
-        >
-          <span className={`w-1.5 h-1.5 rounded-full ${executionMode === 'LIVE' ? 'bg-warning animate-pulse' : 'bg-accent'}`}></span>
-          <span>{executionMode}</span>
-        </button>
+        {/* REMOVED: the Live/Paper switch.
+          It rendered "LIVE" in amber with a pulsing dot and the tooltip "Toggle between
+          Paper Trading and Gated Live Trading", while `executionMode` was read nowhere
+          except this label and `defaultExecutionMode` had no backend field at all. Venue
+          selection is governed by AIOS_ALLOW_LIVE_EXECUTION + AIOS_EXCHANGE_TESTNET in
+          communities/c5_execution/adapters.py, which this could not reach. A badge that
+          asserts a capital mode the system does not implement is a §3.1 honesty failure,
+          and it becomes a real one the day live execution is enabled.
+          ARCHITECTURE.txt §13 specifies G240 Long Shadow -> G250 Canary Capital, a
+          governance gate, not a console toggle. */}
 
         {/* UTC Clock */}
         <div className="hidden sm:flex items-center gap-1 text-text-muted font-mono text-[11px] px-2 py-0.5 bg-surface-sunken rounded border border-border-subtle">

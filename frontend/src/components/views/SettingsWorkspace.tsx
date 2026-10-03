@@ -441,37 +441,28 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                 })}
               </div>
 
-              {/* Execution Mode & Trading Windows */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-3">
-                  <div>
-                    <div className="font-bold text-text-strong text-xs">Default Execution Mode</div>
-                    <div className="text-text-muted text-[11px]">Toggle between simulated paper sandbox and live exchange gateways.</div>
-                  </div>
-                  <div className="flex items-center gap-2 bg-surface-deep p-1 rounded border border-border-strong">
-                    <button
-                      onClick={() => handleChange('defaultExecutionMode', 'PAPER')}
-                      className={`flex-1 py-1 rounded transition-colors text-xs font-mono ${
-                        formState.defaultExecutionMode === 'PAPER'
-                          ? 'bg-info-bg text-accent border border-accent font-bold'
-                          : 'text-text-muted hover:text-text-strong'
-                      }`}
-                    >
-                      PAPER SIMULATION
-                    </button>
-                    <button
-                      onClick={() => handleChange('defaultExecutionMode', 'LIVE')}
-                      className={`flex-1 py-1 rounded transition-colors text-xs font-mono ${
-                        formState.defaultExecutionMode === 'LIVE'
-                          ? 'bg-warning-bg text-warning border border-warning font-bold'
-                          : 'text-text-muted hover:text-text-strong'
-                      }`}
-                    >
-                      LIVE GATEWAY
-                    </button>
-                  </div>
-                </div>
+              {/* REMOVED: "Default Execution Mode" — PAPER SIMULATION / LIVE GATEWAY.
+                  Two controls existed on this one field: this pair and a toggle in
+                  TopSystemBar. Both were dead, and `defaultExecutionMode` has ZERO
+                  occurrences in any backend module — the PUT carried a field the server
+                  never defined, exactly like `accentTheme` and `highDensityMode`.
 
+                  This one was the most dangerous of the four, because the label promises
+                  capital control. An operator could read "LIVE GATEWAY" selected and
+                  reasonably conclude the system was pointed at a live venue. It was not:
+                  venue selection is governed entirely by `AIOS_ALLOW_LIVE_EXECUTION` and
+                  `AIOS_EXCHANGE_TESTNET` in `communities/c5_execution/adapters.py`, and the
+                  UI was connected to neither.
+
+                  ARCHITECTURE.txt §13 does not describe a UI execution-mode toggle. It
+                  describes a staged progression — G240 Long Shadow, then G250 Canary
+                  Capital — which is a governance gate, not a control. Deleting this is
+                  working exact the architecture, not departing from it.
+
+                  `scripts/verify_no_dead_controls.py` now fails if this returns. */}
+
+              {/* Trading Windows */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-4 rounded bg-surface-veil border border-border-subtle space-y-2">
                   <div className="font-bold text-text-strong text-xs">Trading Window Schedule</div>
                   <div className="text-text-muted text-[11px]">Restrict autonomous trading to specific regional market sessions.</div>

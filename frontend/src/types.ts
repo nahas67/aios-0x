@@ -1,5 +1,4 @@
 export type AutonomyLevel = 'MANUAL' | 'ASSISTED' | 'SUPERVISED' | 'AUTONOMOUS' | 'EMERGENCY_HALT';
-export type ExecutionMode = 'PAPER' | 'LIVE';
 export type MarketState = 'OPEN' | 'CLOSED' | 'PRE_MARKET' | 'POST_MARKET';
 
 /**
@@ -365,7 +364,6 @@ export interface VenueConfig {
 export interface SystemSettings {
   // Autonomy & Governance
   autonomyLevel: AutonomyLevel;
-  defaultExecutionMode: ExecutionMode;
   multiSigThresholdUsd: number;
   require2FAForRebalance: boolean;
   emergencyHaltDrawdownPct: number;
